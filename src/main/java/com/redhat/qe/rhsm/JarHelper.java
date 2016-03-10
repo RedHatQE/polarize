@@ -1,9 +1,15 @@
 package com.redhat.qe.rhsm;
 
+import java.io.FileInputStream;
+import java.io.IOException;
 import java.net.URL;
 import java.net.URLClassLoader;
-import java.security.cert.PKIXRevocationChecker;
 import java.util.ArrayList;
+import java.util.List;
+import java.util.stream.Collectors;
+import java.util.zip.ZipFile;
+import java.util.zip.ZipInputStream;
+
 import joptsimple.OptionParser;
 import joptsimple.OptionSet;
 
@@ -15,9 +21,32 @@ import joptsimple.OptionSet;
 public class JarHelper {
     ArrayList<URL> urls;
 
-
     public JarHelper() {
-        urls = new ArrayList<>();
+        this.urls = new ArrayList<>();
+    }
+
+
+    /**
+     * Given the path to a jar file, get all the .class files
+     * @param jarPath
+     */
+    public static List<String> loadJar(String jarPath, String pkg) throws IOException {
+       try(ZipFile zf = new ZipFile(jarPath)) {
+           return zf.stream()
+                   .filter(e -> !e.isDirectory() && e.getName().endsWith(".class") && !e.getName().contains("$"))
+                   .map(e -> {
+                       String className = e.getName().replace('/', '.');
+                       String test = className.substring(0, className.length() - ".class".length());
+                       return test;
+                   })
+                   .filter(e -> e.contains(pkg))
+                   .collect(Collectors.toList());
+       }
+    }
+
+
+    public void loader (String className) {
+        
     }
 
 
@@ -33,6 +62,13 @@ public class JarHelper {
 
         OptionSet opts = parser.parse(args);
         String jarName = (String) opts.valueOf("jars");
-        System.out.println(opts);
+        String packName = (String) opts.valueOf("packages");
+
+        try {
+            List<String> classes = JarHelper.loadJar(jarName, packName);
+            classes.forEach(System.out::println);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 }
