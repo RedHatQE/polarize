@@ -15,7 +15,7 @@ import org.testng.annotations.Test;
  */
 public class Reflector {
 
-    public HashMap<String, ArrayList<String>> testsToClasses;
+    public HashMap<String, List<String>> testsToClasses;
     private Set<String> testTypes;
 
     public Reflector(){
@@ -49,9 +49,6 @@ public class Reflector {
          * So we will have a mapping of key = plan type, value = class name
          */
 
-        Set<String> testTypes = new HashSet<>(Arrays.asList("AcceptanceTests", "Tier1Tests", "Tier2Tests",
-                "Tier3Tests"));
-
         for(String s: args) {
             Reflections refl = new Reflections(s);
 
@@ -74,8 +71,20 @@ public class Reflector {
 
     public <T> void getAnnotations(Class<T> c) {
         Method[] methods = c.getMethods();
+        List<Method> meths = new ArrayList<>(Arrays.asList(methods));
+        List<String> classMethods =
+                meths.stream()
+                        .filter(m -> m.getAnnotation(Test.class) != null)
+                        .map(m -> {
+                            String className = c.getName();
+                            return className + "." + m.getName();
+                        })
+                        .filter(e -> !e.isEmpty())
+                        .collect(Collectors.toList());
+
         // Get the groups from the Test annotation, store it in a set
         Annotation ann = c.getAnnotation(Test.class);
+        if (ann == null) return;
         String[] groups = ((Test) ann).groups();
         Set<String> groupSet = new TreeSet<>(Arrays.asList(groups));
 
@@ -84,17 +93,11 @@ public class Reflector {
                 .filter(testTypes::contains)
                 .collect(Collectors.toSet());
 
-        // TODO: Figure out how to turn this into a stream using a reduce or collect to
-        // store this to a Map
-        // For each item in groupSet, add the group to the groupsToClass map as the key, and as the value
-        // add an entry to the ArrayList
         for (String g : groupSet) {
             if (!this.testsToClasses.containsKey(g)) {
-                ArrayList<String> classNames = new ArrayList<>();
-                classNames.add(c.getName());
-                this.testsToClasses.put(g, classNames);
+                this.testsToClasses.put(g, classMethods);
             } else {
-                this.testsToClasses.get(g).add(c.getName());
+                this.testsToClasses.get(g).addAll(classMethods);
             }
         }
     }

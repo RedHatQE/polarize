@@ -1,18 +1,24 @@
 package com.redhat.qe.rhsm;
 
-import java.io.IOException;
+import java.io.*;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLClassLoader;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.zip.ZipFile;
+import static java.nio.file.StandardOpenOption.*;
 
 
+import com.google.gson.GsonBuilder;
 import joptsimple.OptionParser;
 import joptsimple.OptionSet;
+
+import com.google.gson.Gson;
 
 /**
  * Created by stoner on 3/9/16.
@@ -105,10 +111,15 @@ public class JarHelper {
         OptionParser parser = new OptionParser();
         parser.accepts("jars").withRequiredArg();
         parser.accepts("packages").withRequiredArg();
+        parser.accepts("output");
 
         OptionSet opts = parser.parse(args);
         String jarPathsOpt = (String) opts.valueOf("jars");
         String packName = (String) opts.valueOf("packages");
+        String output = (String) opts.valueOf("output");
+        if (output == null) {
+            output = System.getProperty("user.dir") + "/groups-to-methods.json";
+        }
 
         JarHelper jh = new JarHelper(jarPathsOpt);
         try {
@@ -116,7 +127,20 @@ public class JarHelper {
                 List<String> classes = JarHelper.loadJar(s, packName);
                 classes.forEach(System.out::println);
                 Reflector refl = jh.loadClasses(classes);
-                refl.showMap();
+                //refl.showMap();
+
+                Gson gson = new GsonBuilder().setPrettyPrinting().create();
+                String json = gson.toJson(refl.testsToClasses);
+
+                Path file = new File(output).toPath();
+                OutputStream out = new BufferedOutputStream(Files.newOutputStream(file, CREATE));
+                try {
+                    out.write(json.getBytes(), 0, json.length());
+                } catch (IOException ex) {
+                    System.err.println(ex);
+                }
+                System.out.println(json);
+
             }
         } catch (IOException e) {
             e.printStackTrace();
