@@ -4,6 +4,7 @@ import java.io.*;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLClassLoader;
+import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -132,10 +133,22 @@ public class JarHelper {
                 Gson gson = new GsonBuilder().setPrettyPrinting().create();
                 String json = gson.toJson(refl.testsToClasses);
 
-                Path file = new File(output).toPath();
-                OutputStream out = new BufferedOutputStream(Files.newOutputStream(file, CREATE));
+                File file = new File(output);
+                if (file.exists()) {
+                    boolean deleted = file.delete();
+                    if (!deleted) {
+                        throw new FileAlreadyExistsException("Could not delete old file");
+                    }
+                } else {
+                    file.createNewFile();
+                }
+
+                FileWriter fw = new FileWriter(file);
+                BufferedWriter bw = new BufferedWriter(fw);
+
                 try {
-                    out.write(json.getBytes(), 0, json.length());
+                    bw.write(json);
+                    bw.close();
                 } catch (IOException ex) {
                     System.err.println(ex);
                 }

@@ -15,7 +15,7 @@ import org.testng.annotations.Test;
  */
 public class Reflector {
 
-    public HashMap<String, List<String>> testsToClasses;
+    public HashMap<String, List<MetaData>> testsToClasses;
     private Set<String> testTypes;
 
     public Reflector(){
@@ -30,7 +30,6 @@ public class Reflector {
     public interface GetField<C, R> {
         R getField(C c);
     }
-
 
     /**
      *
@@ -72,14 +71,21 @@ public class Reflector {
     public <T> void getAnnotations(Class<T> c) {
         Method[] methods = c.getMethods();
         List<Method> meths = new ArrayList<>(Arrays.asList(methods));
-        List<String> classMethods =
+        List<MetaData> classMethods =
                 meths.stream()
                         .filter(m -> m.getAnnotation(Test.class) != null)
                         .map(m -> {
+                            Test ann = m.getAnnotation(Test.class);
+                            String desc = ann.description();
                             String className = c.getName();
-                            return className + "." + m.getName();
+                            String methName = m.getName();
+                            String provider = ann.dataProvider();
+                            Boolean isProvider = !provider.isEmpty();
+                            Boolean enabled = ann.enabled();
+                            //return className + "." + m.getName();
+                            return new MetaData(methName, className, desc, enabled, isProvider, provider);
                         })
-                        .filter(e -> !e.isEmpty())
+                        .filter(e -> !e.className.isEmpty() && !e.methodName.isEmpty())
                         .collect(Collectors.toList());
 
         // Get the groups from the Test annotation, store it in a set
