@@ -1,21 +1,19 @@
+plugins {
+    id 'java' // or 'groovy' Must be explicitly applied
+    id 'com.github.johnrengelman.shadow' version '1.2.3'
+}
+
+
 group 'com.redhat.qe.rhsm'
 version '1.0-SNAPSHOT'
 
+
 apply plugin: 'java'
+//apply plugin: 'application'
+apply plugin: 'com.github.johnrengelman.shadow'
 
 sourceCompatibility = 1.8
 targetCompatibility = 1.8
-
-task fatJar(type: Jar) {
-    manifest {
-        attributes 'Implementation-Title': 'Jong',
-                'Implementation-Version': version,
-                'Main-Class': 'com.redhat.qe.rhsm.Reflector'
-    }
-    baseName = project.name + '-all'
-    from { configurations.compile.collect { it.isDirectory() ? it : zipTree(it)}}
-    with jar
-}
 
 repositories {
     mavenCentral()
@@ -30,3 +28,14 @@ dependencies {
     compile 'org.testng:testng:6.9.10'
     compile 'com.google.code.gson:gson:2.6.2'
 }
+
+shadowJar {
+    manifest {
+        attributes('Implementation-Title': 'Jong',
+                   'Implementation-Version': version,
+                   'Main-Class': 'com.redhat.qe.rhsm.JarHelper')
+    }
+}
+
+
+

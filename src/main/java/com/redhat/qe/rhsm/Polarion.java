@@ -3,6 +3,7 @@ package com.redhat.qe.rhsm;
 import java.lang.annotation.Repeatable;
 
 /**
+<<<<<<< HEAD
  * Created by stoner on 5/6/16.
  */
 @Repeatable(Polarions.class)

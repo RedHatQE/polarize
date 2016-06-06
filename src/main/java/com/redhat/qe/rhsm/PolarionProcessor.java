@@ -1,6 +1,5 @@
 package com.redhat.qe.rhsm;
 
-import javax.annotation.OverridingMethodsMustInvokeSuper;
 import javax.annotation.processing.AbstractProcessor;
 import javax.annotation.processing.ProcessingEnvironment;
 import javax.annotation.processing.RoundEnvironment;
