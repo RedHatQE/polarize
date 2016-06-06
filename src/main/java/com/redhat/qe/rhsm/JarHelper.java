@@ -5,15 +5,11 @@ import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.nio.file.FileAlreadyExistsException;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.zip.ZipFile;
-import static java.nio.file.StandardOpenOption.*;
-
 
 import com.google.gson.GsonBuilder;
 import joptsimple.OptionParser;
@@ -59,7 +55,6 @@ public class JarHelper {
 
 
     public URLClassLoader makeLoader () {
-        //List<String> jars = new ArrayList<>(Arrays.asList(jarNames));
         List<URL> urls = this.jarPaths;
         return new URLClassLoader(urls.toArray(new URL[urls.size()]));
     }

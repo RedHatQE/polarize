@@ -1,0 +1,135 @@
+<!-- This schema defines the Metadata for a TestCase
+     It includes all the relevant data needed for the WorkItem importer -->
+
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+    <!-- custom fields for TestCase
+    caseimportance -> critical, high, medium, low
+    caselevel -> component, integration, system, acceptance
+    component -> subscription-manager, subscription-manager-migration-data
+    caseposneg -> postive, negative
+    testtype -> functional, non_functional, structural
+    caseautomation -> automated, manual_only, not_automated
+    status -> draft
+    -->
+
+    <!-- fields for Requirement
+    severity -> should_have, must_have, nice_to_have, will_not_have
+    reqtype -> functional, non_functional
+    priority -> lowest, low, medium. high, highest
+    plannedin ->
+    -->
+
+    <xs:simpleType name="imp-types">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="critical"/>
+            <xs:enumeration value="high"/>
+            <xs:enumeration value="medium"/>
+            <xs:enumeration value="low"/>
+        </xs:restriction>
+    </xs:simpleType>
+
+    <xs:simpleType name="case-types">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="component"/>
+            <xs:enumeration value="integration"/>
+            <xs:enumeration value="system"/>
+            <xs:enumeration value="acceptance"/>
+        </xs:restriction>
+    </xs:simpleType>
+
+    <xs:simpleType name="automation-types">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="automated"/>
+            <xs:enumeration value="manual_only"/>
+            <xs:enumeration value="not_automated"/>
+        </xs:restriction>
+    </xs:simpleType>
+
+    <xs:simpleType name="test-types">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="functional"/>
+            <xs:enumeration value="non_functional"/>
+            <xs:enumeration value="structural"/>
+        </xs:restriction>
+    </xs:simpleType>
+
+    <xs:simpleType name="posneg-types">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="positive"/>
+            <xs:enumeration value="negative"/>
+        </xs:restriction>
+    </xs:simpleType>
+
+    <xs:simpleType name="wi-types">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="TestCase"/>
+            <xs:enumeration value="Requirement"/>
+        </xs:restriction>
+    </xs:simpleType>
+
+    <!-- Elements -->
+    <xs:element name="TestCaseMetadata">
+        <xs:complexType>
+            <!-- TODO: restrict the values for project-id -->
+            <xs:attribute name="project-id" use="required" type="xs:string"/>
+            <xs:attribute name="dry-run" type="xs:boolean"/>
+        </xs:complexType>
+
+        <xs:element name="workitems">
+            <xs:all>
+                <xs:element name="workitem" minOccurs="1" maxOccurs="unbounded">
+                    <xs:complexType>
+                        <xs:attribute name="author" type="xs:string" use="required"/>
+                        <xs:attribute name="workitem-type" type="wi-types" use="required"/>
+                        <xs:attribute name="hyperlink" type="xs:string" use="optional"/>
+                        <xs:attribute name="workitem-id" type="xs:string" use="optional"/>
+                        <xs:attribute name="severity" type="xs:string" use="optional"/>
+                        <xs:sequence>
+                            <xs:element name="description" minOccurs="1" maxOccurs="1" type="xs:string"/>
+                            <xs:element name="title" minOccurs="1" maxOccurs="1" type="xs:string"/>
+                        </xs:sequence>
+                    </xs:complexType>
+
+                    <xs:all>
+                        <xs:element name="caseimportance">
+                            <xs:complexType>
+                                <xs:attribute name="value" type="imp-types" use="required"/>
+                            </xs:complexType>
+                        </xs:element>
+
+                        <xs:element name="caselevel">
+                            <xs:complexType>
+                                <xs:attribute name="value" type="case-types" use="required"/>
+                            </xs:complexType>
+                        </xs:element>
+
+                        <xs:element name="testtype">
+                            <xs:complexType>
+                                <xs:attribute name="value" type="test-types" use="required"/>
+                            </xs:complexType>
+                        </xs:element>
+
+                        <xs:element name="caseposneg">
+                            <xs:complexType>
+                                <xs:attribute name="value" type="posneg-types" use="required"/>
+                            </xs:complexType>
+                        </xs:element>
+
+                        <xs:element name="caseautomation">
+                            <xs:complexType>
+                                <xs:attribute name="value" type="automation-types" use="required"/>
+                            </xs:complexType>
+                        </xs:element>
+
+                        <xs:element name="status">
+                            <xs:complexType>
+                                <xs:attribute name="value" type="posneg-types"/>
+                            </xs:complexType>
+                        </xs:element>
+                    </xs:all>
+                </xs:element>
+            </xs:all>
+        </xs:element>
+    </xs:element>
+
+</xs:schema>

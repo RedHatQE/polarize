@@ -1,0 +1,13 @@
+<TestCaseMetadata project-id="RedHatEnterpriseLinux7">
+  <workitems>
+      <workitem author="Sean Toner" workitem-type="TestCase">
+          <description>This is an example description for a TestCase</description>
+          <title>class.method_name</title>
+      </workitem>
+      <caseimportance value="high"/>
+      <caseposneg value="positive"/>
+      <caselevel value="component"/>
+      <caseautomation value="automated"/>
+      <testtype value="functional"/>
+  </workitems>
+</TestCaseMetadata>
