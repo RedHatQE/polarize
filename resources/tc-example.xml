@@ -1,13 +1,58 @@
 <TestCaseMetadata project-id="RedHatEnterpriseLinux7">
   <workitems>
-      <workitem author="Sean Toner" workitem-type="TestCase">
+      <testcase author="Sean Toner">
           <description>This is an example description for a TestCase</description>
           <title>class.method_name</title>
-      </workitem>
-      <caseimportance value="high"/>
-      <caseposneg value="positive"/>
-      <caselevel value="component"/>
-      <caseautomation value="automated"/>
-      <testtype value="functional"/>
+          <caseimportance value="high"/>
+          <caseposneg value="positive"/>
+          <caselevel value="component"/>
+          <caseautomation value="automated"/>
+          <testtype value="functional"/>
+
+          <!-- This is the requirement the test case links to
+          Either the -->
+          <requirement polarion="" config="/path/to/reqXmlConfig" feature="/path/to/gherkin-file"/>
+
+          <!-- These are the valid arches the test case supports -->
+          <arches>
+              <arch>x8664</arch>
+              <arch>aarch64</arch>
+              <arch>ppc64</arch>
+          </arches>
+
+          <!-- These are the valid OS variants the test case supports -->
+          <variants>
+              <variant>server</variant>
+              <variant>client</variant>
+              <variant>workstation</variant>
+          </variants>
+
+          <!-- Any methods to enable preconditions required by the test.
+          I'm not sure we can ever annotate this fully since all the Before type
+          annotations are a part of TestNG.-->
+          <setup>
+              This is just a plain text field, so we might be able to enter the name
+              of the TestNG @Before___ methods here.
+          </setup>
+
+          <!-- The asserted steps in the test case.  For automation purposes we probably
+          will not be able to count all of the assertions in our legacy tests.  It
+          might be possible to annotate assertions in the future though
+          -->
+          <test-steps>
+              <step>
+                  <name>class.method_name</name>
+                  <description>Describe what the step does and asserts</description>
+                  <expected>The expected value or state after running the step</expected>
+              </step>
+          </test-steps>
+
+          <!-- Any methods to clean up after the test method has run
+          Since TestNG handles all the @After___ methods, not sure we can use this -->
+          <teardown>
+              This is just a plain text field also.  Might be able to figure out what
+              the @After___ methods are and list them here
+          </teardown>
+      </testcase>
   </workitems>
 </TestCaseMetadata>
