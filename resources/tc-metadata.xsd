@@ -19,6 +19,13 @@
     plannedin ->
     -->
 
+    <xs:simpleType name="project-vals">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="RHEL6"/>
+            <xs:enumeration value="RedHatEnterpriseLinux7"/>
+        </xs:restriction>
+    </xs:simpleType>
+
     <xs:simpleType name="imp-types">
         <xs:restriction base="xs:string">
             <xs:enumeration value="critical"/>
@@ -67,69 +74,127 @@
         </xs:restriction>
     </xs:simpleType>
 
-    <!-- Elements -->
+    <xs:simpleType name="arch-types">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="x8664"/>
+            <xs:enumeration value="ppc64"/>
+            <xs:enumeration value="ppc64le"/>
+            <xs:enumeration value="ia64"/>
+            <xs:enumeration value="aarch64"/>
+            <xs:enumeration value="i386"/>
+        </xs:restriction>
+    </xs:simpleType>
+
+    <xs:simpleType name="variant-types">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="server"/>
+            <xs:enumeration value="client"/>
+            <xs:enumeration value="workstation"/>
+            <xs:enumeration value="computenode"/>
+        </xs:restriction>
+    </xs:simpleType>
+
+    <xs:complexType name="req-type">
+        <xs:attribute name="polarion-id"/>
+        <xs:attribute name="config"/>
+        <xs:attribute name="feature"/>
+    </xs:complexType>
+
+    <xs:complexType name="teststep-type">
+        <xs:all>
+            <xs:element name="method" maxOccurs="1" type="xs:string"/>
+            <xs:element name="description" maxOccurs="1" type="xs:string"/>
+            <xs:element name="expected" maxOccurs="1" type="xs:string"/>
+        </xs:all>
+    </xs:complexType>
+
+    <xs:complexType name="testcase-type">
+        <xs:all>
+            <xs:element name="description" minOccurs="1" maxOccurs="1" type="xs:string"/>
+            <xs:element name="title" minOccurs="1" maxOccurs="1" type="xs:string"/>
+            <xs:element name="caseimportance">
+                <xs:complexType>
+                    <xs:attribute name="value" type="imp-types" use="required"/>
+                </xs:complexType>
+            </xs:element>
+
+            <xs:element name="caselevel">
+                <xs:complexType>
+                    <xs:attribute name="value" type="case-types" use="required"/>
+                </xs:complexType>
+            </xs:element>
+
+            <xs:element name="testtype">
+                <xs:complexType>
+                    <xs:attribute name="value" type="test-types" use="required"/>
+                </xs:complexType>
+            </xs:element>
+
+            <xs:element name="caseposneg">
+                <xs:complexType>
+                    <xs:attribute name="value" type="posneg-types" use="required"/>
+                </xs:complexType>
+            </xs:element>
+
+            <xs:element name="caseautomation">
+                <xs:complexType>
+                    <xs:attribute name="value" type="automation-types" use="required"/>
+                </xs:complexType>
+            </xs:element>
+
+            <xs:element name="status">
+                <xs:complexType>
+                    <xs:attribute name="value" type="posneg-types"/>
+                </xs:complexType>
+            </xs:element>
+
+            <!-- A required element that specifies the polarion-id, feature file path and path to metadata xml -->
+            <xs:element name="requirement" minOccurs="1" type="req-type"/>
+
+            <!-- An optional description of setup steps.  For automated tests, these would be the
+            methods for @BeforeClass, @BeforeGroups and @BeforeSuite-->
+            <xs:element name="setup" minOccurs="0" maxOccurs="1" type="xs:string"/>
+
+            <!-- A list of the test steps.  Must be at least 1 -->
+            <xs:element name="teststeps" minOccurs="1">
+                <xs:complexType>
+                    <xs:sequence>
+                        <xs:element name="teststep" type="teststep-type" minOccurs="0"/>
+                    </xs:sequence>
+                </xs:complexType>
+            </xs:element>
+
+            <!-- A description of cleaning up after test methods.  For automation the methods for
+            @AfterClass, @AfterGroups, @AfterSuite -->
+            <xs:element name="teardown" minOccurs="0" maxOccurs="1" type="xs:string"/>
+
+        </xs:all>
+        <xs:attribute name="author" type="xs:string" use="required"/>
+        <xs:attribute name="workitem-type" type="wi-types" use="required"/>
+        <xs:attribute name="hyperlink" type="xs:string" use="optional"/>
+        <xs:attribute name="workitem-id" type="xs:string" use="optional"/>
+        <xs:attribute name="severity" type="xs:string" use="optional"/>
+    </xs:complexType>
+
+    <!-- Element structure
+    A TestCaseMetadata is a sequence of -->
     <xs:element name="TestCaseMetadata">
         <xs:complexType>
-            <!-- TODO: restrict the values for project-id -->
-            <xs:attribute name="project-id" use="required" type="xs:string"/>
-            <xs:attribute name="dry-run" type="xs:boolean"/>
-        </xs:complexType>
-
-        <xs:element name="workitems">
-            <xs:all>
-                <xs:element name="workitem" minOccurs="1" maxOccurs="unbounded">
+            <xs:sequence>
+                <xs:element name="workitems" minOccurs="1">
                     <xs:complexType>
-                        <xs:attribute name="author" type="xs:string" use="required"/>
-                        <xs:attribute name="workitem-type" type="wi-types" use="required"/>
-                        <xs:attribute name="hyperlink" type="xs:string" use="optional"/>
-                        <xs:attribute name="workitem-id" type="xs:string" use="optional"/>
-                        <xs:attribute name="severity" type="xs:string" use="optional"/>
                         <xs:sequence>
-                            <xs:element name="description" minOccurs="1" maxOccurs="1" type="xs:string"/>
-                            <xs:element name="title" minOccurs="1" maxOccurs="1" type="xs:string"/>
+                            <xs:element name="testcase" type="testcase-type"/>
+                            <!-- Add the element for polarion requirements -->
                         </xs:sequence>
                     </xs:complexType>
-
-                    <xs:all>
-                        <xs:element name="caseimportance">
-                            <xs:complexType>
-                                <xs:attribute name="value" type="imp-types" use="required"/>
-                            </xs:complexType>
-                        </xs:element>
-
-                        <xs:element name="caselevel">
-                            <xs:complexType>
-                                <xs:attribute name="value" type="case-types" use="required"/>
-                            </xs:complexType>
-                        </xs:element>
-
-                        <xs:element name="testtype">
-                            <xs:complexType>
-                                <xs:attribute name="value" type="test-types" use="required"/>
-                            </xs:complexType>
-                        </xs:element>
-
-                        <xs:element name="caseposneg">
-                            <xs:complexType>
-                                <xs:attribute name="value" type="posneg-types" use="required"/>
-                            </xs:complexType>
-                        </xs:element>
-
-                        <xs:element name="caseautomation">
-                            <xs:complexType>
-                                <xs:attribute name="value" type="automation-types" use="required"/>
-                            </xs:complexType>
-                        </xs:element>
-
-                        <xs:element name="status">
-                            <xs:complexType>
-                                <xs:attribute name="value" type="posneg-types"/>
-                            </xs:complexType>
-                        </xs:element>
-                    </xs:all>
                 </xs:element>
-            </xs:all>
-        </xs:element>
+            </xs:sequence>
+
+            <!-- TODO: restrict the values for project-id -->
+            <xs:attribute name="project-id" use="required" type="project-vals"/>
+            <xs:attribute name="dry-run" type="xs:boolean"/>
+        </xs:complexType>
     </xs:element>
 
 </xs:schema>
