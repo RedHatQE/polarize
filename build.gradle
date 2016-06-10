@@ -36,6 +36,3 @@ shadowJar {
                    'Main-Class': 'com.redhat.qe.rhsm.JarHelper')
     }
 }
-
-
-
