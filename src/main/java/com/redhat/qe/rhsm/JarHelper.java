@@ -119,14 +119,18 @@ public class JarHelper {
 
         JarHelper jh = new JarHelper(jarPathsOpt);
         try {
+            List<String> classes = new ArrayList<>();
             for(String s: jh.paths.split(",")) {
-                List<String> classes = JarHelper.loadJar(s, packName);
+                for(String pn: packName.split(",")){
+                    classes.addAll(JarHelper.loadJar(s, pn));
+                }
                 classes.forEach(System.out::println);
                 Reflector refl = jh.loadClasses(classes);
                 //refl.showMap();
 
                 Gson gson = new GsonBuilder().setPrettyPrinting().create();
-                String json = gson.toJson(refl.testsToClasses);
+                //String json = gson.toJson(refl.testsToClasses);
+                String json = gson.toJson(refl.methods);
 
                 File file = new File(output);
                 if (file.exists()) {

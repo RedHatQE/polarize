@@ -8,7 +8,7 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 import org.testng.annotations.Test;
-
+import com.redhat.qe.rhsm.MetaData;
 
 /**
  * Created by stoner on 3/9/16.
@@ -16,6 +16,7 @@ import org.testng.annotations.Test;
 public class Reflector {
 
     public HashMap<String, List<MetaData>> testsToClasses;
+    public List<MetaData> methods;
     private Set<String> testTypes;
 
     public Reflector(){
@@ -68,7 +69,7 @@ public class Reflector {
                 .forEach((es) -> System.out.println(es.getKey() + "=" + es.getValue()));
     }
 
-    public <T> void getAnnotations(Class<T> c) {
+    public <T> List<MetaData> getMetaData(Class<T> c) {
         Method[] methods = c.getMethods();
         List<Method> meths = new ArrayList<>(Arrays.asList(methods));
         List<MetaData> classMethods =
@@ -87,6 +88,16 @@ public class Reflector {
                         })
                         .filter(e -> !e.className.isEmpty() && !e.methodName.isEmpty())
                         .collect(Collectors.toList());
+        return classMethods;
+    }
+
+    public <T> void getAnnotations(Class<T> c) {
+        List<MetaData> classMethods = this.getMetaData(c);
+        if(this.methods == null) {
+            this.methods = classMethods;
+        }
+        else
+            this.methods.addAll(classMethods);
 
         // Get the groups from the Test annotation, store it in a set
         Annotation ann = c.getAnnotation(Test.class);
