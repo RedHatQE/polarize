@@ -142,9 +142,11 @@
                 </xs:complexType>
             </xs:element>
 
+            <!-- Fix the type.  Status is a state machine, so I need to track down all
+            possible values -->
             <xs:element name="status">
                 <xs:complexType>
-                    <xs:attribute name="value" type="posneg-types"/>
+                    <xs:attribute name="value" type="xs:string"/>
                 </xs:complexType>
             </xs:element>
 

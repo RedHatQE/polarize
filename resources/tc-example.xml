@@ -27,10 +27,11 @@
             <caselevel value="component"/>
             <caseautomation value="automated"/>
             <testtype value="functional"/>
+            <status value="draft"/>
 
             <!-- If the polation-id is given, the config and feature attributes will be ignored.  It it is empty
             The Processor will look -->
-            <req polarion-id="" config="" feature=""/>
+            <requirement polarion-id="" config="" feature=""/>
 
             <!-- From an automation POV, we can probably look for the @BeforeClass belonging to this
              method.  Not sure how to get the @BeforeGroup or @BeforeSuite though -->
@@ -41,7 +42,7 @@
             description though so that our tests will only have a single step.-->
             <teststeps>
                 <teststep>
-                    <method name=""/>
+                    <method>SomeClass.someMethod</method>
                     <description>description of test step</description>
                     <expected>the expected value</expected>
                 </teststep>
