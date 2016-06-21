@@ -4,15 +4,12 @@ import java.io.*;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLClassLoader;
-import java.nio.file.Files;
-import java.nio.file.Path;
+import java.nio.file.FileAlreadyExistsException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.zip.ZipFile;
-import static java.nio.file.StandardOpenOption.*;
-
 
 import com.google.gson.GsonBuilder;
 import joptsimple.OptionParser;
@@ -58,7 +55,6 @@ public class JarHelper {
 
 
     public URLClassLoader makeLoader () {
-        //List<String> jars = new ArrayList<>(Arrays.asList(jarNames));
         List<URL> urls = this.jarPaths;
         return new URLClassLoader(urls.toArray(new URL[urls.size()]));
     }
@@ -123,19 +119,35 @@ public class JarHelper {
 
         JarHelper jh = new JarHelper(jarPathsOpt);
         try {
+            List<String> classes = new ArrayList<>();
             for(String s: jh.paths.split(",")) {
-                List<String> classes = JarHelper.loadJar(s, packName);
+                for(String pn: packName.split(",")){
+                    classes.addAll(JarHelper.loadJar(s, pn));
+                }
                 classes.forEach(System.out::println);
                 Reflector refl = jh.loadClasses(classes);
                 //refl.showMap();
 
                 Gson gson = new GsonBuilder().setPrettyPrinting().create();
-                String json = gson.toJson(refl.testsToClasses);
+                //String json = gson.toJson(refl.testsToClasses);
+                String json = gson.toJson(refl.methods);
 
-                Path file = new File(output).toPath();
-                OutputStream out = new BufferedOutputStream(Files.newOutputStream(file, CREATE));
+                File file = new File(output);
+                if (file.exists()) {
+                    boolean deleted = file.delete();
+                    if (!deleted) {
+                        throw new FileAlreadyExistsException("Could not delete old file");
+                    }
+                } else {
+                    file.createNewFile();
+                }
+
+                FileWriter fw = new FileWriter(file);
+                BufferedWriter bw = new BufferedWriter(fw);
+
                 try {
-                    out.write(json.getBytes(), 0, json.length());
+                    bw.write(json);
+                    bw.close();
                 } catch (IOException ex) {
                     System.err.println(ex);
                 }

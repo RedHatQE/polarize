@@ -8,14 +8,15 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 import org.testng.annotations.Test;
-
+import com.redhat.qe.rhsm.MetaData;
 
 /**
  * Created by stoner on 3/9/16.
  */
 public class Reflector {
 
-    public HashMap<String, List<String>> testsToClasses;
+    public HashMap<String, List<MetaData>> testsToClasses;
+    public List<MetaData> methods;
     private Set<String> testTypes;
 
     public Reflector(){
@@ -30,7 +31,6 @@ public class Reflector {
     public interface GetField<C, R> {
         R getField(C c);
     }
-
 
     /**
      *
@@ -69,18 +69,35 @@ public class Reflector {
                 .forEach((es) -> System.out.println(es.getKey() + "=" + es.getValue()));
     }
 
-    public <T> void getAnnotations(Class<T> c) {
+    public <T> List<MetaData> getMetaData(Class<T> c) {
         Method[] methods = c.getMethods();
         List<Method> meths = new ArrayList<>(Arrays.asList(methods));
-        List<String> classMethods =
+        List<MetaData> classMethods =
                 meths.stream()
                         .filter(m -> m.getAnnotation(Test.class) != null)
                         .map(m -> {
+                            Test ann = m.getAnnotation(Test.class);
+                            String desc = ann.description();
                             String className = c.getName();
-                            return className + "." + m.getName();
+                            String methName = m.getName();
+                            String provider = ann.dataProvider();
+                            Boolean isProvider = !provider.isEmpty();
+                            Boolean enabled = ann.enabled();
+                            //return className + "." + m.getName();
+                            return new MetaData(methName, className, desc, enabled, isProvider, provider);
                         })
-                        .filter(e -> !e.isEmpty())
+                        .filter(e -> !e.className.isEmpty() && !e.methodName.isEmpty())
                         .collect(Collectors.toList());
+        return classMethods;
+    }
+
+    public <T> void getAnnotations(Class<T> c) {
+        List<MetaData> classMethods = this.getMetaData(c);
+        if(this.methods == null) {
+            this.methods = classMethods;
+        }
+        else
+            this.methods.addAll(classMethods);
 
         // Get the groups from the Test annotation, store it in a set
         Annotation ann = c.getAnnotation(Test.class);
