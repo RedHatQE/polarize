@@ -178,6 +178,9 @@
         <xs:attribute name="severity" type="xs:string" use="optional"/>
     </xs:complexType>
 
+    <!-- Requirement Type -->
+
+
     <!-- Element structure
     A TestCaseMetadata is a sequence of -->
     <xs:element name="TestCaseMetadata">
