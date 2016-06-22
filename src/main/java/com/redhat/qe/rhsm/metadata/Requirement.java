@@ -5,6 +5,5 @@ package com.redhat.qe.rhsm.metadata;
  */
 public @interface Requirement {
     String polarionId();
-    String config();
-    String feature();
+
 }
