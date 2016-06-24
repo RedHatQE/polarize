@@ -178,6 +178,9 @@
         <xs:attribute name="severity" type="xs:string" use="optional"/>
     </xs:complexType>
 
+    <!-- Requirement Type -->
+
+
     <!-- Element structure
     A TestCaseMetadata is a sequence of -->
     <xs:element name="TestCaseMetadata">
@@ -186,7 +189,7 @@
                 <xs:element name="workitems" minOccurs="1">
                     <xs:complexType>
                         <xs:sequence>
-                            <xs:element name="testcase" type="testcase-type"/>
+                            <xs:element name="testcase" type="testcase-type" minOccurs="1" maxOccurs="unbounded"/>
                             <!-- Add the element for polarion requirements -->
                         </xs:sequence>
                     </xs:complexType>
