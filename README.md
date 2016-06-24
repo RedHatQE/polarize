@@ -1,8 +1,12 @@
 # jong
 
-Jong is a tool that uses Java runtime reflection to get annotation data about classes and methods.  Specifically, it looks for
-TestNG annotations so that @Test annotated classes and methods can be gathered.  However, it is not hard to extend what kinds of
-annotations to look for, so that junit or other test frameworks metadata can be gathered.
+Jong is a tool that uses Java runtime reflection and an Annotation Processor at compile time to get annotation data about classes and methods.  Specifically, it does two things:
+
+1) @Test TestNG annotations so that @Test annotated classes and methods can be gathered.  
+2) @Polarion and @Requirement annotations to gather enough information to
+   - Create a TestCase or Requirement WorkItem if one doesn't doesn't exist for the method/class
+   - make available the data necessary to post process the junit result file to upload it to the XUnit importer
+
 
 ## Rationale
 
@@ -14,9 +18,7 @@ two sets of data (annotations in the source code, and TestCase/Requirements in P
 
 ## Advantages
 
-Currently, the rhsm-qe team uses the pong project to upload TestRun results to Polarion.  As pong parses a testng-results.xml file
-it also checks to see if there is a matching TestCase and Requirement for an executed <test-method> element.  While this works, it
-means that TestCase and Requirements are only generated if the test was actually in that run.  So jong provides these benefits
+Currently, the rhsm-qe team uses the pong project to upload TestRun results to Polarion.  As pong parses a testng-results.xml file it also checks to see if there is a matching TestCase and Requirement for an executed <test-method> element.  While this works, it means that TestCase and Requirements are only generated if the test was actually in that run.  So jong provides these benefits
 
 - Does not require execution of a TestRun to generate Polarion TestCase or Requirement
 - Although not yet implemented, it can also be used to gather annotation metadata besides TestNG
