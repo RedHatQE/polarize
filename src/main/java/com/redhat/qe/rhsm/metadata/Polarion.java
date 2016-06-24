@@ -9,13 +9,13 @@ import java.lang.annotation.Repeatable;
 public @interface Polarion {
     String author() default "CI User";
     String projectID();
+    String xmlConfig() default "";
     String testCaseID() default "";
     String caseimportance() default "high";
     String caseposneg() default "positive";
     String caselevel() default "component";
     String testtype() default "functional";
-    Requirement requirement();  // eg. requirementIDs = {"RHEL6-25678", "RHEL6-27654"}
+    Requirement[] reqs();  // eg. requirementIDs = {"RHEL6-25678", "RHEL6-27654"}
     String setup() default "";
     String teardown() default "";
-    //TestSteps teststeps();
 }

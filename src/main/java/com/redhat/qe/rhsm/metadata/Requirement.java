@@ -9,6 +9,7 @@ public @interface Requirement {
     String reqtype() default "Functional";           // defaults to Functional
     String priority() default "medium";              // defaults to medium
     String feature() default "";                     // Optional
-    String author()                     ;            // required (someone has to OK this)
+    String author();                                 // required (someone has to OK this)
     String description();                            // required
+    String xmlDesc() default "";
 }
