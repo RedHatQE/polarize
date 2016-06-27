@@ -13,10 +13,10 @@ public class TestAnnotation {
     }
 
     @Polarion(projectID="RHEL6",
-    xmlConfig="/path/to/xml",
-    reqs={})
+              xmlDesc="/path/to/xml",
+              reqs={@Requirement(xmlDesc="/path/to/xml-requirement")})
     @Polarion(projectID="RedHatEnterpriseLinux7",
-              reqs = {@Requirement(polarionId="",
+              reqs = {@Requirement(id="",
                                    severity="Should Have",         // defaults to Must Have
                                    reqtype="NonFunctional",        // defaults to Functional
                                    priority="high",                // defaults to medium

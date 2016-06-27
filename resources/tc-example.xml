@@ -35,8 +35,6 @@
                                xmlConfig="",           // if both this and above DNE, generate one
                                feature=""),
                   setup="Description of any preconditions that must be established for test case to run",
-                  @TestSteps({@TestStep(expected="The expected value")
-                              @TestStep(expected="Expected val for second step")}),
                   teardown="The methods to clean up after a test method")
         -->
         <testcase author="Sean Toner" workitem-type="TestCase">
