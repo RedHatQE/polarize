@@ -8,8 +8,11 @@ import javax.lang.model.element.TypeElement;
 import javax.lang.model.util.Elements;
 import javax.lang.model.util.Types;
 import javax.tools.Diagnostic;
+import java.lang.annotation.Annotation;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Created by stoner on 5/16/16.
@@ -32,8 +35,10 @@ public class PolarionProcessor extends AbstractProcessor {
      */
     @Override
     public boolean process(Set<? extends TypeElement> set, RoundEnvironment roundEnvironment) {
+        System.out.println("In process() method");
         String iface = Requirement.class.getSimpleName();
-        roundEnvironment.getElementsAnnotatedWith(Requirement.class).stream()
+        List<? extends Element> reqAnns = roundEnvironment.getElementsAnnotatedWith(Requirement.class)
+                .stream()
                 .map(ae -> {
                     if (ae.getKind() != ElementKind.METHOD ||
                         ae.getKind() != ElementKind.CLASS) {
@@ -41,12 +46,23 @@ public class PolarionProcessor extends AbstractProcessor {
                     }
                     return ae;
                  })
-                .filter(ae -> ae.getKind() == ElementKind.METHOD);
-        return false;
+                //.map(ae -> ae.getAnnotation(Requirement.class))
+                .collect(Collectors.toList());
+
+        return true;
+    }
+
+    /**
+     * Examines a Requirement object to obtain its values and generates a
+     * @param req
+     */
+    private void processRequirement(Requirement req) {
+
     }
 
     @Override
     public synchronized void init(ProcessingEnvironment env) {
+        System.out.println("In init() method");
         super.init(env);
         this.types = env.getTypeUtils();
         this.elements = env.getElementUtils();
