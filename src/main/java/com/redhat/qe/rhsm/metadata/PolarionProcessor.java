@@ -8,10 +8,9 @@ import javax.lang.model.element.TypeElement;
 import javax.lang.model.util.Elements;
 import javax.lang.model.util.Types;
 import javax.tools.Diagnostic;
+import java.io.File;
 import java.lang.annotation.Annotation;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
 
 /**
@@ -22,6 +21,55 @@ public class PolarionProcessor extends AbstractProcessor {
     private Elements elements;
     private Messager msgr;
     private Filer filer;
+
+    /**
+     * Contains the fully qualified name of a @Polarion decorated method
+     */
+    private class Meta<T> {
+        public String packName;
+        public String className;
+        public String methName;
+        public String qualifiedName;
+        public T annotation;
+    }
+
+    /**
+     * Recursive function that will get the fully qualified name of a method.
+     *
+     * Eg packageName.class.methodName
+     * @param elem
+     * @param accum
+     * @return
+     */
+    String getTopLevel(Element elem, String accum, Meta m) {
+        String tmp = elem.getSimpleName().toString();
+        switch(elem.getKind()) {
+            case PACKAGE:
+                m.packName = elements.getPackageOf(elem).toString();
+                tmp = m.packName;
+                break;
+            case CLASS:
+                m.className = tmp;
+                break;
+            case METHOD:
+                m.methName = tmp;
+                break;
+        }
+
+        if (!Objects.equals(accum, "")) {
+            accum = tmp + "." + accum;
+        }
+        else {
+            accum = tmp;
+        }
+
+        if (elem.getKind() == ElementKind.PACKAGE)
+            return accum;
+        else {
+            Element enclosing = elem.getEnclosingElement();
+            return this.getTopLevel(enclosing, accum, m);
+        }
+    }
 
     /**
      * The PolarionProcessor actually needs to look for three annotation types:
@@ -43,20 +91,110 @@ public class PolarionProcessor extends AbstractProcessor {
                     if (ae.getKind() != ElementKind.METHOD ||
                         ae.getKind() != ElementKind.CLASS) {
                         this.errorMsg(ae, "Can only annotate classes or methods with @%s", iface);
+                        return null;
                     }
                     return ae;
                  })
-                //.map(ae -> ae.getAnnotation(Requirement.class))
+                .filter(ae -> ae != null)
                 .collect(Collectors.toList());
 
+        List<? extends Element> polAnns = this.getPolarionAnnotations(roundEnvironment);
+        Map<String, ? extends Annotation> mToA = this.methodToAnnotation(polAnns, Polarion.class);
+
+        List<Meta<Polarion>> metas = polAnns.stream()
+                .map(e -> {
+                    Meta m = new Meta<Polarion>();
+                    String full = this.getTopLevel(e, "", m);
+                    System.out.println(String.format("Fully qualified name is %s", full));
+                    m.qualifiedName = full;
+                    m.annotation = e.getAnnotation(Polarion.class);
+                    return m;
+                })
+                .collect(Collectors.toList());
+
+        //Map<String, Polarion> mToA2 = this.methodToAnnotation2(metas);
+
+        mToA.forEach((s, e) -> System.out.println(String.format("%s -> %s", s, e.toString())));
+        //mToA.forEach((qual, ann) -> System.out.println(String.format("%s -> %s", qual, ann.toString())));
         return true;
     }
 
+
+    private Map<String, ? extends Annotation> methodToAnnotation(List<? extends Element> elements,
+                                                                 Class<? extends Annotation> ann) {
+        return elements.stream()
+                .collect(Collectors.toMap(e -> e.getSimpleName().toString(),
+                                          e -> e.getAnnotation(ann)));
+
+    }
+
     /**
-     * Examines a Requirement object to obtain its values and generates a
+     * Given a sequence of Meta objects, return a Map of the qualified name to the Annotation data
+     *
+     * @param elements
+     * @param <T>
+     * @return
+     */
+    private <T> Map<String, T> methodToAnnotation2(List<Meta<T>> elements) {
+        Map<String, T> mToA = new HashMap<>();
+        for(Meta<T> m: elements) {
+            mToA.put(m.qualifiedName, m.annotation);
+        }
+        return mToA;
+    }
+
+
+    /**
+     * FIXME: Pass in as argument the Annotation type and a lambda to pass to map
+     * @param env
+     * @return
+     */
+    private List<? extends Element> getPolarionAnnotations(RoundEnvironment env) {
+        String iface = Polarion.class.getSimpleName();
+        List<? extends Element> polAnns = env.getElementsAnnotatedWith(Polarion.class)
+                .stream()
+                .map(ae -> {
+                    if (ae.getKind() != ElementKind.METHOD) {
+                        this.errorMsg(ae, "Can only annotate methods with @%s", iface);
+                    }
+                    return ae;
+                })
+                .collect(Collectors.toList());
+        return polAnns;
+    }
+
+    public File getXMLFileForMethod(Element elem) {
+        return null;
+    }
+
+    /**
+     * Examines a Requirement object to obtain its values and generates an XML file
+     *
+     * First, it will check to see if id is an empty string.  Next, it will check if the xmlDesc value is also an
+     * empty string.  If both are empty, then given the rest of the information from the annotation, it will generate
+     * an XML file and place it in:
+     *
+     * resources/requirements/{package}/{class}/{methodName}.xml
+     *
      * @param req
      */
     private void processRequirement(Requirement req) {
+
+    }
+
+    /**
+     * Takes a feature file in gherkin style, and generates an XML file
+     * @param featureFile
+     */
+    private void featureToRequirement(String featureFile) {
+
+    }
+
+    /**
+     * Examples a Polarion object to obtain its values and generates an XML file if needed.
+     * @param pol
+     */
+    private void processTestCase(Polarion pol) {
 
     }
 
