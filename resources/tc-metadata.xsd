@@ -175,7 +175,6 @@
         <xs:attribute name="workitem-type" type="wi-types" use="required"/>
         <xs:attribute name="hyperlink" type="xs:string" use="optional"/>
         <xs:attribute name="workitem-id" type="xs:string" use="optional"/>
-        <xs:attribute name="severity" type="xs:string" use="optional"/>
     </xs:complexType>
 
     <!-- Requirement Type -->
@@ -186,7 +185,7 @@
     <xs:element name="TestCaseMetadata">
         <xs:complexType>
             <xs:sequence>
-                <xs:element name="workitems" minOccurs="1">
+                <xs:element name="workitems" minOccurs="1" maxOccurs="1">
                     <xs:complexType>
                         <xs:sequence>
                             <xs:element name="testcase" type="testcase-type" minOccurs="1" maxOccurs="unbounded"/>
