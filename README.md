@@ -1,6 +1,6 @@
-# jong
+# polarize
 
-Jong is a tool that uses Java runtime reflection and an Annotation Processor at compile time to get annotation data about classes and methods.  Specifically, it does two things:
+polarize is a tool that uses Java runtime reflection and an Annotation Processor at compile time to get annotation data about classes and methods.  Specifically, it does two things:
 
 1) @Test TestNG annotations so that @Test annotated classes and methods can be gathered.  
 2) @Polarion and @Requirement annotations to gather enough information to
