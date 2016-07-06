@@ -1,22 +1,6 @@
 <TestCaseMetadata project-id="RedHatEnterpriseLinux7">
     <!-- workitems can contain testcase or requirement elements -->
     <workitems>
-        <!-- Annotation equivalent to generate the XML:
-
-        @Requirement(id="",
-                     severity="Must Have",           // defaults to Must Have
-                     reqtype=""                      // defaults to Functional
-                     priority="medium"               // defaults to medium
-                     author="Sean Toner",            // required (someone has to OK this)
-                     description="Feature Summary",  // required
-                     feature="")                     // optional. if given, path to gherkin feature file
-        -->
-        <requirement id="" severity="" reqtype="" priority="">
-            <author>Sean Toner</author>
-            <description>A summary description of the feature to be tested goes here</description>
-            <feature>path to an optional feature file</feature>
-        </requirement>
-
         <!-- The Annotation equivalent of the XML.  The Annotation Processor will generate the equivalent
         <testcase> subtree and insert it into the TestCaseMetadata -> workitems tree.
 
@@ -31,8 +15,8 @@
                   caseposneg="positive",               // defaults to positive if not given
                   caselevel="component",               // defaults to component if not given
                   testtype="functional",               // defaults to functional if not given
-                  @Requirement(polarionId="",          // if null, look in directory.  if DNE, request to WI Importer
-                               xmlConfig="",           // if both this and above DNE, generate one
+                  @Requirement(id="",                  // if null, look in directory.  if DNE, request to WI Importer
+                               xmlDesc="",             // if both this and above DNE, generate one
                                feature=""),
                   setup="Description of any preconditions that must be established for test case to run",
                   teardown="The methods to clean up after a test method")
@@ -48,12 +32,23 @@
             <status value="draft"/>
 
             <!-- If the polation-id is given, the config and feature attributes will be ignored.  It it is empty
-            The Processor will look -->
-            <requirement polarion-id="" config="" feature="">
-                <severity>
-
-                </severity>
-            </requirement>
+            The Processor will look
+            @Requirement(id="",
+                         xmlDesc="/path/to/xml",         // defaults to
+                         severity="Must Have",           // defaults to Must Have
+                         reqtype=""                      // defaults to Functional
+                         priority="medium"               // defaults to medium
+                         author="Sean Toner",            // required (someone has to OK this)
+                         description="Feature Summary",  // required
+                         feature="")                     // optional. if given, path to gherkin feature file
+            -->
+            <requirements>
+                <requirement id="" severity="" reqtype="" priority="">
+                    <author>Sean Toner</author>
+                    <description>A summary description of the feature to be tested goes here</description>
+                    <feature>path to an optional feature file</feature>
+                </requirement>
+            </requirements>
 
             <!-- From an automation POV, we can probably look for the @BeforeClass belonging to this
              method.  Not sure how to get the @BeforeGroup or @BeforeSuite though -->

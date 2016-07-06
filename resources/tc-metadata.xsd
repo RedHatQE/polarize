@@ -95,9 +95,15 @@
     </xs:simpleType>
 
     <xs:complexType name="req-type">
-        <xs:attribute name="polarion-id"/>
-        <xs:attribute name="config"/>
-        <xs:attribute name="feature"/>
+        <xs:all>
+            <xs:element name="author" minOccurs="1" maxOccurs="1"/>
+            <xs:element name="description" minOccurs="1" maxOccurs="1"/>
+            <xs:element name="feature" minOccurs="0" maxOccurs="1"/>
+        </xs:all>
+        <xs:attribute name="id"/>
+        <xs:attribute name="severity"/>
+        <xs:attribute name="priority"/>
+        <xs:attribute name="reqtype"/>
     </xs:complexType>
 
     <xs:complexType name="teststep-type">
