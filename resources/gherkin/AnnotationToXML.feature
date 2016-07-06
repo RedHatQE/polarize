@@ -9,9 +9,10 @@ Feature: Generate XML from annotated class
       - RHEL_7_3
     Links
       - /some/link/to/share  # optional
+
   Scenario: Annotated class generates valid XML
     Given The class is annotated with @Polarion
-    And The Polarion annotation has author
-    And The Polarion annotation has projectId
-    And The Polarion annotation has sub-annotation Requirement
-    Then XML
+      And The Polarion annotation has author
+      And The Polarion annotation has projectId
+      And The Polarion annotation has sub-annotation Requirement
+     Then XML
