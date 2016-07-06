@@ -15,10 +15,19 @@ import javax.tools.Diagnostic;
 import javax.xml.bind.JAXBContext;
 import javax.xml.bind.JAXBException;
 import javax.xml.bind.Marshaller;
+import java.io.BufferedReader;
 import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
 import java.lang.annotation.Annotation;
+import java.nio.file.FileSystems;
+import java.nio.file.Files;
 import java.util.*;
 import java.util.stream.Collectors;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 
 /**
  * Created by stoner on 5/16/16.
@@ -28,6 +37,9 @@ public class PolarionProcessor extends AbstractProcessor {
     private Elements elements;
     private Messager msgr;
     private Filer filer;
+    private Logger logger;
+    String reqPath;
+    String tcPath;
 
     /**
      * Contains the fully qualified name of a @Polarion decorated method
@@ -110,20 +122,22 @@ public class PolarionProcessor extends AbstractProcessor {
         // Get all the @Requirement top-level annotations
         // We will use the information here to generate the XML for requirements
         List<? extends Element> reqAnns = this.getRequirementAnnotations(roundEnvironment);
+        List<Meta<Requirement>> requirements = this.makeMeta(reqAnns, Requirement.class);
+        Map<String, Meta<Requirement>> methToRequirement = this.methodToMeta(requirements);
 
         // Get all the @Polarion annotations
         // Make a list of Meta types that store the fully qualified name of every @Polarion annotated
         // method.  We will use this to create a map of qualified_name => Polarion Annotation
         List<? extends Element> polAnns = this.getPolarionAnnotations(roundEnvironment);
         List<Meta<Polarion>> metas = this.makeMeta(polAnns, Polarion.class);
-        Map<String, Meta<Polarion>> methToMeta = this.methodToMeta(metas);
-        methToMeta.forEach((qual, ann) -> System.out.println(String.format("%s -> %s", qual, ann.toString())));
+        Map<String, Meta<Polarion>> methToPolarion = this.methodToMeta(metas);
+        methToPolarion.forEach((qual, ann) -> System.out.println(String.format("%s -> %s", qual, ann.toString())));
 
         // Get all the @Test annotations in order to get the description
         Map<String, String> methNameToDescription = this.getTestAnnotations(roundEnvironment);
 
-        // We now have the mapping from qualified name to annotation.
-        List<TestcaseType> tests = methToMeta.entrySet().stream()
+        // We now have the mapping from qualified name to annotation.  So, process each TestCase object
+        List<TestcaseType> tests = methToPolarion.entrySet().stream()
                 .map(es -> {
                     String qualifiedName = es.getKey();
                     @Nonnull String desc = methNameToDescription.get(qualifiedName);
@@ -131,6 +145,8 @@ public class PolarionProcessor extends AbstractProcessor {
                     return this.processTestCase(meta, desc);
                 })
                 .collect(Collectors.toList());
+
+
 
         // Convert the TestcaseType objects to XML
         // TODO: figure out how to get the project-id
@@ -327,6 +343,76 @@ public class PolarionProcessor extends AbstractProcessor {
         return tc;
     }
 
+    /**
+     * Given the Requirement annotation data, do the following:
+     *
+     * - If ID exists:
+     *   - Check that requirements.xml.path/class/methodName.xml exists
+     *     - If it does not, generate one and call requestRequirementImporter
+     *       - Wait for return value to get Requirement ID
+     *     - If it does, verify the XML has Polarion ID
+     *       - Verify that the Polarion ID matches the method
+     * - If ID does not exist:
+     *   - Generate XML request for WorkItem importer
+     *   - Wait for return value to get the Requirement ID
+     * @param reqs
+     */
+    private void processRequirement(Meta<Requirement> reqs) {
+
+    }
+
+    /**
+     * Loads configuration data from the following in increasing order of precedence:
+     *
+     * - resources/polarize.properties
+     * - ~/.polarize/polarize.properties
+     * - Java -D options
+     *
+     * Two of the more important properties are requirements.xml.path and testcase.xml.path.  These fields describe
+     * where the XML equivalent of the annotations will be stored.  Normally, this will be some path inside of the
+     * project that will be scanned for annotations.  This is because polarize will generate the XML descriptions if
+     * they dont exist, and it is better to have these xml files under source control.  When the processor needs to
+     * generate an XML description based on the annotation data, it will do the following:
+     *
+     * - If processing @Requirement, look for/generate requirements.xml.path/class/methodName.xml
+     * - If processing @Polarion, look for/generate testcase.xml.path/class/methodName.xml
+     */
+    private void loadConfiguration() {
+        InputStream is = getClass().getClassLoader().getResourceAsStream("polarize.properties");
+        Properties props = new Properties();
+
+        try {
+            props.load(is);
+            reqPath = props.getProperty("requirements.xml.path", "/tmp/reqs");
+            tcPath = props.getProperty("testcases.xml.path", "/tmp/tcs");
+        } catch (IOException e) {
+            this.logger.info("Could not load polarize.properties.  Trying ~/.polarize/polarize.properties");
+        }
+
+        try {
+            String homeDir = System.getProperty("user.home");
+            BufferedReader rdr;
+            rdr = Files.newBufferedReader(FileSystems.getDefault().getPath(homeDir + "/.polarize/polarize.properties"));
+            props.load(rdr);
+            reqPath = props.getProperty("requirements.xml.path", "/tmp/reqs");
+            tcPath = props.getProperty("testcases.xml.path", "/tmp/tcs");
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+        try {
+            reqPath = System.getProperty("requirements.xml.path");
+        } catch (Exception ex) {
+            this.logger.info(String.format("No -Drequirements.xml.path set.  reqPath is %s", this.reqPath));
+        }
+
+        try {
+            tcPath = System.getProperty("testcases.xml.path");
+        } catch (Exception ex) {
+            this.logger.info(String.format("No -Dtestcases.xml.path set.  tcPath is %s", this.tcPath));
+        }
+    }
+
     @Override
     public synchronized void init(ProcessingEnvironment env) {
         System.out.println("In init() method");
@@ -335,6 +421,9 @@ public class PolarionProcessor extends AbstractProcessor {
         this.elements = env.getElementUtils();
         this.filer = env.getFiler();
         this.msgr = env.getMessager();
+        this.logger = LoggerFactory.getLogger(PolarionProcessor.class);
+
+        this.loadConfiguration();
     }
 
     @Override
