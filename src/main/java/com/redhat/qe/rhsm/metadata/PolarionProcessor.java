@@ -1,5 +1,6 @@
 package com.redhat.qe.rhsm.metadata;
 
+import com.redhat.qe.rhsm.FileHelper;
 import com.redhat.qe.rhsm.schema.*;
 import org.testng.annotations.Test;
 
@@ -22,6 +23,7 @@ import java.io.InputStream;
 import java.lang.annotation.Annotation;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -137,12 +139,21 @@ public class PolarionProcessor extends AbstractProcessor {
         Map<String, String> methNameToDescription = this.getTestAnnotations(roundEnvironment);
 
         // We now have the mapping from qualified name to annotation.  So, process each TestCase object
-        List<TestcaseType> tests = methToPolarion.entrySet().stream()
+        List<Testcase> tests = methToPolarion.entrySet().stream()
                 .map(es -> {
                     String qualifiedName = es.getKey();
                     @Nonnull String desc = methNameToDescription.get(qualifiedName);
                     Meta<Polarion> meta = es.getValue();
                     return this.processTestCase(meta, desc);
+                })
+                .collect(Collectors.toList());
+
+
+        List<ReqType> reqList = methToRequirement.entrySet().stream()
+                .map(e -> {
+                    Meta<Requirement> m = e.getValue();
+                    Requirement r = m.annotation;
+                    return this.processRequirement(r);
                 })
                 .collect(Collectors.toList());
 
@@ -155,7 +166,7 @@ public class PolarionProcessor extends AbstractProcessor {
         tcmd.setDryRun(true);
 
         TestCaseMetadata.Workitems wis = new TestCaseMetadata.Workitems();
-        List<TestcaseType> tcs = wis.getTestcase();
+        List<Testcase> tcs = wis.getTestcase();
         tcs.addAll(tests);
         tcmd.setWorkitems(wis);
 
@@ -284,8 +295,29 @@ public class PolarionProcessor extends AbstractProcessor {
      *
      * @param req
      */
-    private void processRequirement(Requirement req) {
+    private ReqType processRequirement(Requirement req) {
+        if(req.id().equals("")) {
+            // Check for xmlDesc
+        }
 
+        return null;
+    }
+
+
+    private File getXmlDesc(Requirement req) {
+        String xmlPath = this.reqPath + "/" + req.xmlDesc();
+        Optional<Path> p = FileHelper.makePath(xmlPath);
+        File f = null;
+        if(p.isPresent()) {
+            Path path = p.get();
+            f = path.toFile();
+
+            //TODO: validate the XML
+
+            //TODO: check the
+        }
+
+        return null;
     }
 
     /**
@@ -300,45 +332,56 @@ public class PolarionProcessor extends AbstractProcessor {
      * Examples a Polarion object to obtain its values and generates an XML file if needed.
      * @param meta
      */
-    private TestcaseType processTestCase(Meta<Polarion> meta, String description) {
+    private Testcase processTestCase(Meta<Polarion> meta, String description) {
         Polarion pol = meta.annotation;
-        TestcaseType tc = new TestcaseType();
+        Testcase tc = new Testcase();
         tc.setAuthor(pol.author());
         tc.setDescription(description);
         tc.setTitle(meta.qualifiedName);
 
         // For automation, let's always assume we're in draft state
-        TestcaseType.Status status = new TestcaseType.Status();
+        Testcase.Status status = new Testcase.Status();
         status.setValue("draft");
         tc.setStatus(status);
 
-        TestcaseType.Caseautomation ca = new TestcaseType.Caseautomation();
+        Testcase.Caseautomation ca = new Testcase.Caseautomation();
         ca.setValue(AutomationTypes.AUTOMATED);
         tc.setCaseautomation(ca);
 
-        TestcaseType.Caseimportance ci = new TestcaseType.Caseimportance();
+        Testcase.Caseimportance ci = new Testcase.Caseimportance();
         ci.setValue(ImpTypes.fromValue(pol.caseimportance().toLowerCase()));
         tc.setCaseimportance(ci);
 
-        TestcaseType.Caselevel cl = new TestcaseType.Caselevel();
+        Testcase.Caselevel cl = new Testcase.Caselevel();
         cl.setValue(CaseTypes.fromValue(pol.caselevel().toLowerCase()));
         tc.setCaselevel(cl);
 
-        TestcaseType.Caseposneg cpn = new TestcaseType.Caseposneg();
+        Testcase.Caseposneg cpn = new Testcase.Caseposneg();
         cpn.setValue(PosnegTypes.fromValue(pol.caseposneg().toLowerCase()));
         tc.setCaseposneg(cpn);
 
-        TestcaseType.Testtype tt = new TestcaseType.Testtype();
+        Testcase.Testtype tt = new Testcase.Testtype();
         tt.setValue(TestTypes.fromValue(pol.testtype().toLowerCase()));
         tc.setTesttype(tt);
 
         tc.setWorkitemId(pol.testCaseID());
         tc.setWorkitemType(WiTypes.TEST_CASE);
 
-        /**
-         * TODO: add the Requirements
-         */
         Requirement[] reqs = pol.reqs();
+        List<ReqType> r = tc.getRequirements().getRequirement();
+        for(Requirement e: reqs) {
+            ReqType req = new ReqType();
+            req.setAuthor(e.author());
+            req.setDescription(e.description());
+            req.setId(e.id());
+            req.setPriority(e.priority());
+            req.setProject(tc.getProject());
+            req.setReqtype(e.reqtype());
+            req.setSeverity(e.severity());
+            r.add(req);
+        }
+
+        //TODO: Check for feature file and XML Desc file
 
         return tc;
     }
