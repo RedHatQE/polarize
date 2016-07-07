@@ -1,0 +1,86 @@
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           xmlns:pt="com.redhat.qe.rhsm.PolarizeTypes"
+           xmlns:req="com.redhat.qe.rhsm.RequirementType"
+           targetNamespace="com.redhat.qe.rhsm.TestCaseType"
+           elementFormDefault="qualified">
+    <xs:import schemaLocation="types.xsd"
+               namespace="com.redhat.qe.rhsm.PolarizeTypes"/>
+    <xs:import schemaLocation="requirement.xsd"
+               namespace="com.redhat.qe.rhsm.RequirementType"/>
+    <xs:complexType name="testcase">
+        <xs:all>
+            <xs:element name="description" minOccurs="1" maxOccurs="1" type="xs:string"/>
+            <xs:element name="title" minOccurs="1" maxOccurs="1" type="xs:string"/>
+            <xs:element name="caseimportance">
+                <xs:complexType>
+                    <xs:attribute name="value" type="pt:imp-types" use="required"/>
+                </xs:complexType>
+            </xs:element>
+
+            <xs:element name="caselevel">
+                <xs:complexType>
+                    <xs:attribute name="value" type="pt:case-types" use="required"/>
+                </xs:complexType>
+            </xs:element>
+
+            <xs:element name="testtype">
+                <xs:complexType>
+                    <xs:attribute name="value" type="pt:test-types" use="required"/>
+                </xs:complexType>
+            </xs:element>
+
+            <xs:element name="caseposneg">
+                <xs:complexType>
+                    <xs:attribute name="value" type="pt:posneg-types" use="required"/>
+                </xs:complexType>
+            </xs:element>
+
+            <xs:element name="caseautomation">
+                <xs:complexType>
+                    <xs:attribute name="value" type="pt:automation-types" use="required"/>
+                </xs:complexType>
+            </xs:element>
+
+            <!-- Fix the type.  Status is a state machine, so I need to track down all
+            possible values -->
+            <xs:element name="status">
+                <xs:complexType>
+                    <xs:attribute name="value" type="xs:string"/>
+                </xs:complexType>
+            </xs:element>
+
+            <!-- A required element that specifies the polarion-id, feature file path and path to metadata xml -->
+            <xs:element name="requirements" minOccurs="1" maxOccurs="1">
+                <xs:complexType>
+                    <xs:sequence>
+                        <xs:element name="requirement" minOccurs="1" maxOccurs="unbounded" type="req:req-type"/>
+                    </xs:sequence>
+                </xs:complexType>
+            </xs:element>
+
+            <!-- An optional description of setup steps.  For automated tests, these would be the
+            methods for @BeforeClass, @BeforeGroups and @BeforeSuite-->
+            <xs:element name="setup" minOccurs="0" maxOccurs="1" type="xs:string"/>
+
+            <!-- A list of the test steps.  Must be at least 1 -->
+            <xs:element name="teststeps" minOccurs="1">
+                <xs:complexType>
+                    <xs:sequence>
+                        <xs:element name="teststep" type="pt:teststep-type" minOccurs="0"/>
+                    </xs:sequence>
+                </xs:complexType>
+            </xs:element>
+
+            <!-- A description of cleaning up after test methods.  For automation the methods for
+            @AfterClass, @AfterGroups, @AfterSuite -->
+            <xs:element name="teardown" minOccurs="0" maxOccurs="1" type="xs:string"/>
+
+        </xs:all>
+        <xs:attribute name="project" type="pt:project-vals" use="required"/>
+        <xs:attribute name="author" type="xs:string" use="required"/>
+        <xs:attribute name="workitem-type" type="pt:wi-types" use="required"/>
+        <xs:attribute name="hyperlink" type="xs:string" use="optional"/>
+        <xs:attribute name="workitem-id" type="xs:string" use="optional"/>
+    </xs:complexType>
+
+</xs:schema>

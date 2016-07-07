@@ -1,0 +1,27 @@
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           xmlns:pt="com.redhat.qe.rhsm.PolarizeTypes"
+           xmlns:tc="com.redhat.qe.rhsm.TestCaseType"
+           xmlns:req="com.redhat.qe.rhsm.RequirementType"
+           targetNamespace="com.redhat.qe.rhsm.WorkItemType"
+           elementFormDefault="qualified">
+    <xs:import schemaLocation="types.xsd"
+               namespace="com.redhat.qe.rhsm.PolarizeTypes"/>
+    <xs:import schemaLocation="testcase.xsd"
+               namespace="com.redhat.qe.rhsm.TestCaseType"/>
+    <xs:import schemaLocation="requirement.xsd"
+               namespace="com.redhat.qe.rhsm.RequirementType"/>
+    <!-- Element structure
+    A TestCaseMetadata is a sequence of -->
+    <xs:element name="WorkItem">
+        <xs:complexType>
+            <xs:choice>
+                <xs:element name="testcase" type="tc:testcase" minOccurs="1" maxOccurs="1"/>
+                <xs:element name="requirement" type="req:req-type" minOccurs="1" maxOccurs="1"/>
+            </xs:choice>
+
+            <!-- TODO: restrict the values for project-id -->
+            <xs:attribute name="project-id" use="required" type="pt:project-vals"/>
+            <xs:attribute name="type" use="required" type="pt:wi-types"/>
+        </xs:complexType>
+    </xs:element>
+</xs:schema>

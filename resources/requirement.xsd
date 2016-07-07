@@ -1,0 +1,19 @@
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           xmlns:pt="com.redhat.qe.rhsm.PolarizeTypes"
+           targetNamespace="com.redhat.qe.rhsm.RequirementType"
+           elementFormDefault="qualified">
+    <xs:import schemaLocation="types.xsd"
+               namespace="com.redhat.qe.rhsm.PolarizeTypes"/>
+    <xs:complexType name="req-type">
+        <xs:all>
+            <xs:element name="author" minOccurs="1" maxOccurs="1"/>
+            <xs:element name="description" minOccurs="1" maxOccurs="1"/>
+            <xs:element name="feature" minOccurs="0" maxOccurs="1"/>
+        </xs:all>
+        <xs:attribute name="project" type="pt:project-vals" use="required"/>
+        <xs:attribute name="id"/>
+        <xs:attribute name="severity" use="required"/>
+        <xs:attribute name="priority" use="required"/>
+        <xs:attribute name="reqtype" use="required"/>
+    </xs:complexType>
+</xs:schema>
