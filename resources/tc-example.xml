@@ -34,6 +34,7 @@
             <!-- If the polation-id is given, the config and feature attributes will be ignored.  It it is empty
             The Processor will look
             @Requirement(id="",
+                         project="RHEL6",                // required if annotating a class
                          xmlDesc="/path/to/xml",         // defaults to
                          severity="Must Have",           // defaults to Must Have
                          reqtype=""                      // defaults to Functional

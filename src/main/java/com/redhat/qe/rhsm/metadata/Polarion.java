@@ -1,5 +1,6 @@
 package com.redhat.qe.rhsm.metadata;
 
+import java.io.Serializable;
 import java.lang.annotation.*;
 
 /**

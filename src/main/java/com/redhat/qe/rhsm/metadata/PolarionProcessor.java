@@ -32,6 +32,12 @@ import org.slf4j.LoggerFactory;
 
 
 /**
+ * This is the Annotation processor that will look for @Polarion and @Requirement annotations
+ *
+ * While compiling code, it will find methods (or classes for @Requirement) that are annotated and generate an XML
+ * description which is suitable to be consumed by the WorkItem Importer.  The polarize.properties is used to set where
+ * the generated XML files will go and be looked for.
+ *
  * Created by stoner on 5/16/16.
  */
 public class PolarionProcessor extends AbstractProcessor {
@@ -42,17 +48,6 @@ public class PolarionProcessor extends AbstractProcessor {
     private Logger logger;
     String reqPath;
     String tcPath;
-
-    /**
-     * Contains the fully qualified name of a @Polarion decorated method
-     */
-    private class Meta<T> {
-        public String packName;
-        public String className;
-        public String methName;
-        public String qualifiedName;
-        public T annotation;
-    }
 
     /**
      * Recursive function that will get the fully qualified name of a method.
@@ -121,24 +116,30 @@ public class PolarionProcessor extends AbstractProcessor {
     public boolean process(Set<? extends TypeElement> set, RoundEnvironment roundEnvironment) {
         System.out.println("In process() method");
 
-        // Get all the @Requirement top-level annotations
-        // We will use the information here to generate the XML for requirements
+        /**
+         * Get all the @Requirement top-level annotations
+         * We will use the information here to generate the XML for requirements
+         */
         List<? extends Element> reqAnns = this.getRequirementAnnotations(roundEnvironment);
         List<Meta<Requirement>> requirements = this.makeMeta(reqAnns, Requirement.class);
         Map<String, Meta<Requirement>> methToRequirement = this.methodToMeta(requirements);
 
-        // Get all the @Polarion annotations
-        // Make a list of Meta types that store the fully qualified name of every @Polarion annotated
-        // method.  We will use this to create a map of qualified_name => Polarion Annotation
+        /**
+         * Get all the @Polarion annotations
+         * Make a list of Meta types that store the fully qualified name of every @Polarion annotated
+         * method.  We will use this to create a map of qualified_name => Polarion Annotation
+         */
         List<? extends Element> polAnns = this.getPolarionAnnotations(roundEnvironment);
         List<Meta<Polarion>> metas = this.makeMeta(polAnns, Polarion.class);
         Map<String, Meta<Polarion>> methToPolarion = this.methodToMeta(metas);
         methToPolarion.forEach((qual, ann) -> System.out.println(String.format("%s -> %s", qual, ann.toString())));
 
-        // Get all the @Test annotations in order to get the description
+        /** Get all the @Test annotations in order to get the description */
         Map<String, String> methNameToDescription = this.getTestAnnotations(roundEnvironment);
 
-        // We now have the mapping from qualified name to annotation.  So, process each TestCase object
+        /**
+         * We now have the mapping from qualified name to annotation.  So, process each TestCase object
+         */
         List<Testcase> tests = methToPolarion.entrySet().stream()
                 .map(es -> {
                     String qualifiedName = es.getKey();
@@ -148,16 +149,25 @@ public class PolarionProcessor extends AbstractProcessor {
                 })
                 .collect(Collectors.toList());
 
-
+        /**
+         * Run processRequirement on Requirements annotated at the class level.  Since these are annotated at the
+         * class level they must have the projectID
+         */
         List<ReqType> reqList = methToRequirement.entrySet().stream()
                 .map(e -> {
                     Meta<Requirement> m = e.getValue();
-                    Requirement r = m.annotation;
-                    return this.processRequirement(r);
+                    if (m.annotation.project().equals("")) {
+                        String err = "When annotating a class with @Requirement, the project value must be set";
+                        this.msgr.printMessage(Diagnostic.Kind.ERROR, String.format(err));
+                        return null;
+                    }
+                    return this.processRequirement(m);
                 })
                 .collect(Collectors.toList());
-
-
+        for(ReqType rt: reqList) {
+            if (rt == null)
+                return false;
+        }
 
         // Convert the TestcaseType objects to XML
         // TODO: figure out how to get the project-id
@@ -184,28 +194,10 @@ public class PolarionProcessor extends AbstractProcessor {
     }
 
 
-    private Map<String, ? extends Annotation> methodToAnnotation(List<? extends Element> elements,
-                                                                 Class<? extends Annotation> ann) {
-        return elements.stream()
-                .collect(Collectors.toMap(e -> e.getSimpleName().toString(),
-                                          e -> e.getAnnotation(ann)));
-
+    public void createTestCaseXML(Testcase tc) {
+        WorkItem wi = new WorkItem();
     }
 
-    /**
-     * Given a sequence of Meta objects, return a Map of the qualified name to the Annotation data
-     *
-     * @param elements
-     * @param <T>
-     * @return
-     */
-    private <T> Map<String, T> methodToAnnotation2(List<Meta<T>> elements) {
-        Map<String, T> mToA = new HashMap<>();
-        for(Meta<T> m: elements) {
-            mToA.put(m.qualifiedName, m.annotation);
-        }
-        return mToA;
-    }
 
     /**
      * Creates a map of fully qualified names to a Meta type
@@ -280,48 +272,20 @@ public class PolarionProcessor extends AbstractProcessor {
     }
 
 
+    /**
+     * TODO: Looks for the xmlDesc file for a TestCase or Requirement
+     *
+     * @param elem
+     * @return
+     */
     public File getXMLFileForMethod(Element elem) {
         return null;
     }
 
-    /**
-     * Examines a Requirement object to obtain its values and generates an XML file
-     *
-     * First, it will check to see if id is an empty string.  Next, it will check if the xmlDesc value is also an
-     * empty string.  If both are empty, then given the rest of the information from the annotation, it will generate
-     * an XML file and place it in:
-     *
-     * resources/requirements/{package}/{class}/{methodName}.xml
-     *
-     * @param req
-     */
-    private ReqType processRequirement(Requirement req) {
-        if(req.id().equals("")) {
-            // Check for xmlDesc
-        }
-
-        return null;
-    }
-
-
-    private File getXmlDesc(Requirement req) {
-        String xmlPath = this.reqPath + "/" + req.xmlDesc();
-        Optional<Path> p = FileHelper.makePath(xmlPath);
-        File f = null;
-        if(p.isPresent()) {
-            Path path = p.get();
-            f = path.toFile();
-
-            //TODO: validate the XML
-
-            //TODO: check the
-        }
-
-        return null;
-    }
 
     /**
-     * Takes a feature file in gherkin style, and generates an XML file
+     * TODO: Takes a feature file in gherkin style, and generates an XML file
+     *
      * @param featureFile
      */
     private void featureToRequirement(String featureFile) {
@@ -368,16 +332,13 @@ public class PolarionProcessor extends AbstractProcessor {
         tc.setWorkitemType(WiTypes.TEST_CASE);
 
         Requirement[] reqs = pol.reqs();
-        List<ReqType> r = tc.getRequirements().getRequirement();
+        Testcase.Requirements treq = new Testcase.Requirements();
+        List<ReqType> r = treq.getRequirement();
         for(Requirement e: reqs) {
-            ReqType req = new ReqType();
-            req.setAuthor(e.author());
-            req.setDescription(e.description());
-            req.setId(e.id());
-            req.setPriority(e.priority());
-            req.setProject(tc.getProject());
-            req.setReqtype(e.reqtype());
-            req.setSeverity(e.severity());
+            Meta<Requirement> m = new Meta<>(meta);
+            m.annotation = e;
+            ProjectVals proj = tc.getProject();
+            ReqType req = this.processRequirement(m, proj);
             r.add(req);
         }
 
@@ -398,10 +359,52 @@ public class PolarionProcessor extends AbstractProcessor {
      * - If ID does not exist:
      *   - Generate XML request for WorkItem importer
      *   - Wait for return value to get the Requirement ID
-     * @param reqs
+     * @param meta
      */
-    private void processRequirement(Meta<Requirement> reqs) {
+    private ReqType processRequirement(Meta<Requirement> meta) {
+        ReqType req = new ReqType();
+        Requirement r = meta.annotation;
+        req.setAuthor(r.author());
+        req.setDescription(r.description());
+        req.setId(r.id());
+        req.setPriority(r.priority());
+        req.setProject(ProjectVals.fromValue(r.project()));
+        req.setReqtype(r.reqtype());
+        req.setSeverity(r.severity());
 
+        Path path = FileHelper.makeXmlPath(this.reqPath, meta);
+        File xmlDesc = path.toFile();
+        if(r.id().equals("")) {
+            // Check for xmlDesc.  If both the id and xmlDesc are empty strings, then we need to generate an XML file
+            // based on the Requirement metadata
+            if (r.xmlDesc().equals("")) {
+                this.logger.info("TODO: Generate XML file and pass it to WorkItem Importer");
+
+            }
+
+            if (!path.toFile().exists()) {
+
+            }
+        }
+
+        return req;
+    }
+
+    /**
+     * Examines a Requirement object to obtain its values and generates an XML file
+     *
+     * First, it will check to see if id is an empty string.  Next, it will check if the xmlDesc value is also an
+     * empty string.  If both are empty, then given the rest of the information from the annotation, it will generate
+     * an XML file and place it in:
+     *
+     * resources/requirements/{package}/{class}/{methodName}.xml
+     *
+     * @param m
+     */
+    private ReqType processRequirement(Meta<Requirement> m, ProjectVals project) {
+        ReqType req = this.processRequirement(m);
+        req.setProject(project);
+        return req;
     }
 
     /**
@@ -440,20 +443,16 @@ public class PolarionProcessor extends AbstractProcessor {
             reqPath = props.getProperty("requirements.xml.path", "/tmp/reqs");
             tcPath = props.getProperty("testcases.xml.path", "/tmp/tcs");
         } catch (IOException e) {
-            e.printStackTrace();
+            //e.printStackTrace();
         }
 
-        try {
-            reqPath = System.getProperty("requirements.xml.path");
-        } catch (Exception ex) {
-            this.logger.info(String.format("No -Drequirements.xml.path set.  reqPath is %s", this.reqPath));
-        }
+        String xmlReqPath = System.getProperty("requirements.xml.path");
+        if (xmlReqPath != null)
+            reqPath = xmlReqPath;
 
-        try {
-            tcPath = System.getProperty("testcases.xml.path");
-        } catch (Exception ex) {
-            this.logger.info(String.format("No -Dtestcases.xml.path set.  tcPath is %s", this.tcPath));
-        }
+        String xmlTCPath = System.getProperty("testcases.xml.path");
+        if (xmlTCPath != null)
+            tcPath = xmlTCPath;
     }
 
     @Override

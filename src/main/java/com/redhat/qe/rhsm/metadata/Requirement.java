@@ -12,6 +12,8 @@ import java.lang.annotation.Target;
 @Retention(RetentionPolicy.RUNTIME)
 public @interface Requirement {
     String id() default "";                          // if "", must have xmlDesc
+    String project() default "";                     // required if annotating a class.  If embedded in @Polarion it
+                                                     // uses the value of project from it
     String author() default "";                      // if "", must have xmlDesc
     String description() default "";                 // if "", must have xmlDesc
     String xmlDesc() default "";                     // Optional if id, author and description are supplied
