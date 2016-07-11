@@ -44,6 +44,7 @@ public @interface Polarion {
     String caseposneg() default "positive";
     String caselevel() default "component";
     String testtype() default "functional";
+    String description() default "";           // Must have description but may come from @Test
     String setup() default "";
     String teardown() default "";
     Requirement[] reqs();  // eg. requirementIDs = {"RHEL6-25678", "RHEL6-27654"}

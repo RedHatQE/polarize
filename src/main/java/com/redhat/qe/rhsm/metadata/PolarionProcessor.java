@@ -46,8 +46,13 @@ public class PolarionProcessor extends AbstractProcessor {
     private Messager msgr;
     private Filer filer;
     private Logger logger;
-    String reqPath;
-    String tcPath;
+    private String reqPath;
+    private String tcPath;
+    private Map<String, Meta<Requirement>> methToRequirement;
+    private Map<String,
+        Map<String,
+            Meta<Requirement>>> methToProjectReq;
+    private Map<String, String> methNameToTestNGDescription;
 
     /**
      * Recursive function that will get the fully qualified name of a method.
@@ -117,12 +122,20 @@ public class PolarionProcessor extends AbstractProcessor {
         System.out.println("In process() method");
 
         /**
-         * Get all the @Requirement top-level annotations
-         * We will use the information here to generate the XML for requirements
+         * Get all the @Requirement annotations which have been repeated
          */
-        List<? extends Element> reqAnns = this.getRequirementAnnotations(roundEnvironment);
+        List<? extends Element> repeatedAnns = this.getRequirementAnnotations(roundEnvironment, Requirements.class);
+
+
+        /**
+         * Get all the @Requirement annotated on a class that are not repeated. We will use the information here to
+         * generate the XML for requirements.  If a @Polarion annotated test method has an empty reqs, we will look in
+         * methToRequirements for the associated Requirement.
+         */
+        List<? extends Element> reqAnns = this.getRequirementAnnotations(roundEnvironment, Requirement.class);
         List<Meta<Requirement>> requirements = this.makeMeta(reqAnns, Requirement.class);
-        Map<String, Meta<Requirement>> methToRequirement = this.methodToMeta(requirements);
+        //this.methToRequirement.putAll(this.methodToMeta(requirements));
+        this.methToProjectReq.putAll(this.methodToProjectMeta(requirements));
 
         /**
          * Get all the @Polarion annotations
@@ -135,7 +148,8 @@ public class PolarionProcessor extends AbstractProcessor {
         methToPolarion.forEach((qual, ann) -> System.out.println(String.format("%s -> %s", qual, ann.toString())));
 
         /** Get all the @Test annotations in order to get the description */
-        Map<String, String> methNameToDescription = this.getTestAnnotations(roundEnvironment);
+        Map<String, String> methToDescription = this.getTestAnnotations(roundEnvironment);
+        this.methNameToTestNGDescription.putAll(methToDescription);
 
         /**
          * We now have the mapping from qualified name to annotation.  So, process each TestCase object
@@ -143,7 +157,7 @@ public class PolarionProcessor extends AbstractProcessor {
         List<Testcase> tests = methToPolarion.entrySet().stream()
                 .map(es -> {
                     String qualifiedName = es.getKey();
-                    @Nonnull String desc = methNameToDescription.get(qualifiedName);
+                    @Nonnull String desc = methNameToTestNGDescription.get(qualifiedName);
                     Meta<Polarion> meta = es.getValue();
                     return this.processTestCase(meta, desc);
                 })
@@ -212,13 +226,35 @@ public class PolarionProcessor extends AbstractProcessor {
                         m -> m));
     }
 
-    private List<? extends Element> getRequirementAnnotations(RoundEnvironment env) {
-        String iface = Requirement.class.getSimpleName();
-        return env.getElementsAnnotatedWith(Requirement.class)
+    /**
+     * Creates a nested map of qualifiedName -> {projectID: Requirement}
+     *
+     * TODO: Figure out how to do this with reduce
+     *
+     * @param metas
+     * @return
+     */
+    private Map<String, Map<String, Meta<Requirement>>> methodToProjectMeta(List<Meta<Requirement>> metas) {
+        Map<String, Map<String, Meta<Requirement>>> acc = new HashMap<>();
+        for(Meta<Requirement> m: metas) {
+            Requirement r = m.annotation;
+            String key = m.qualifiedName;
+            String project = r.project();
+            Map<String, Meta<Requirement>> projectToMeta = new HashMap<>();
+            projectToMeta.put(project, m);
+            acc.put(key, projectToMeta);
+        }
+        return acc;
+    }
+
+    private List<? extends Element> getRequirementAnnotations(RoundEnvironment env, Class<? extends Annotation> c) {
+        String iface = c.getSimpleName();
+
+        return env.getElementsAnnotatedWith(c)
                 .stream()
                 .map(ae -> {
-                    if (ae.getKind() != ElementKind.METHOD ||
-                            ae.getKind() != ElementKind.CLASS) {
+                    this.logger.info(String.format("Kind is %s", ae.getKind().toString()));
+                    if (!(ae.getKind() == ElementKind.METHOD || ae.getKind() == ElementKind.CLASS)) {
                         this.errorMsg(ae, "Can only annotate classes or methods with @%s", iface);
                         return null;
                     }
@@ -332,6 +368,14 @@ public class PolarionProcessor extends AbstractProcessor {
         tc.setWorkitemType(WiTypes.TEST_CASE);
 
         Requirement[] reqs = pol.reqs();
+        /** If reqs is empty look at the class annotated requirements contained in methToProjectReq */
+        if (reqs.length == 0) {
+            String pkgClassname = String.format("%s.%s", meta.packName, meta.className);
+            String project = tc.getProject().value();
+            Meta<Requirement> r = this.methToProjectReq.get(pkgClassname).get(project);
+            reqs = new Requirement[1];
+            reqs[0] = r.annotation;
+        }
         Testcase.Requirements treq = new Testcase.Requirements();
         List<ReqType> r = treq.getRequirement();
         for(Requirement e: reqs) {
@@ -368,7 +412,11 @@ public class PolarionProcessor extends AbstractProcessor {
         req.setDescription(r.description());
         req.setId(r.id());
         req.setPriority(r.priority());
-        req.setProject(ProjectVals.fromValue(r.project()));
+        try {
+            req.setProject(ProjectVals.fromValue(r.project()));
+        } catch (Exception ex) {
+            this.logger.warn("No projectID...will try from @Polarion");
+        }
         req.setReqtype(r.reqtype());
         req.setSeverity(r.severity());
 
@@ -466,6 +514,10 @@ public class PolarionProcessor extends AbstractProcessor {
         this.logger = LoggerFactory.getLogger(PolarionProcessor.class);
 
         this.loadConfiguration();
+
+        this.methNameToTestNGDescription = new HashMap<>();
+        this.methToRequirement = new HashMap<>();
+        this.methToProjectReq = new HashMap<>();
     }
 
     @Override
