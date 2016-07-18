@@ -56,7 +56,7 @@ public class FileHelper {
         else
             throw new InvalidArgumentType();
 
-        Path basePath = Paths.get(base, proj, type, meta.className);
+        Path basePath = Paths.get(base, proj, meta.className);
         String fullPath = basePath.toString() + meta.methName + ".xml";
         Path path = Paths.get(fullPath);
 

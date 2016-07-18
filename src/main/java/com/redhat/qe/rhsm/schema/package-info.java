@@ -9,5 +9,6 @@
         elementFormDefault = javax.xml.bind.annotation.XmlNsForm.QUALIFIED,
 xmlns={ @javax.xml.bind.annotation.XmlNs(prefix = "pt", namespaceURI = "com.redhat.qe.rhsm.PolarizeTypes"),
         @javax.xml.bind.annotation.XmlNs(prefix= "tc", namespaceURI = "com.redhat.qe.rhsm.TestCaseType"),
-        @javax.xml.bind.annotation.XmlNs(prefix = "req", namespaceURI = "com.redhat.qe.rhsm.RequirementType") })
+        @javax.xml.bind.annotation.XmlNs(prefix = "req", namespaceURI = "com.redhat.qe.rhsm.RequirementType"),
+        @javax.xml.bind.annotation.XmlNs(prefix="wit", namespaceURI = "com.redhat.qe.rhsm.WorkItemType")})
 package com.redhat.qe.rhsm.schema;

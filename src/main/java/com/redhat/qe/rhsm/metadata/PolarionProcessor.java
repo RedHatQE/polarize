@@ -14,10 +14,10 @@ import javax.lang.model.util.Elements;
 import javax.lang.model.util.Types;
 import javax.tools.Diagnostic;
 import javax.xml.bind.*;
-import java.io.BufferedReader;
-import java.io.File;
-import java.io.IOException;
-import java.io.InputStream;
+import javax.xml.stream.XMLEventReader;
+import javax.xml.stream.XMLInputFactory;
+import javax.xml.stream.XMLStreamException;
+import java.io.*;
 import java.lang.annotation.Annotation;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
@@ -62,7 +62,7 @@ public class PolarionProcessor extends AbstractProcessor {
      * @param accum
      * @return
      */
-    String getTopLevel(Element elem, String accum, Meta m) {
+    private String getTopLevel(Element elem, String accum, Meta m) {
         String tmp = elem.getSimpleName().toString();
         switch(elem.getKind()) {
             case PACKAGE:
@@ -98,7 +98,7 @@ public class PolarionProcessor extends AbstractProcessor {
         for(Element e : elements) {
             Meta m = new Meta<T>();
             String full = this.getTopLevel(e, "", m);
-            System.out.println(String.format("Fully qualified name is %s", full));
+            this.logger.info(String.format("Fully qualified name is %s", full));
             m.qualifiedName = full;
             m.annotation = e.getAnnotation(ann);
             metas.add(m);
@@ -124,7 +124,7 @@ public class PolarionProcessor extends AbstractProcessor {
             for(Requirement r: container.value()) {
                 Meta m = new Meta<T>();
                 String full = this.getTopLevel(e, "", m);
-                System.out.println(String.format("Fully qualified name is %s", full));
+                this.logger.info(String.format("Fully qualified name is %s", full));
                 m.qualifiedName = full;
                 m.annotation = r;
                 metas.add(m);
@@ -142,7 +142,7 @@ public class PolarionProcessor extends AbstractProcessor {
             for(Polarion r: container.value()) {
                 Meta m = new Meta<T>();
                 String full = this.getTopLevel(e, "", m);
-                System.out.println(String.format("Fully qualified name is %s", full));
+                this.logger.info(String.format("Fully qualified name is %s", full));
                 m.qualifiedName = full;
                 m.annotation = r;
                 metas.add(m);
@@ -167,29 +167,29 @@ public class PolarionProcessor extends AbstractProcessor {
         System.out.println("In process() method");
 
         // Get all the @Requirement annotations which have been repeated
-        TreeSet<ElementKind> allowed = new TreeSet<ElementKind>();
+        TreeSet<ElementKind> allowed = new TreeSet<>();
         allowed.add(ElementKind.CLASS);
         String err = "Can only annotate classes with @Requirements";
         List<? extends Element> repeatedAnns = this.getAnnotations(roundEnvironment, Requirements.class, allowed, err);
         List<Meta<Requirement>> requirements = this.makeMetaFromRequirements(repeatedAnns, Requirements.class);
 
 
-         // Get all the @Requirement annotated on a class that are not repeated. We will use the information here to
-         // generate the XML for requirements.  If a @Polarion annotated test method has an empty reqs, we will look in
-         // methToRequirements for the associated Requirement.
-        allowed = new TreeSet<ElementKind>();
+        // Get all the @Requirement annotated on a class that are not repeated. We will use the information here to
+        // generate the XML for requirements.  If a @Polarion annotated test method has an empty reqs, we will look in
+        // methToRequirements for the associated Requirement.
+        allowed = new TreeSet<>();
         allowed.add(ElementKind.CLASS);
         allowed.add(ElementKind.METHOD);
         err = "Can only annotate classes or methods with @Requirement";
         List<? extends Element> reqAnns = this.getAnnotations(roundEnvironment, Requirement.class, allowed, err);
         requirements.addAll(this.makeMeta(reqAnns, Requirement.class));
-        this.methToProjectReq.putAll(this.methodToProjectMeta(requirements));
+        this.methToProjectReq.putAll(this.createMethodToMetaRequirementMap(requirements));
 
 
         // Get all the @Polarion annotations
         // Make a list of Meta types that store the fully qualified name of every @Polarion annotated
         // method.  We will use this to create a map of qualified_name => Polarion Annotation
-        allowed = new TreeSet<ElementKind>();
+        allowed = new TreeSet<>();
         allowed.add(ElementKind.METHOD);
         err = "Can only annotate methods with @Polarion";
         List<? extends Element> polAnns = this.getAnnotations(roundEnvironment, Polarion.class, allowed, err);
@@ -199,7 +199,7 @@ public class PolarionProcessor extends AbstractProcessor {
         List<? extends Element> pols = this.getAnnotations(roundEnvironment, Polarions.class, allowed, err);
         metas.addAll(this.makeMetaFromPolarions(pols, Polarions.class));
 
-        this.methToProjectPol = this.methodToMetaPolarion(metas);
+        this.methToProjectPol = this.createMethodToMetaPolarionMap(metas);
 
 
         // Get all the @Test annotations in order to get the description
@@ -312,7 +312,7 @@ public class PolarionProcessor extends AbstractProcessor {
 
 
     private Map<String, Map<String, Meta<Polarion>>>
-    methodToMetaPolarion(List<Meta<Polarion>> metas) {
+    createMethodToMetaPolarionMap(List<Meta<Polarion>> metas) {
         Map<String, Map<String, Meta<Polarion>>> methods = new HashMap<>();
         Map<String, Meta<Polarion>> projects = new HashMap<>();
         for(Meta<Polarion> m: metas) {
@@ -338,7 +338,8 @@ public class PolarionProcessor extends AbstractProcessor {
      * @param metas
      * @return
      */
-    private Map<String, Map<String, Meta<Requirement>>> methodToProjectMeta(List<Meta<Requirement>> metas) {
+    private Map<String, Map<String, Meta<Requirement>>>
+    createMethodToMetaRequirementMap(List<Meta<Requirement>> metas) {
         Map<String, Map<String, Meta<Requirement>>> acc = new HashMap<>();
         Map<String, Meta<Requirement>> projectToMeta = new HashMap<>();
         for(Meta<Requirement> m: metas) {
@@ -501,8 +502,10 @@ public class PolarionProcessor extends AbstractProcessor {
 
         Path path = FileHelper.makeXmlPath(this.reqPath, meta);
         File xmlDesc = path.toFile();
+        WorkItem wi;
         if (path.toFile().exists()) {
-            this.logger.warn(String.format("File %s already exists", xmlDesc.toString()));
+            wi = PolarionProcessor.unmarshaller(WorkItem.class, xmlDesc);
+            return wi.getRequirement();
         }
         else {
             // TODO: Generate the directory path if necessary
@@ -511,26 +514,40 @@ public class PolarionProcessor extends AbstractProcessor {
         }
 
         if(r.id().equals("")) {
+            this.logger.info("No polarionID...");
             // Check for xmlDesc.  If both the id and xmlDesc are empty strings, then we need to generate an XML file
             // based on the Requirement metadata
             if (r.xmlDesc().equals("")) {
-                this.logger.info(String.format("Generating XML requirement descriptor in %s", xmlDesc.toString()));
-                WorkItem wi = new WorkItem();
-                wi.setRequirement(req);
-                wi.setProjectId(req.getProject());
-                wi.setType(WiTypes.REQUIREMENT);
-
-                PolarionProcessor.marshaller(wi, xmlDesc);
+                return this.initReqType(req, xmlDesc);
             }
             else {
-                // look for the file
+                this.logger.info("Found xmlDesc value, unmarshalling...");
+                if (path.toFile().exists()) {
+                    wi = PolarionProcessor.unmarshaller(WorkItem.class, xmlDesc);
+                    return wi.getRequirement();
+                }
+                else {
+                    this.logger.error("xmlDesc was populated, but xml file doesn't exist.  Generating desc file");
+                    return this.initReqType(req, xmlDesc);
+                }
             }
         }
         else {
-
+            this.logger.info("TODO: Polarion ID was given. Chech if xmldesc has the same");
+            wi = PolarionProcessor.unmarshaller(WorkItem.class, xmlDesc);
+            return wi.getRequirement();
         }
+    }
 
-        return req;
+    private ReqType initReqType(ReqType req, File xmlpath) {
+        this.logger.info(String.format("Generating XML requirement descriptor in %s", xmlpath.toString()));
+        WorkItem wi = new WorkItem();
+        wi.setRequirement(req);
+        wi.setProjectId(req.getProject());
+        wi.setType(WiTypes.REQUIREMENT);
+
+        PolarionProcessor.marshaller(wi, xmlpath);
+        return wi.getRequirement();
     }
 
     /**
@@ -561,15 +578,31 @@ public class PolarionProcessor extends AbstractProcessor {
      * @param xmlpath
      * @param <T>
      */
-    public static <T> T unmarshaller(T t, File xmlpath) {
+    public static <T> T unmarshaller(Class<T> t, File xmlpath) {
+        XMLInputFactory factory = XMLInputFactory.newFactory();
+        JAXBElement<T> ret;
         try {
-            JAXBContext jaxbc = JAXBContext.newInstance(t.getClass());
+            FileInputStream fis = new FileInputStream(xmlpath);
+            XMLEventReader rdr = factory.createXMLEventReader(fis);
+            JAXBContext jaxbc = JAXBContext.newInstance(t);
 
             Unmarshaller um = jaxbc.createUnmarshaller();
+            ret = um.unmarshal(rdr, t);
+            return ret.getValue();
         } catch (JAXBException e) {
             e.printStackTrace();
+        } catch (FileNotFoundException e) {
+            e.printStackTrace();
+        } catch (XMLStreamException e) {
+            e.printStackTrace();
         }
-        return t;
+        return null;
+    }
+
+    private ReqType getRequirementFromXML(WorkItem wi, File xmlpath) {
+        wi = PolarionProcessor.unmarshaller(WorkItem.class, xmlpath);
+        wi.setType(WiTypes.REQUIREMENT);
+        return wi.getRequirement();
     }
 
     /**
