@@ -1,2 +1,2 @@
 #!/bin/bash
-xjc -p com.redhat.qe.rhsm.schema  -d ../src/main/java .
+xjc -npa -p com.redhat.qe.rhsm.schema  -d ../src/main/java .

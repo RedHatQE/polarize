@@ -13,9 +13,7 @@ import javax.lang.model.element.TypeElement;
 import javax.lang.model.util.Elements;
 import javax.lang.model.util.Types;
 import javax.tools.Diagnostic;
-import javax.xml.bind.JAXBContext;
-import javax.xml.bind.JAXBException;
-import javax.xml.bind.Marshaller;
+import javax.xml.bind.*;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
@@ -168,20 +166,17 @@ public class PolarionProcessor extends AbstractProcessor {
     public boolean process(Set<? extends TypeElement> set, RoundEnvironment roundEnvironment) {
         System.out.println("In process() method");
 
-        /**
-         * Get all the @Requirement annotations which have been repeated
-         */
+        // Get all the @Requirement annotations which have been repeated
         TreeSet<ElementKind> allowed = new TreeSet<ElementKind>();
         allowed.add(ElementKind.CLASS);
         String err = "Can only annotate classes with @Requirements";
         List<? extends Element> repeatedAnns = this.getAnnotations(roundEnvironment, Requirements.class, allowed, err);
         List<Meta<Requirement>> requirements = this.makeMetaFromRequirements(repeatedAnns, Requirements.class);
 
-        /**
-         * Get all the @Requirement annotated on a class that are not repeated. We will use the information here to
-         * generate the XML for requirements.  If a @Polarion annotated test method has an empty reqs, we will look in
-         * methToRequirements for the associated Requirement.
-         */
+
+         // Get all the @Requirement annotated on a class that are not repeated. We will use the information here to
+         // generate the XML for requirements.  If a @Polarion annotated test method has an empty reqs, we will look in
+         // methToRequirements for the associated Requirement.
         allowed = new TreeSet<ElementKind>();
         allowed.add(ElementKind.CLASS);
         allowed.add(ElementKind.METHOD);
@@ -190,35 +185,28 @@ public class PolarionProcessor extends AbstractProcessor {
         requirements.addAll(this.makeMeta(reqAnns, Requirement.class));
         this.methToProjectReq.putAll(this.methodToProjectMeta(requirements));
 
-        /**
-         * Get all the @Polarion annotations
-         * Make a list of Meta types that store the fully qualified name of every @Polarion annotated
-         * method.  We will use this to create a map of qualified_name => Polarion Annotation
-         */
+
+        // Get all the @Polarion annotations
+        // Make a list of Meta types that store the fully qualified name of every @Polarion annotated
+        // method.  We will use this to create a map of qualified_name => Polarion Annotation
         allowed = new TreeSet<ElementKind>();
         allowed.add(ElementKind.METHOD);
         err = "Can only annotate methods with @Polarion";
         List<? extends Element> polAnns = this.getAnnotations(roundEnvironment, Polarion.class, allowed, err);
         List<Meta<Polarion>> metas = this.makeMeta(polAnns, Polarion.class);
 
-        /**
-         * Get all the @Polarion annotations which have been repeated on a single element.
-         */
+        // Get all the @Polarion annotations which have been repeated on a single element.
         List<? extends Element> pols = this.getAnnotations(roundEnvironment, Polarions.class, allowed, err);
         metas.addAll(this.makeMetaFromPolarions(pols, Polarions.class));
 
         this.methToProjectPol = this.methodToMetaPolarion(metas);
-        //Map<String, Meta<Polarion>> methToPolarion = this.methodToMeta(metas);
-        //methToPolarion.forEach((qual, ann) -> System.out.println(String.format("%s -> %s", qual, ann.toString())));
 
 
-        /** Get all the @Test annotations in order to get the description */
+        // Get all the @Test annotations in order to get the description
         Map<String, String> methToDescription = this.getTestAnnotations(roundEnvironment);
         this.methNameToTestNGDescription.putAll(methToDescription);
 
-        /**
-         * We now have the mapping from qualified name to annotation.  So, process each TestCase object
-         */
+        // We now have the mapping from qualified name to annotation.  So, process each TestCase object
         List<Testcase> tests = this.methToProjectPol.entrySet().stream()
                 .flatMap(es -> {
                     String qualifiedName = es.getKey();
@@ -232,10 +220,8 @@ public class PolarionProcessor extends AbstractProcessor {
                 })
                 .collect(Collectors.toList());
 
-        /**
-         * Run processRequirement on Requirements annotated at the class level.  Since these are annotated at the
-         * class level they must have the projectID
-         */
+        // Run processRequirement on Requirements annotated at the class level.  Since these are annotated at the
+        // class level they must have the projectID
         List<ReqType> reqList = methToRequirement.entrySet().stream()
                 .map(e -> {
                     Meta<Requirement> m = e.getValue();
@@ -266,9 +252,11 @@ public class PolarionProcessor extends AbstractProcessor {
         try {
             JAXBContext jaxbc = JAXBContext.newInstance(TestCaseMetadata.class);
             Marshaller marshaller = jaxbc.createMarshaller();
-            marshaller.setProperty( Marshaller.JAXB_FORMATTED_OUTPUT, true);
+            marshaller.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, true);
             marshaller.marshal(tcmd, new File("/tmp/testing.xml"));
             marshaller.marshal(tcmd, System.out);
+        } catch (PropertyException pe){
+            pe.printStackTrace();
         } catch (JAXBException e) {
             e.printStackTrace();
         }
@@ -534,6 +522,12 @@ public class PolarionProcessor extends AbstractProcessor {
 
                 PolarionProcessor.marshaller(wi, xmlDesc);
             }
+            else {
+                // look for the file
+            }
+        }
+        else {
+
         }
 
         return req;
@@ -557,6 +551,25 @@ public class PolarionProcessor extends AbstractProcessor {
         }
 
         // TODO: verify the function succeeded
+    }
+
+
+    /**
+     * Generates an object of type T given an XML file
+     *
+     * @param t
+     * @param xmlpath
+     * @param <T>
+     */
+    public static <T> T unmarshaller(T t, File xmlpath) {
+        try {
+            JAXBContext jaxbc = JAXBContext.newInstance(t.getClass());
+
+            Unmarshaller um = jaxbc.createUnmarshaller();
+        } catch (JAXBException e) {
+            e.printStackTrace();
+        }
+        return t;
     }
 
     /**
