@@ -71,6 +71,8 @@ what polarize does.  In one approach, the metadata is stored in reStructuredText
 metadata is parsed out.  In the second approach, the metadata is stored directly as docstrings and then parsed out.  In
 either case, there should be a standardized way for a python based test team to have metadata about their tests.
 
+Please see https://github.com/rarebreed/polarize for the initial work done on this project.
+
 # Budget Estimation
 
 2-3 QE familiar with java and python (and perhaps ruby) spending at least 50% of their time on this project.  Perhaps
