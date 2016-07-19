@@ -1,6 +1,7 @@
 package com.redhat.qe.rhsm.metadata;
 
 import com.redhat.qe.rhsm.FileHelper;
+import com.redhat.qe.rhsm.JAXBHelper;
 import com.redhat.qe.rhsm.schema.*;
 import org.testng.annotations.Test;
 
@@ -40,9 +41,9 @@ import org.slf4j.LoggerFactory;
  */
 public class PolarionProcessor extends AbstractProcessor {
     private Types types;
+    private Filer filer;
     private Elements elements;
     private Messager msgr;
-    private Filer filer;
     private Logger logger;
     private String reqPath;
     private String tcPath;
@@ -57,10 +58,10 @@ public class PolarionProcessor extends AbstractProcessor {
     /**
      * Recursive function that will get the fully qualified name of a method.
      *
-     * Eg packageName.class.methodName
-     * @param elem
-     * @param accum
-     * @return
+     * @param elem Element object to recursively ascend up
+     * @param accum a string which accumulate the qualified name
+     * @param m Meta object whose values will be initialized as the function recurses
+     * @return the fully qualified path of the starting Element
      */
     private String getTopLevel(Element elem, String accum, Meta m) {
         String tmp = elem.getSimpleName().toString();
@@ -92,8 +93,16 @@ public class PolarionProcessor extends AbstractProcessor {
         }
     }
 
-    private <T> List<Meta<T>> makeMeta(List<? extends Element> elements,
-                                       Class<? extends Annotation> ann){
+
+    /**
+     * Creates a list of Meta objects from a list of Element objects
+     *
+     * @param elements list of Elements
+     * @param ann an Annotation class (eg Polarion.class)
+     * @param <T> type that is of an Annotation
+     * @return a list of Metas of type T
+     */
+    private <T extends Annotation> List<Meta<T>> makeMeta(List<? extends Element> elements, Class<T> ann){
         List<Meta<T>> metas = new ArrayList<>();
         for(Element e : elements) {
             Meta m = new Meta<T>();
@@ -110,12 +119,12 @@ public class PolarionProcessor extends AbstractProcessor {
      * Creates a List of Meta types from a Requirements annotation
      *
      * TODO: Figure out how to parameterize this.  The ann variable is already Requirements.class
-     * @param elements
-     * @param ann
-     * @param <T>
-     * @return
+     * @param elements a list of Elements
+     * @param ann an annotation class (eg. Requirement.class)
+     * @param <T> type that extends an Annotation
+     * @return a list of Metas of type T
      */
-    private <T> List<Meta<T>>
+    private <T extends Annotation> List<Meta<T>>
     makeMetaFromRequirements(List<? extends Element> elements,
                              Class<? extends Annotation> ann){
         List<Meta<T>> metas = new ArrayList<>();
@@ -166,13 +175,12 @@ public class PolarionProcessor extends AbstractProcessor {
     public boolean process(Set<? extends TypeElement> set, RoundEnvironment roundEnvironment) {
         System.out.println("In process() method");
 
-        // Get all the @Requirement annotations which have been repeated
+        this.logger.info("Getting all the @Requirement annotations which have been repeated");
         TreeSet<ElementKind> allowed = new TreeSet<>();
         allowed.add(ElementKind.CLASS);
         String err = "Can only annotate classes with @Requirements";
         List<? extends Element> repeatedAnns = this.getAnnotations(roundEnvironment, Requirements.class, allowed, err);
         List<Meta<Requirement>> requirements = this.makeMetaFromRequirements(repeatedAnns, Requirements.class);
-
 
         // Get all the @Requirement annotated on a class that are not repeated. We will use the information here to
         // generate the XML for requirements.  If a @Polarion annotated test method has an empty reqs, we will look in
@@ -184,7 +192,6 @@ public class PolarionProcessor extends AbstractProcessor {
         List<? extends Element> reqAnns = this.getAnnotations(roundEnvironment, Requirement.class, allowed, err);
         requirements.addAll(this.makeMeta(reqAnns, Requirement.class));
         this.methToProjectReq.putAll(this.createMethodToMetaRequirementMap(requirements));
-
 
         // Get all the @Polarion annotations
         // Make a list of Meta types that store the fully qualified name of every @Polarion annotated
@@ -265,51 +272,13 @@ public class PolarionProcessor extends AbstractProcessor {
     }
 
 
-    public void createTestCaseXML(Testcase tc) {
+    public void createTestCaseXML(Testcase tc, File path) {
         WorkItem wi = new WorkItem();
+        wi.setTestcase(tc);
+        wi.setProjectId(tc.getProject());
+        wi.setType(WiTypes.TEST_CASE);
+        JAXBHelper.marshaller(wi, path);
     }
-
-
-    /**
-     * Creates a map of fully qualified names to a Meta type
-     *
-     * @param metas
-     * @param <T>
-     * @return
-     */
-    private <T> Map<String, Meta<T>> methodToMeta(List<Meta<T>> metas) {
-        return metas.stream()
-                .collect(Collectors.toMap(m -> m.qualifiedName,
-                        m -> m));
-    }
-
-    /**
-     * Returns a map of qualifiedName -> {projectId : Meta}
-     *
-     * TODO: There has to be a way to genericize this.  The problem is that I can not bound the usage of the generic
-     * type because Annotations are not extensible.
-     *
-     * @param metas
-     * @return
-     */
-    private Map<String, Map<String, Meta<Requirement>>>
-    methodToMetaRequirement(List<Meta<Requirement>> metas) {
-        Map<String, Map<String, Meta<Requirement>>> methods = new HashMap<>();
-
-        for(Meta<Requirement> m: metas) {
-            Requirement ann = m.annotation;
-            String meth = m.qualifiedName;
-            String project = ann.project();
-            Map<String, Meta<Requirement>> projects = new HashMap<>();
-
-            projects.put(project, m);
-            if(!methods.containsKey(meth)) {
-                methods.put(meth, projects);
-            }
-        }
-        return methods;
-    }
-
 
     private Map<String, Map<String, Meta<Polarion>>>
     createMethodToMetaPolarionMap(List<Meta<Polarion>> metas) {
@@ -328,15 +297,13 @@ public class PolarionProcessor extends AbstractProcessor {
         return methods;
     }
 
-
-
     /**
      * Creates a nested map of qualifiedName -> {projectID: Requirement}
      *
      * TODO: Figure out how to do this with reduce
      *
-     * @param metas
-     * @return
+     * @param metas A list of Metas of type Requirement
+     * @return a nested map qualifiedName to {projectId: Requirement}
      */
     private Map<String, Map<String, Meta<Requirement>>>
     createMethodToMetaRequirementMap(List<Meta<Requirement>> metas) {
@@ -418,8 +385,11 @@ public class PolarionProcessor extends AbstractProcessor {
     }
 
     /**
-     * Examples a Polarion object to obtain its values and generates an XML file if needed.
+     * Examines a Polarion object to obtain its values and generates an XML file if needed.
+     *
      * @param meta
+     * @param description
+     * @return
      */
     private Testcase processTestCase(Meta<Polarion> meta, String description) {
         Polarion pol = meta.annotation;
@@ -459,7 +429,7 @@ public class PolarionProcessor extends AbstractProcessor {
         tc.setProject(ProjectVals.fromValue(meta.annotation.projectID()));
 
         Requirement[] reqs = pol.reqs();
-        /** If reqs is empty look at the class annotated requirements contained in methToProjectReq */
+        // If reqs is empty look at the class annotated requirements contained in methToProjectReq
         if (reqs.length == 0) {
             String pkgClassname = String.format("%s.%s", meta.packName, meta.className);
             String project = tc.getProject().value();
@@ -477,7 +447,7 @@ public class PolarionProcessor extends AbstractProcessor {
             r.add(req);
         }
 
-        //TODO: Check for feature file and XML Desc file
+        //TODO: Check for XML Desc file
 
         return tc;
     }
@@ -504,7 +474,7 @@ public class PolarionProcessor extends AbstractProcessor {
         File xmlDesc = path.toFile();
         WorkItem wi;
         if (path.toFile().exists()) {
-            wi = PolarionProcessor.unmarshaller(WorkItem.class, xmlDesc);
+            wi = JAXBHelper.unmarshaller(WorkItem.class, xmlDesc);
             return wi.getRequirement();
         }
         else {
@@ -523,7 +493,7 @@ public class PolarionProcessor extends AbstractProcessor {
             else {
                 this.logger.info("Found xmlDesc value, unmarshalling...");
                 if (path.toFile().exists()) {
-                    wi = PolarionProcessor.unmarshaller(WorkItem.class, xmlDesc);
+                    wi = JAXBHelper.unmarshaller(WorkItem.class, xmlDesc);
                     return wi.getRequirement();
                 }
                 else {
@@ -534,7 +504,7 @@ public class PolarionProcessor extends AbstractProcessor {
         }
         else {
             this.logger.info("TODO: Polarion ID was given. Chech if xmldesc has the same");
-            wi = PolarionProcessor.unmarshaller(WorkItem.class, xmlDesc);
+            wi = JAXBHelper.unmarshaller(WorkItem.class, xmlDesc);
             return wi.getRequirement();
         }
     }
@@ -546,64 +516,10 @@ public class PolarionProcessor extends AbstractProcessor {
         wi.setProjectId(req.getProject());
         wi.setType(WiTypes.REQUIREMENT);
 
-        PolarionProcessor.marshaller(wi, xmlpath);
+        JAXBHelper.marshaller(wi, xmlpath);
         return wi.getRequirement();
     }
 
-    /**
-     * Generates
-     * @param t An object whose class is annotated with @XmlRootElement
-     * @param xmlpath
-     * @param <T>
-     */
-    public static <T> void marshaller(T t, File xmlpath) {
-        try {
-            JAXBContext jaxbc = JAXBContext.newInstance(t.getClass());
-            Marshaller marshaller = jaxbc.createMarshaller();
-            marshaller.setProperty( Marshaller.JAXB_FORMATTED_OUTPUT, true);
-            marshaller.marshal(t, xmlpath);
-            marshaller.marshal(t, System.out);
-        } catch (JAXBException e) {
-            e.printStackTrace();
-        }
-
-        // TODO: verify the function succeeded
-    }
-
-
-    /**
-     * Generates an object of type T given an XML file
-     *
-     * @param t
-     * @param xmlpath
-     * @param <T>
-     */
-    public static <T> T unmarshaller(Class<T> t, File xmlpath) {
-        XMLInputFactory factory = XMLInputFactory.newFactory();
-        JAXBElement<T> ret;
-        try {
-            FileInputStream fis = new FileInputStream(xmlpath);
-            XMLEventReader rdr = factory.createXMLEventReader(fis);
-            JAXBContext jaxbc = JAXBContext.newInstance(t);
-
-            Unmarshaller um = jaxbc.createUnmarshaller();
-            ret = um.unmarshal(rdr, t);
-            return ret.getValue();
-        } catch (JAXBException e) {
-            e.printStackTrace();
-        } catch (FileNotFoundException e) {
-            e.printStackTrace();
-        } catch (XMLStreamException e) {
-            e.printStackTrace();
-        }
-        return null;
-    }
-
-    private ReqType getRequirementFromXML(WorkItem wi, File xmlpath) {
-        wi = PolarionProcessor.unmarshaller(WorkItem.class, xmlpath);
-        wi.setType(WiTypes.REQUIREMENT);
-        return wi.getRequirement();
-    }
 
     /**
      * Examines a Requirement object to obtain its values and generates an XML file
