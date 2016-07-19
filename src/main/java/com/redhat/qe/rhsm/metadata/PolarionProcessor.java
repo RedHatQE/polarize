@@ -245,10 +245,23 @@ public class PolarionProcessor extends AbstractProcessor {
                 return false;
         }
 
+        this.createWorkItems(tests, ProjectVals.RED_HAT_ENTERPRISE_LINUX_7);
+        return true;
+    }
+
+    private void createTestCaseXML(Testcase tc, File path) {
+        this.logger.info(String.format("Generating XML description in %s", path.toString()));
+        WorkItem wi = new WorkItem();
+        wi.setTestcase(tc);
+        wi.setProjectId(tc.getProject());
+        wi.setType(WiTypes.TEST_CASE);
+        JAXBHelper.marshaller(wi, path);
+    }
+
+    private void createWorkItems(List<Testcase> tests, ProjectVals proj) {
         // Convert the TestcaseType objects to XML
-        // TODO: figure out how to get the project-id
         TestCaseMetadata tcmd = new TestCaseMetadata();
-        tcmd.setProjectId(ProjectVals.RED_HAT_ENTERPRISE_LINUX_7);
+        tcmd.setProjectId(proj);
         tcmd.setDryRun(true);
 
         TestCaseMetadata.Workitems wis = new TestCaseMetadata.Workitems();
@@ -267,17 +280,6 @@ public class PolarionProcessor extends AbstractProcessor {
         } catch (JAXBException e) {
             e.printStackTrace();
         }
-
-        return true;
-    }
-
-
-    public void createTestCaseXML(Testcase tc, File path) {
-        WorkItem wi = new WorkItem();
-        wi.setTestcase(tc);
-        wi.setProjectId(tc.getProject());
-        wi.setType(WiTypes.TEST_CASE);
-        JAXBHelper.marshaller(wi, path);
     }
 
     private Map<String, Map<String, Meta<Polarion>>>
@@ -448,6 +450,15 @@ public class PolarionProcessor extends AbstractProcessor {
         }
 
         //TODO: Check for XML Desc file
+        Path path = FileHelper.makeXmlPath(this.tcPath, meta);
+        File xmlDesc = path.toFile();
+        if (xmlDesc.exists()) {
+            this.logger.info("Description file already exists");
+            // TODO: verify the description file has everything needed
+        }
+        else {
+            this.createTestCaseXML(tc, xmlDesc);
+        }
 
         return tc;
     }
