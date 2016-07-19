@@ -1,0 +1,31 @@
+<!-- This schema defines the Metadata for a TestCase
+     It includes all the relevant data needed for the WorkItem importer -->
+
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           xmlns:pt="com.redhat.qe.rhsm.PolarizeTypes"
+           xmlns:tc="com.redhat.qe.rhsm.TestCaseType">
+    <xs:import schemaLocation="types.xsd"
+               namespace="com.redhat.qe.rhsm.PolarizeTypes"/>
+    <xs:import schemaLocation="testcase.xsd"
+               namespace="com.redhat.qe.rhsm.TestCaseType"/>
+    <!-- Element structure
+    A TestCaseMetadata is a sequence of -->
+    <xs:element name="TestCaseMetadata">
+        <xs:complexType>
+            <xs:sequence>
+                <xs:element name="workitems" minOccurs="1" maxOccurs="1">
+                    <xs:complexType>
+                        <xs:sequence>
+                            <xs:element name="testcase" type="tc:testcase" minOccurs="1" maxOccurs="unbounded"/>
+                            <!-- Add the element for polarion requirements -->
+                        </xs:sequence>
+                    </xs:complexType>
+                </xs:element>
+            </xs:sequence>
+
+            <!-- TODO: restrict the values for project-id -->
+            <xs:attribute name="project-id" use="required" type="pt:project-vals"/>
+            <xs:attribute name="dry-run" type="xs:boolean"/>
+        </xs:complexType>
+    </xs:element>
+</xs:schema>
