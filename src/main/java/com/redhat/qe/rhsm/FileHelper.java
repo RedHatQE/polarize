@@ -1,12 +1,11 @@
 package com.redhat.qe.rhsm;
 
-import java.lang.annotation.Annotation;
-import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.io.File;
 import java.util.Optional;
+
+import com.redhat.qe.rhsm.exceptions.InvalidArgumentType;
 import com.redhat.qe.rhsm.metadata.Meta;
 import com.redhat.qe.rhsm.metadata.Polarion;
 import com.redhat.qe.rhsm.metadata.Requirement;
@@ -57,7 +56,7 @@ public class FileHelper {
             throw new InvalidArgumentType();
 
         Path basePath = Paths.get(base, proj, meta.className);
-        String fullPath = basePath.toString() + meta.methName + ".xml";
+        String fullPath = Paths.get(basePath.toString(), meta.methName + ".xml").toString();
         Path path = Paths.get(fullPath);
 
         return path;

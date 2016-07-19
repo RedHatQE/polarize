@@ -2,6 +2,7 @@ package com.redhat.qe.rhsm.metadata;
 
 import com.redhat.qe.rhsm.FileHelper;
 import com.redhat.qe.rhsm.JAXBHelper;
+import com.redhat.qe.rhsm.exceptions.RequirementAnnotationException;
 import com.redhat.qe.rhsm.schema.*;
 import org.testng.annotations.Test;
 
@@ -15,9 +16,6 @@ import javax.lang.model.util.Elements;
 import javax.lang.model.util.Types;
 import javax.tools.Diagnostic;
 import javax.xml.bind.*;
-import javax.xml.stream.XMLEventReader;
-import javax.xml.stream.XMLInputFactory;
-import javax.xml.stream.XMLStreamException;
 import java.io.*;
 import java.lang.annotation.Annotation;
 import java.nio.file.FileSystems;
@@ -237,7 +235,7 @@ public class PolarionProcessor extends AbstractProcessor {
                         this.msgr.printMessage(Diagnostic.Kind.ERROR, String.format(errMsg));
                         return null;
                     }
-                    return this.processRequirement(m);
+                    return this.processRequirement(m, this.createReqTypeFromRequirement(m.annotation));
                 })
                 .collect(Collectors.toList());
         for(ReqType rt: reqList) {
@@ -285,15 +283,23 @@ public class PolarionProcessor extends AbstractProcessor {
     private Map<String, Map<String, Meta<Polarion>>>
     createMethodToMetaPolarionMap(List<Meta<Polarion>> metas) {
         Map<String, Map<String, Meta<Polarion>>> methods = new HashMap<>();
-        Map<String, Meta<Polarion>> projects = new HashMap<>();
         for(Meta<Polarion> m: metas) {
             Polarion ann = m.annotation;
             String meth = m.qualifiedName;
             String project = ann.projectID();
 
-            projects.put(project, m);
-            if(!methods.containsKey(meth)) {
+            if (!methods.containsKey(meth)) {
+                Map<String, Meta<Polarion>> projects = new HashMap<>();
+                projects.put(project, m);
                 methods.put(meth, projects);
+            }
+            else {
+                Map<String, Meta<Polarion>> projects = methods.get(meth);
+                if (!projects.containsKey(project)) {
+                    projects.put(project, m);
+                }
+                else
+                    this.logger.warn(String.format("Project %s already exists for %s", project, meth));
             }
         }
         return methods;
@@ -448,6 +454,7 @@ public class PolarionProcessor extends AbstractProcessor {
             ReqType req = this.processRequirement(m, proj);
             r.add(req);
         }
+        tc.setRequirements(treq);
 
         //TODO: Check for XML Desc file
         Path path = FileHelper.makeXmlPath(this.tcPath, meta);
@@ -457,6 +464,8 @@ public class PolarionProcessor extends AbstractProcessor {
             // TODO: verify the description file has everything needed
         }
         else {
+            Path parent = path.getParent();
+            Boolean success = parent.toFile().mkdirs();
             this.createTestCaseXML(tc, xmlDesc);
         }
 
@@ -477,9 +486,10 @@ public class PolarionProcessor extends AbstractProcessor {
      *   - Wait for return value to get the Requirement ID
      * @param meta
      */
-    private ReqType processRequirement(Meta<Requirement> meta) {
+    private ReqType processRequirement(Meta<Requirement> meta, ReqType req) {
         Requirement r = meta.annotation;
-        ReqType req = this.createReqTypeFromRequirement(r);
+        if (req.getProject().value().equals(""))
+            throw new RequirementAnnotationException();
 
         Path path = FileHelper.makeXmlPath(this.reqPath, meta);
         File xmlDesc = path.toFile();
@@ -544,9 +554,9 @@ public class PolarionProcessor extends AbstractProcessor {
      * @param m
      */
     private ReqType processRequirement(Meta<Requirement> m, ProjectVals project) {
-        ReqType req = this.processRequirement(m);
-        req.setProject(project);
-        return req;
+        ReqType init = this.createReqTypeFromRequirement(m.annotation);
+        init.setProject(project);
+        return this.processRequirement(m, init);
     }
 
     private ReqType createReqTypeFromRequirement(Requirement r) {
