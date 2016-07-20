@@ -39,14 +39,14 @@ public class Reflector {
     public void reflect(String[] args) {
         //Reflector reflector = new Reflector();
 
-        /**
-         * We have 4 categories of tests:
-         * - Acceptance
-         * - Tier1Tests
-         * - Tier2Tests
-         * - Tier3Tests
-         *
-         * So we will have a mapping of key = plan type, value = class name
+        /*
+          We have 4 categories of tests:
+          - Acceptance
+          - Tier1Tests
+          - Tier2Tests
+          - Tier3Tests
+
+          So we will have a mapping of key = plan type, value = class name
          */
 
         for(String s: args) {

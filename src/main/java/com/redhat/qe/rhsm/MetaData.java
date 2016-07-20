@@ -1,7 +1,7 @@
 package com.redhat.qe.rhsm;
 
-/**
- * Created by stoner on 3/23/16.
+/*
+  Created by stoner on 3/23/16.
  */
 /**
  * Container of information from a class method, and the @Test annotation
