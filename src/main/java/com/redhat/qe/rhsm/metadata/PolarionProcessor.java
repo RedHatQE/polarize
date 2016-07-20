@@ -3,6 +3,7 @@ package com.redhat.qe.rhsm.metadata;
 import com.redhat.qe.rhsm.FileHelper;
 import com.redhat.qe.rhsm.JAXBHelper;
 import com.redhat.qe.rhsm.exceptions.RequirementAnnotationException;
+import com.redhat.qe.rhsm.exceptions.XSDValidationError;
 import com.redhat.qe.rhsm.schema.*;
 import org.testng.annotations.Test;
 
@@ -206,13 +207,29 @@ public class PolarionProcessor extends AbstractProcessor {
 
         this.methToProjectPol = this.createMethodToMetaPolarionMap(metas);
 
-
         // Get all the @Test annotations in order to get the description
         Map<String, String> methToDescription = this.getTestAnnotations(roundEnvironment);
         this.methNameToTestNGDescription.putAll(methToDescription);
 
+        List<ReqType> reqList = this.processAllRequirements();
+        if (reqList == null)
+            return false;
+        List<Testcase> tests = this.processAllTestCase();
+
+        this.createWorkItems(tests, ProjectVals.RED_HAT_ENTERPRISE_LINUX_7);
+        return true;
+    }
+
+    /**
+     * From the mapping of qualifiedName -> Annotation stored in methToProjectPol, process each item
+     *
+     * The primary role of this function is to run processTestCase method given the objects in methToProjectPol
+     *
+     * @return List of Testcase
+     */
+    private List<Testcase> processAllTestCase() {
         // We now have the mapping from qualified name to annotation.  So, process each TestCase object
-        List<Testcase> tests = this.methToProjectPol.entrySet().stream()
+        return this.methToProjectPol.entrySet().stream()
                 .flatMap(es -> {
                     String qualifiedName = es.getKey();
                     @Nonnull String desc = methNameToTestNGDescription.get(qualifiedName);
@@ -224,27 +241,31 @@ public class PolarionProcessor extends AbstractProcessor {
                             .collect(Collectors.toList()).stream();
                 })
                 .collect(Collectors.toList());
+    }
 
-        // Run processRequirement on Requirements annotated at the class level.  Since these are annotated at the
-        // class level they must have the projectID
-        List<ReqType> reqList = methToRequirement.entrySet().stream()
-                .map(e -> {
-                    Meta<Requirement> m = e.getValue();
-                    if (m.annotation.project().equals("")) {
-                        String errMsg = "When annotating a class with @Requirement, the project value must be set";
-                        this.msgr.printMessage(Diagnostic.Kind.ERROR, String.format(errMsg));
-                        return null;
-                    }
-                    return this.processRequirement(m, this.createReqTypeFromRequirement(m.annotation));
-                })
+    /**
+     * Run processRequirement on Requirements annotated at the class level.
+     *
+     * Since these are annotated at the class level they must have the projectID
+     *
+     * @return List of ReqType or null
+     */
+    private List<ReqType> processAllRequirements() {
+        List<ReqType> reqList = this.methToProjectReq.entrySet().stream()
+                .flatMap(es -> es.getValue().entrySet().stream()
+                        .map(val -> {
+                            Meta<Requirement> meta = val.getValue();
+                            ReqType req = this.createReqTypeFromRequirement(meta.annotation);
+                            return this.processRequirement(meta, req);
+                        })
+                        .collect(Collectors.toList()).stream())
                 .collect(Collectors.toList());
         for(ReqType rt: reqList) {
-            if (rt == null)
-                return false;
+            if (rt == null) {
+                reqList = null;
+            }
         }
-
-        this.createWorkItems(tests, ProjectVals.RED_HAT_ENTERPRISE_LINUX_7);
-        return true;
+        return reqList;
     }
 
     private void createTestCaseXML(Testcase tc, File path) {
@@ -472,6 +493,28 @@ public class PolarionProcessor extends AbstractProcessor {
         return tc;
     }
 
+    private File getXSDFromResource(Class<?> t) {
+        InputStream is;
+        BufferedInputStream bis;
+        if (t == WorkItem.class) {
+            is = getClass().getClassLoader().getResourceAsStream("workitem.xsd");
+            bis = new BufferedInputStream(is);
+        }
+        else if (t == Testcase.class) {
+
+        }
+        else if (t == ReqType.class) {
+
+        }
+        else if (t == TestCaseMetadata.class) {
+
+        }
+        else
+            throw new XSDValidationError();
+
+        return null;
+    }
+
     /**
      * Given the Requirement annotation data, do the following:
      *
@@ -493,13 +536,15 @@ public class PolarionProcessor extends AbstractProcessor {
 
         Path path = FileHelper.makeXmlPath(this.reqPath, meta);
         File xmlDesc = path.toFile();
-        WorkItem wi;
+        Optional<WorkItem> wi;
         if (path.toFile().exists()) {
-            wi = JAXBHelper.unmarshaller(WorkItem.class, xmlDesc);
-            return wi.getRequirement();
+            if (r.override()) {
+                wi = JAXBHelper.unmarshaller(WorkItem.class, xmlDesc, null);
+                if (wi.isPresent())
+                    return wi.get().getRequirement();
+            }
         }
         else {
-            // TODO: Generate the directory path if necessary
             Path parent = path.getParent();
             Boolean success = parent.toFile().mkdirs();
         }
@@ -514,8 +559,9 @@ public class PolarionProcessor extends AbstractProcessor {
             else {
                 this.logger.info("Found xmlDesc value, unmarshalling...");
                 if (path.toFile().exists()) {
-                    wi = JAXBHelper.unmarshaller(WorkItem.class, xmlDesc);
-                    return wi.getRequirement();
+                    wi = JAXBHelper.unmarshaller(WorkItem.class, xmlDesc, null);
+                    if (wi.isPresent())
+                        return wi.get().getRequirement();
                 }
                 else {
                     this.logger.error("xmlDesc was populated, but xml file doesn't exist.  Generating desc file");
@@ -525,9 +571,11 @@ public class PolarionProcessor extends AbstractProcessor {
         }
         else {
             this.logger.info("TODO: Polarion ID was given. Chech if xmldesc has the same");
-            wi = JAXBHelper.unmarshaller(WorkItem.class, xmlDesc);
-            return wi.getRequirement();
+            wi = JAXBHelper.unmarshaller(WorkItem.class, xmlDesc, null);
+            if (wi.isPresent())
+                return wi.get().getRequirement();
         }
+        return null;
     }
 
     private ReqType initReqType(ReqType req, File xmlpath) {

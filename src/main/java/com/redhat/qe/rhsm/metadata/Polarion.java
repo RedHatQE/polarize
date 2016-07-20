@@ -1,6 +1,5 @@
 package com.redhat.qe.rhsm.metadata;
 
-import java.io.Serializable;
 import java.lang.annotation.*;
 
 /**
@@ -47,5 +46,6 @@ public @interface Polarion {
     String description() default "";           // Must have description but may come from @Test
     String setup() default "";
     String teardown() default "";
+    boolean override() default true;          // If true, when xml description file exists, generate a new one.
     Requirement[] reqs();  // eg. requirementIDs = {"RHEL6-25678", "RHEL6-27654"}
 }

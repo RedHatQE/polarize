@@ -19,4 +19,5 @@ public @interface Requirement {
     String reqtype() default "Functional";           // defaults to Functional
     String priority() default "medium";              // defaults to medium
     String feature() default "";                     // Optional: path to a gherkin feature file
+    boolean override() default true;                 // If true, if xml desc file exists, generate new one
 }

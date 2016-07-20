@@ -41,24 +41,24 @@ public class FileHelper {
      */
     public static <T> Path makeXmlPath(String base, Meta<T> meta) throws InvalidArgumentType {
         String proj;
-        String type;
+        String xmlname;
         if (meta.annotation instanceof Polarion) {
             Polarion p = (Polarion) meta.annotation;
             proj = p.projectID();
-            type = "testcases";
         }
         else if (meta.annotation instanceof Requirement){
             Requirement r = (Requirement) meta.annotation;
             proj = r.project();
-            type = "requirements";
         }
         else
             throw new InvalidArgumentType();
 
-        Path basePath = Paths.get(base, proj, meta.className);
-        String fullPath = Paths.get(basePath.toString(), meta.methName + ".xml").toString();
-        Path path = Paths.get(fullPath);
+        xmlname = meta.methName;
+        if (xmlname == null || xmlname.equals(""))
+            xmlname = meta.className;
 
-        return path;
+        Path basePath = Paths.get(base, proj, meta.className);
+        String fullPath = Paths.get(basePath.toString(), xmlname + ".xml").toString();
+        return Paths.get(fullPath);
     }
 }
