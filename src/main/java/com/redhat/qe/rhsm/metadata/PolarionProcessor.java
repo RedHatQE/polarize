@@ -3,6 +3,7 @@ package com.redhat.qe.rhsm.metadata;
 import com.redhat.qe.rhsm.FileHelper;
 import com.redhat.qe.rhsm.JAXBHelper;
 import com.redhat.qe.rhsm.exceptions.RequirementAnnotationException;
+import com.redhat.qe.rhsm.exceptions.XMLDescriptonCreationError;
 import com.redhat.qe.rhsm.exceptions.XSDValidationError;
 import com.redhat.qe.rhsm.schema.*;
 import org.testng.annotations.Test;
@@ -192,7 +193,7 @@ public class PolarionProcessor extends AbstractProcessor {
         requirements.addAll(this.makeMeta(reqAnns, Requirement.class));
         this.methToProjectReq.putAll(this.createMethodToMetaRequirementMap(requirements));
 
-        // Get all the @Polarion annotations
+        // Get all the @Polarion annotations which were annotated on an element only once.
         // Make a list of Meta types that store the fully qualified name of every @Polarion annotated
         // method.  We will use this to create a map of qualified_name => Polarion Annotation
         allowed = new TreeSet<>();
@@ -426,6 +427,7 @@ public class PolarionProcessor extends AbstractProcessor {
         tc.setAuthor(pol.author());
         tc.setDescription(description);
         tc.setTitle(meta.qualifiedName);
+        this.logger.info("Processing Testcase for " + meta.qualifiedName);
 
         // For automation, let's always assume we're in draft state
         Testcase.Status status = new Testcase.Status();
@@ -456,15 +458,20 @@ public class PolarionProcessor extends AbstractProcessor {
         tc.setWorkitemType(WiTypes.TEST_CASE);
 
         tc.setProject(ProjectVals.fromValue(meta.annotation.projectID()));
+        //if (meta.annotation.projectID().equals(""))
 
         Requirement[] reqs = pol.reqs();
         // If reqs is empty look at the class annotated requirements contained in methToProjectReq
         if (reqs.length == 0) {
             String pkgClassname = String.format("%s.%s", meta.packName, meta.className);
             String project = tc.getProject().value();
-            Meta<Requirement> r = this.methToProjectReq.get(pkgClassname).get(project);
-            reqs = new Requirement[1];
-            reqs[0] = r.annotation;
+            if (this.methToProjectReq.containsKey(pkgClassname)) {
+                Meta<Requirement> r = this.methToProjectReq.get(pkgClassname).get(project);
+                reqs = new Requirement[1];
+                reqs[0] = r.annotation;
+            }
+            else
+                this.logger.warn("There is no Requirement for " + tc.getTitle());
         }
         Testcase.Requirements treq = new Testcase.Requirements();
         List<ReqType> r = treq.getRequirement();
@@ -480,9 +487,29 @@ public class PolarionProcessor extends AbstractProcessor {
         //TODO: Check for XML Desc file
         Path path = FileHelper.makeXmlPath(this.tcPath, meta);
         File xmlDesc = path.toFile();
+        WorkItem wi;
         if (xmlDesc.exists()) {
             this.logger.info("Description file already exists");
             // TODO: verify the description file has everything needed
+            // TODO: validate the xml against the schema.
+
+            // If we override, regenerate the XML description file
+            if (pol.override()) {
+                this.createTestCaseXML(tc, xmlDesc);
+            }
+            /**
+            wi = JAXBHelper.unmarshaller(WorkItem.class, xmlDesc, null);
+            if (!wi.isPresent())
+                throw new XMLDescriptonCreationError();
+
+            // Check if the ID is in the xml description file
+            WorkItem item = wi.get();
+            String id = item.getRequirement().getId();
+            if (id.equals("")) {
+                this.workItemImporterRequest(xmlDesc);
+            }
+            return wi.get().getRequirement();
+             */
         }
         else {
             Path parent = path.getParent();
@@ -516,16 +543,31 @@ public class PolarionProcessor extends AbstractProcessor {
     }
 
     /**
+     * TODO: stub to make a request to the WorkItem importer
+     *
+     * @param descFile the xml description file to pass to the importer
+     */
+    private void workItemImporterRequest(File descFile) {
+        this.logger.info(String.format("TODO: Need to make a WorkItem importer request for %s", descFile.toString()));
+        this.logger.info("TODO: Look for return from WorkItem importer.  Should contain ID");
+    }
+
+    /**
+     * TODO: the logic here is really convoluted though admittedly, this is a complicated algorithm.  There must be a
+     * better way to do a state machine than this.  Graph traversal perhaps?  Vertices are things to do, and edges
+     * are conditions.
+     *
+     * TODO: I think we need to return something other than ReqType, because we need the qualified name too
+     *
      * Given the Requirement annotation data, do the following:
      *
-     * - If ID exists:
-     *   - Check that requirements.xml.path/class/methodName.xml exists
-     *     - If it does not, generate one and call requestRequirementImporter
-     *       - Wait for return value to get Requirement ID
-     *     - If it does, verify the XML has Polarion ID
-     *       - Verify that the Polarion ID matches the method
-     * - If ID does not exist:
-     *   - Generate XML request for WorkItem importer
+     * - Check if requirements.xml.path/class/methodName.xml exists
+     *   - Verify the XML has Polarion ID
+     *     - If the ID doesn't exist, look in the annotation.
+     *       - If the annotation doesn't have it, issue a WorkItem importer request
+     *   - Verify that the Polarion ID matches the method
+     * - If xml description file does not exist:
+     *   - Generate XML description and request for WorkItem importer
      *   - Wait for return value to get the Requirement ID
      * @param meta
      */
@@ -537,54 +579,81 @@ public class PolarionProcessor extends AbstractProcessor {
         Path path = FileHelper.makeXmlPath(this.reqPath, meta);
         File xmlDesc = path.toFile();
         Optional<WorkItem> wi;
+
+        // If the xml description file exists, verify that it conforms to the schema.
+        // If the description file does not exist, make a request to the WorkItem importer
         if (path.toFile().exists()) {
+            // TODO: validate the xml against the schema.
+
+            // If we override, regenerate the XML description file
             if (r.override()) {
+                this.createRequirementXML(req, xmlDesc);
+            }
+            wi = JAXBHelper.unmarshaller(WorkItem.class, xmlDesc, null);
+            if (!wi.isPresent())
+                throw new XMLDescriptonCreationError();
+
+            // Check if the ID is in the xml description file
+            WorkItem item = wi.get();
+            String id = item.getRequirement().getId();
+            if (id.equals("")) {
+                this.workItemImporterRequest(xmlDesc);
+            }
+            return wi.get().getRequirement();
+
+        }
+        else {
+            FileHelper.makeDirs(path);
+
+            if(r.id().equals("")) {
+                this.logger.info("No polarionID...");
+                // Check for xmlDesc.  If both the id and xmlDesc are empty strings, then we need to generate XML file
+                // based on the Requirement metadata.  If xmlDesc is not an empty string, validate it and unmarshall
+                // it to a WorkItem
+                if (r.xmlDesc().equals("")) {
+                    ReqType generated = this.createRequirementXML(req, xmlDesc);  // generate the desc file
+                    this.workItemImporterRequest(xmlDesc);
+                    return generated;
+                }
+                else {
+                    String finalPath = r.xmlDesc();
+                    Path xmlpath = FileHelper.makeRequirementXmlPath(this.reqPath, finalPath);
+                    File desc = xmlpath.toFile();
+                    if (!desc.exists()) {
+                        this.logger.info("xmlDesc was given but doesn't exist.  Generating one...");
+                        FileHelper.makeDirs(xmlpath);
+                        ReqType generated = this.createRequirementXML(req, desc);
+                        this.workItemImporterRequest(desc);
+                        return generated;
+                    }
+                }
+            }
+            else {
+                this.logger.info("TODO: Polarion ID was given. Chech if xmldesc has the same");
                 wi = JAXBHelper.unmarshaller(WorkItem.class, xmlDesc, null);
                 if (wi.isPresent())
                     return wi.get().getRequirement();
             }
         }
-        else {
-            Path parent = path.getParent();
-            Boolean success = parent.toFile().mkdirs();
-        }
 
-        if(r.id().equals("")) {
-            this.logger.info("No polarionID...");
-            // Check for xmlDesc.  If both the id and xmlDesc are empty strings, then we need to generate an XML file
-            // based on the Requirement metadata
-            if (r.xmlDesc().equals("")) {
-                return this.initReqType(req, xmlDesc);
-            }
-            else {
-                this.logger.info("Found xmlDesc value, unmarshalling...");
-                if (path.toFile().exists()) {
-                    wi = JAXBHelper.unmarshaller(WorkItem.class, xmlDesc, null);
-                    if (wi.isPresent())
-                        return wi.get().getRequirement();
-                }
-                else {
-                    this.logger.error("xmlDesc was populated, but xml file doesn't exist.  Generating desc file");
-                    return this.initReqType(req, xmlDesc);
-                }
-            }
-        }
-        else {
-            this.logger.info("TODO: Polarion ID was given. Chech if xmldesc has the same");
-            wi = JAXBHelper.unmarshaller(WorkItem.class, xmlDesc, null);
-            if (wi.isPresent())
-                return wi.get().getRequirement();
-        }
         return null;
     }
 
-    private ReqType initReqType(ReqType req, File xmlpath) {
+    /**
+     * Creates an xml file based on information from a ReqType
+     *
+     * @param req
+     * @param xmlpath
+     * @return
+     */
+    private ReqType createRequirementXML(ReqType req, File xmlpath) {
         this.logger.info(String.format("Generating XML requirement descriptor in %s", xmlpath.toString()));
         WorkItem wi = new WorkItem();
         wi.setRequirement(req);
         wi.setProjectId(req.getProject());
         wi.setType(WiTypes.REQUIREMENT);
 
+        // TODO: Validate that the xmlpath is a valid XML file conforming to the schema
         JAXBHelper.marshaller(wi, xmlpath);
         return wi.getRequirement();
     }

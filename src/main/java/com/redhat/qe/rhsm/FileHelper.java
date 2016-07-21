@@ -61,4 +61,13 @@ public class FileHelper {
         String fullPath = Paths.get(basePath.toString(), xmlname + ".xml").toString();
         return Paths.get(fullPath);
     }
+
+    public static Path makeRequirementXmlPath(String base, String last) throws InvalidArgumentType {
+        return Paths.get(base, last);
+    }
+
+    public static Boolean makeDirs(Path path) {
+        Path parent = path.getParent();
+        return parent.toFile().mkdirs();
+    }
 }
