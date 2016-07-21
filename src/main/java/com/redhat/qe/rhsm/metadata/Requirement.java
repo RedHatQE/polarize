@@ -10,7 +10,7 @@ import java.lang.annotation.*;
 @Retention(RetentionPolicy.RUNTIME)
 public @interface Requirement {
     String id() default "";                          // if "", must have xmlDesc
-    String project() default "";                     // required if annotating a class.  If embedded in @Polarion it
+    String project() default "";                     // required if annotating a class.  If embedded in @TestCase it
                                                      // uses the value of project from it
     String author() default "";                      // if "", must have xmlDesc
     String description() default "";                 // if "", must have xmlDesc

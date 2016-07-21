@@ -31,7 +31,7 @@ import org.slf4j.LoggerFactory;
 
 
 /**
- * This is the Annotation processor that will look for @Polarion and @Requirement annotations
+ * This is the Annotation processor that will look for @TestCase and @Requirement annotations
  *
  * While compiling code, it will find methods (or classes for @Requirement) that are annotated and generate an XML
  * description which is suitable to be consumed by the WorkItem Importer.  The polarize.properties is used to set where
@@ -39,7 +39,7 @@ import org.slf4j.LoggerFactory;
  *
  * Created by stoner on 5/16/16.
  */
-public class PolarionProcessor extends AbstractProcessor {
+public class TestDefinitionProcessor extends AbstractProcessor {
     private Types types;
     private Filer filer;
     private Elements elements;
@@ -52,7 +52,7 @@ public class PolarionProcessor extends AbstractProcessor {
     private Map<String, Map<String,
                             Meta<Requirement>>> methToProjectReq;
     private Map<String, Map<String,
-                            Meta<Polarion>>> methToProjectPol;
+                            Meta<TestCase>>> methToProjectPol;
     private Map<String, String> methNameToTestNGDescription;
 
     /**
@@ -98,7 +98,7 @@ public class PolarionProcessor extends AbstractProcessor {
      * Creates a list of Meta objects from a list of Element objects
      *
      * @param elements list of Elements
-     * @param ann an Annotation class (eg Polarion.class)
+     * @param ann an Annotation class (eg TestCase.class)
      * @param <T> type that is of an Annotation
      * @return a list of Metas of type T
      */
@@ -147,8 +147,8 @@ public class PolarionProcessor extends AbstractProcessor {
                           Class<? extends Annotation> ann){
         List<Meta<T>> metas = new ArrayList<>();
         for(Element e : elements) {
-            Polarions container = (Polarions) e.getAnnotation(ann);
-            for(Polarion r: container.value()) {
+            TestCases container = (TestCases) e.getAnnotation(ann);
+            for(TestCase r: container.value()) {
                 Meta m = new Meta<T>();
                 String full = this.getTopLevel(e, "", m);
                 this.logger.info(String.format("Fully qualified name is %s", full));
@@ -162,8 +162,8 @@ public class PolarionProcessor extends AbstractProcessor {
 
 
     /**
-     * The PolarionProcessor actually needs to look for three annotation types:
-     * - @Polarion: to get TestCase WorkItem information
+     * The TestDefinitionProcessor actually needs to look for three annotation types:
+     * - @TestCase: to get TestCase WorkItem information
      * - @Requirement: to get Requirement WorkItem information
      * - @Test: to get the existing description
      *
@@ -183,7 +183,7 @@ public class PolarionProcessor extends AbstractProcessor {
         List<Meta<Requirement>> requirements = this.makeMetaFromRequirements(repeatedAnns, Requirements.class);
 
         // Get all the @Requirement annotated on a class that are not repeated. We will use the information here to
-        // generate the XML for requirements.  If a @Polarion annotated test method has an empty reqs, we will look in
+        // generate the XML for requirements.  If a @TestCase annotated test method has an empty reqs, we will look in
         // methToRequirements for the associated Requirement.
         allowed = new TreeSet<>();
         allowed.add(ElementKind.CLASS);
@@ -193,18 +193,18 @@ public class PolarionProcessor extends AbstractProcessor {
         requirements.addAll(this.makeMeta(reqAnns, Requirement.class));
         this.methToProjectReq.putAll(this.createMethodToMetaRequirementMap(requirements));
 
-        // Get all the @Polarion annotations which were annotated on an element only once.
-        // Make a list of Meta types that store the fully qualified name of every @Polarion annotated
-        // method.  We will use this to create a map of qualified_name => Polarion Annotation
+        // Get all the @TestCase annotations which were annotated on an element only once.
+        // Make a list of Meta types that store the fully qualified name of every @TestCase annotated
+        // method.  We will use this to create a map of qualified_name => TestCase Annotation
         allowed = new TreeSet<>();
         allowed.add(ElementKind.METHOD);
-        err = "Can only annotate methods with @Polarion";
-        List<? extends Element> polAnns = this.getAnnotations(roundEnvironment, Polarion.class, allowed, err);
-        List<Meta<Polarion>> metas = this.makeMeta(polAnns, Polarion.class);
+        err = "Can only annotate methods with @TestCase";
+        List<? extends Element> polAnns = this.getAnnotations(roundEnvironment, TestCase.class, allowed, err);
+        List<Meta<TestCase>> metas = this.makeMeta(polAnns, TestCase.class);
 
-        // Get all the @Polarion annotations which have been repeated on a single element.
-        List<? extends Element> pols = this.getAnnotations(roundEnvironment, Polarions.class, allowed, err);
-        metas.addAll(this.makeMetaFromPolarions(pols, Polarions.class));
+        // Get all the @TestCase annotations which have been repeated on a single element.
+        List<? extends Element> pols = this.getAnnotations(roundEnvironment, TestCases.class, allowed, err);
+        metas.addAll(this.makeMetaFromPolarions(pols, TestCases.class));
 
         this.methToProjectPol = this.createMethodToMetaPolarionMap(metas);
 
@@ -236,7 +236,7 @@ public class PolarionProcessor extends AbstractProcessor {
                     @Nonnull String desc = methNameToTestNGDescription.get(qualifiedName);
                     return es.getValue().entrySet().stream()
                             .map(val -> {
-                                Meta<Polarion> meta = val.getValue();
+                                Meta<TestCase> meta = val.getValue();
                                 return this.processTestCase(meta, desc);
                             })
                             .collect(Collectors.toList()).stream();
@@ -302,21 +302,21 @@ public class PolarionProcessor extends AbstractProcessor {
         }
     }
 
-    private Map<String, Map<String, Meta<Polarion>>>
-    createMethodToMetaPolarionMap(List<Meta<Polarion>> metas) {
-        Map<String, Map<String, Meta<Polarion>>> methods = new HashMap<>();
-        for(Meta<Polarion> m: metas) {
-            Polarion ann = m.annotation;
+    private Map<String, Map<String, Meta<TestCase>>>
+    createMethodToMetaPolarionMap(List<Meta<TestCase>> metas) {
+        Map<String, Map<String, Meta<TestCase>>> methods = new HashMap<>();
+        for(Meta<TestCase> m: metas) {
+            TestCase ann = m.annotation;
             String meth = m.qualifiedName;
             String project = ann.projectID();
 
             if (!methods.containsKey(meth)) {
-                Map<String, Meta<Polarion>> projects = new HashMap<>();
+                Map<String, Meta<TestCase>> projects = new HashMap<>();
                 projects.put(project, m);
                 methods.put(meth, projects);
             }
             else {
-                Map<String, Meta<Polarion>> projects = methods.get(meth);
+                Map<String, Meta<TestCase>> projects = methods.get(meth);
                 if (!projects.containsKey(project)) {
                     projects.put(project, m);
                 }
@@ -415,14 +415,14 @@ public class PolarionProcessor extends AbstractProcessor {
     }
 
     /**
-     * Examines a Polarion object to obtain its values and generates an XML file if needed.
+     * Examines a TestCase object to obtain its values and generates an XML file if needed.
      *
      * @param meta
      * @param description
      * @return
      */
-    private Testcase processTestCase(Meta<Polarion> meta, String description) {
-        Polarion pol = meta.annotation;
+    private Testcase processTestCase(Meta<TestCase> meta, String description) {
+        TestCase pol = meta.annotation;
         Testcase tc = new Testcase();
         tc.setAuthor(pol.author());
         tc.setDescription(description);
@@ -458,7 +458,6 @@ public class PolarionProcessor extends AbstractProcessor {
         tc.setWorkitemType(WiTypes.TEST_CASE);
 
         tc.setProject(ProjectVals.fromValue(meta.annotation.projectID()));
-        //if (meta.annotation.projectID().equals(""))
 
         Requirement[] reqs = pol.reqs();
         // If reqs is empty look at the class annotated requirements contained in methToProjectReq
@@ -562,10 +561,10 @@ public class PolarionProcessor extends AbstractProcessor {
      * Given the Requirement annotation data, do the following:
      *
      * - Check if requirements.xml.path/class/methodName.xml exists
-     *   - Verify the XML has Polarion ID
+     *   - Verify the XML has TestCase ID
      *     - If the ID doesn't exist, look in the annotation.
      *       - If the annotation doesn't have it, issue a WorkItem importer request
-     *   - Verify that the Polarion ID matches the method
+     *   - Verify that the TestCase ID matches the method
      * - If xml description file does not exist:
      *   - Generate XML description and request for WorkItem importer
      *   - Wait for return value to get the Requirement ID
@@ -629,7 +628,7 @@ public class PolarionProcessor extends AbstractProcessor {
                 }
             }
             else {
-                this.logger.info("TODO: Polarion ID was given. Chech if xmldesc has the same");
+                this.logger.info("TODO: TestCase ID was given. Chech if xmldesc has the same");
                 wi = JAXBHelper.unmarshaller(WorkItem.class, xmlDesc, null);
                 if (wi.isPresent())
                     return wi.get().getRequirement();
@@ -685,7 +684,7 @@ public class PolarionProcessor extends AbstractProcessor {
         try {
             req.setProject(ProjectVals.fromValue(r.project()));
         } catch (Exception ex) {
-            this.logger.warn("No projectID...will try from @Polarion");
+            this.logger.warn("No projectID...will try from @TestCase");
         }
         req.setReqtype(r.reqtype());
         req.setSeverity(r.severity());
@@ -706,7 +705,7 @@ public class PolarionProcessor extends AbstractProcessor {
      * generate an XML description based on the annotation data, it will do the following:
      *
      * - If processing @Requirement, look for/generate requirements.xml.path/class/methodName.xml
-     * - If processing @Polarion, look for/generate testcase.xml.path/class/methodName.xml
+     * - If processing @TestCase, look for/generate testcase.xml.path/class/methodName.xml
      */
     private void loadConfiguration() {
         InputStream is = getClass().getClassLoader().getResourceAsStream("polarize.properties");
@@ -748,7 +747,7 @@ public class PolarionProcessor extends AbstractProcessor {
         this.elements = env.getElementUtils();
         this.filer = env.getFiler();
         this.msgr = env.getMessager();
-        this.logger = LoggerFactory.getLogger(PolarionProcessor.class);
+        this.logger = LoggerFactory.getLogger(TestDefinitionProcessor.class);
 
         this.loadConfiguration();
 
@@ -760,7 +759,7 @@ public class PolarionProcessor extends AbstractProcessor {
     @Override
     public Set<String> getSupportedAnnotationTypes() {
         Set<String> anns = new LinkedHashSet<>();
-        anns.add(Polarion.class.getCanonicalName());
+        anns.add(TestCase.class.getCanonicalName());
         anns.add(Requirement.class.getCanonicalName());
         anns.add(Test.class.getCanonicalName());
         return anns;

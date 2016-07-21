@@ -1,7 +1,7 @@
 package com.redhat.qe.rhsm.metadata;
 
 /**
- * Contains the fully qualified name of a @Polarion decorated method
+ * Contains the fully qualified name of a @TestCase decorated method
  */
 public class Meta<T> {
     public String packName;

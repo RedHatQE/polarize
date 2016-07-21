@@ -70,7 +70,7 @@ Here is an example:
 ```java
 package com.redhat.qe.rhsm.testjong;
 
-import com.redhat.qe.rhsm.metadata.Polarion;
+import com.redhat.qe.rhsm.metadata.TestCase;
 import com.redhat.qe.rhsm.metadata.Requirement;
 import org.testng.annotations.Test;
 

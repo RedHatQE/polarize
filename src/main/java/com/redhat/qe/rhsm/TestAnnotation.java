@@ -1,7 +1,7 @@
 package com.redhat.qe.rhsm;
 
 
-import com.redhat.qe.rhsm.metadata.Polarion;
+import com.redhat.qe.rhsm.metadata.TestCase;
 import com.redhat.qe.rhsm.metadata.Requirement;
 
 /**
@@ -12,10 +12,10 @@ public class TestAnnotation {
 
     }
 
-    @Polarion(projectID="RHEL6",
+    @TestCase(projectID="RHEL6",
               xmlDesc="/path/to/xml",
               reqs={@Requirement(xmlDesc="/path/to/xml-requirement")})
-    @Polarion(projectID="RedHatEnterpriseLinux7",
+    @TestCase(projectID="RedHatEnterpriseLinux7",
               reqs = {@Requirement(id="",
                                    severity="Should Have",         // defaults to Must Have
                                    reqtype="NonFunctional",        // defaults to Functional

@@ -8,7 +8,7 @@
         description, and the <teststep> -> <method name=""> will be obtained since we know the name of the method
         already while the Annotation Processor scans the code.
 
-        @Polarion(author="Sean Toner",                 // required
+        @TestCase(author="Sean Toner",                 // required
                   projectId="RedHatEnterpriseLinux7",  // required
                   testCaseID="RHEL7-56743,             // if empty or null, make request to WorkItem Importer tool
                   caseimportance="high",               // defaults to high  if not given

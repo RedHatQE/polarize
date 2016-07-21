@@ -6,15 +6,15 @@ import java.lang.annotation.*;
  * Created by stoner on 5/6/16.
  *
  * Annotation to generate an XML file useable by the WorkItem Importer project that Sim's team is working on.
- * The PolarionProcessor will examine any method annotated with @Polarion in order to generate the mapping
- * between a test method in the source code, with the Polarion TestCase and Requirement ID.  This mapping
+ * The TestDefinitionProcessor will examine any method annotated with @TestCase in order to generate the mapping
+ * between a test method in the source code, with the TestCase TestCase and Requirement ID.  This mapping
  * will then in turn be inserted in a post-processing step with the junit report file.
  *
  * Since we are using the @Repeatable meta annotation, this is only useable on a JDK 1.8+.
  *
  * Example Usage:
  *
- *     @Polarion(author="Sean Toner",                 // required
+ *     @TestCase(author="Sean Toner",                 // required
  *               projectId="RedHatEnterpriseLinux7",  // required
  *               xmlDesc="/path/to/xml-description",  // defaults to ""
  *               testCaseID="RHEL7-56743,             // if empty or null, make request to WorkItem Importer tool
@@ -31,10 +31,10 @@ import java.lang.annotation.*;
  *                                    xmlDesc="/path/to/xml-file")}
  *               setup="Description of any preconditions that must be established for test case to run"
  */
-@Repeatable(Polarions.class)
+@Repeatable(TestCases.class)
 @Target(ElementType.METHOD)
 @Retention(RetentionPolicy.RUNTIME)
-public @interface Polarion {
+public @interface TestCase {
     String author() default "CI User";
     String projectID();
     String xmlDesc() default "";

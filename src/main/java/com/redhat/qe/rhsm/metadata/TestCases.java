@@ -10,6 +10,6 @@ import java.lang.annotation.Target;
  */
 @Target(ElementType.METHOD)
 @Retention(RetentionPolicy.RUNTIME)
-public @interface Polarions {
-    Polarion[] value();
+public @interface TestCases {
+    TestCase[] value();
 }
