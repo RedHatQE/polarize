@@ -20,6 +20,7 @@ import javax.tools.Diagnostic;
 import javax.xml.bind.*;
 import java.io.*;
 import java.lang.annotation.Annotation;
+import java.net.URL;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -107,7 +108,6 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         for(Element e : elements) {
             Meta m = new Meta<T>();
             String full = this.getTopLevel(e, "", m);
-            this.logger.info(String.format("Fully qualified name is %s", full));
             m.qualifiedName = full;
             m.annotation = e.getAnnotation(ann);
             metas.add(m);
@@ -133,7 +133,6 @@ public class TestDefinitionProcessor extends AbstractProcessor {
             for(Requirement r: container.value()) {
                 Meta m = new Meta<T>();
                 String full = this.getTopLevel(e, "", m);
-                this.logger.info(String.format("Fully qualified name is %s", full));
                 m.qualifiedName = full;
                 m.annotation = r;
                 metas.add(m);
@@ -275,7 +274,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         wi.setTestcase(tc);
         wi.setProjectId(tc.getProject());
         wi.setType(WiTypes.TEST_CASE);
-        JAXBHelper.marshaller(wi, path);
+        JAXBHelper.marshaller(wi, path, this.getXSDFromResource(wi.getClass()));
     }
 
     private void createWorkItems(List<Testcase> tests, ProjectVals proj) {
@@ -359,7 +358,6 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         return env.getElementsAnnotatedWith(c)
                 .stream()
                 .map(ae -> {
-                    this.logger.info(String.format("Kind is %s", ae.getKind().toString()));
                     if (!allowed.contains(ae.getKind())){
                         this.errorMsg(ae, errMsg, iface);
                         return null;
@@ -469,8 +467,13 @@ public class TestDefinitionProcessor extends AbstractProcessor {
                 reqs = new Requirement[1];
                 reqs[0] = r.annotation;
             }
-            else
-                this.logger.warn("There is no Requirement for " + tc.getTitle());
+            else {
+                String err = String.format("\nThere is no requirement for %s.", tc.getTitle());
+                String err2 = "\nEither the class must be annotated with @Requirement, or the " +
+                        "@TestCase(reqs={@Requirement(...)}) must be filled in";
+                this.logger.error(err + err2);
+                throw new RequirementAnnotationException();
+            }
         }
         Testcase.Requirements treq = new Testcase.Requirements();
         List<ReqType> r = treq.getRequirement();
@@ -483,7 +486,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         }
         tc.setRequirements(treq);
 
-        //TODO: Check for XML Desc file
+        //TODO: Check for XML Desc file for TestCase
         Path path = FileHelper.makeXmlPath(this.tcPath, meta);
         File xmlDesc = path.toFile();
         WorkItem wi;
@@ -496,19 +499,19 @@ public class TestDefinitionProcessor extends AbstractProcessor {
             if (pol.override()) {
                 this.createTestCaseXML(tc, xmlDesc);
             }
-            /**
-            wi = JAXBHelper.unmarshaller(WorkItem.class, xmlDesc, null);
-            if (!wi.isPresent())
+
+            Optional<WorkItem> witem;
+            witem = JAXBHelper.unmarshaller(WorkItem.class, xmlDesc, this.getXSDFromResource(WorkItem.class));
+            if (!witem.isPresent())
                 throw new XMLDescriptonCreationError();
 
             // Check if the ID is in the xml description file
-            WorkItem item = wi.get();
+            WorkItem item = witem.get();
             String id = item.getRequirement().getId();
             if (id.equals("")) {
                 this.workItemImporterRequest(xmlDesc);
             }
-            return wi.get().getRequirement();
-             */
+            tc = witem.get().getTestcase();
         }
         else {
             Path parent = path.getParent();
@@ -519,26 +522,24 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         return tc;
     }
 
-    private File getXSDFromResource(Class<?> t) {
-        InputStream is;
-        BufferedInputStream bis;
+    private URL getXSDFromResource(Class<?> t) {
+        URL xsd;
         if (t == WorkItem.class) {
-            is = getClass().getClassLoader().getResourceAsStream("workitem.xsd");
-            bis = new BufferedInputStream(is);
+            xsd = getClass().getClassLoader().getResource("workitem.xsd");
         }
         else if (t == Testcase.class) {
-
+            xsd = getClass().getClass().getResource("testcase.xsd");
         }
         else if (t == ReqType.class) {
-
+            xsd = getClass().getClass().getResource("requirement.xsd");
         }
         else if (t == TestCaseMetadata.class) {
-
+            xsd = getClass().getClassLoader().getResource("workitems.xsd");
         }
         else
             throw new XSDValidationError();
 
-        return null;
+        return xsd;
     }
 
     /**
@@ -588,7 +589,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
             if (r.override()) {
                 this.createRequirementXML(req, xmlDesc);
             }
-            wi = JAXBHelper.unmarshaller(WorkItem.class, xmlDesc, null);
+            wi = JAXBHelper.unmarshaller(WorkItem.class, xmlDesc, this.getXSDFromResource(WorkItem.class));
             if (!wi.isPresent())
                 throw new XMLDescriptonCreationError();
 
@@ -629,7 +630,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
             }
             else {
                 this.logger.info("TODO: TestCase ID was given. Chech if xmldesc has the same");
-                wi = JAXBHelper.unmarshaller(WorkItem.class, xmlDesc, null);
+                wi = JAXBHelper.unmarshaller(WorkItem.class, xmlDesc, this.getXSDFromResource(WorkItem.class));
                 if (wi.isPresent())
                     return wi.get().getRequirement();
             }
@@ -653,7 +654,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         wi.setType(WiTypes.REQUIREMENT);
 
         // TODO: Validate that the xmlpath is a valid XML file conforming to the schema
-        JAXBHelper.marshaller(wi, xmlpath);
+        JAXBHelper.marshaller(wi, xmlpath, this.getXSDFromResource(wi.getClass()));
         return wi.getRequirement();
     }
 

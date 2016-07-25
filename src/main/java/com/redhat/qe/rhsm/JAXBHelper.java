@@ -1,5 +1,7 @@
 package com.redhat.qe.rhsm;
 
+import com.redhat.qe.rhsm.exceptions.XMLDescriptonCreationError;
+import com.redhat.qe.rhsm.exceptions.XSDValidationError;
 import org.xml.sax.SAXException;
 
 import javax.xml.XMLConstants;
@@ -14,6 +16,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.net.URL;
 import java.util.Optional;
 
 /**
@@ -28,7 +31,7 @@ public class JAXBHelper {
      * @param xmlpath
      * @param <T>
      */
-    public static <T> void marshaller(T t, File xmlpath) {
+    public static <T> void marshaller(T t, File xmlpath, URL xsdpath) {
         try {
             JAXBContext jaxbc = JAXBContext.newInstance(t.getClass());
             Marshaller marshaller = jaxbc.createMarshaller();
@@ -41,6 +44,13 @@ public class JAXBHelper {
 
         // TODO: verify the function succeeded.  Check for existence of xml file,
         // and validate it
+        if (!xmlpath.exists())
+            throw new XMLDescriptonCreationError();
+
+        if (xsdpath != null) {
+            if (!JAXBHelper.validateXML(xmlpath, xsdpath))
+                throw new XSDValidationError();
+        }
     }
 
 
@@ -53,11 +63,15 @@ public class JAXBHelper {
      * @param <T> Type of item that will optionall be contained in return
      * @return an Optional of type T
      */
-    public static <T> Optional<T> unmarshaller(Class<T> t, File xmlpath, File xsdPath) {
+    public static <T> Optional<T> unmarshaller(Class<T> t, File xmlpath, URL xsdPath) {
         XMLInputFactory factory = XMLInputFactory.newFactory();
 
+        Boolean validated = true;
         if (xsdPath != null)
-            JAXBHelper.validateXML(xmlpath, xsdPath);
+            validated = JAXBHelper.validateXML(xmlpath, xsdPath);
+
+        if (!validated)
+            throw new XSDValidationError();
 
         JAXBElement<T> ret;
         try {
@@ -84,9 +98,9 @@ public class JAXBHelper {
      *
      * @return
      */
-    public static Boolean validateXML(File xmlpath, File xsdPath) {
-        SchemaFactory sf = SchemaFactory.newInstance(XMLConstants.W3C_XML_SCHEMA_INSTANCE_NS_URI);
-        Schema xsdSchema = null;
+    public static Boolean validateXML(File xmlpath, URL xsdPath) {
+        SchemaFactory sf = SchemaFactory.newInstance(XMLConstants.W3C_XML_SCHEMA_NS_URI);
+        Schema xsdSchema;
         Boolean returnEmpty = false;
         try {
             xsdSchema = sf.newSchema(xsdPath);
@@ -95,10 +109,12 @@ public class JAXBHelper {
                 Source xmlSrc = new StreamSource(xmlpath);
                 v.validate(xmlSrc);
             } catch (SAXException e) {
-                e.printStackTrace();
+                //e.printStackTrace();
+                System.err.println(e.getMessage());
                 returnEmpty = true;
             } catch (IOException e) {
-                e.printStackTrace();
+                //e.printStackTrace();
+                System.err.println(e.getMessage());
                 returnEmpty = true;
             }
         } catch (SAXException e) {
