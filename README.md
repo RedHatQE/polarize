@@ -88,20 +88,20 @@ import org.testng.annotations.Test;
              description="Class level Requirement for RHEL7")
 public class TestJongReq {
 
-    @Polarion(projectID="RHEL6",
+    @TestCase(projectID="RHEL6",
               description="TestCase for a dummy test method",
               reqs={})
-    @Polarion(author="Sean Toner",                 // required
+    @TestCase(author="Sean Toner",                 // required
               projectID="RedHatEnterpriseLinux7",  // required
               testCaseID="RHEL7-56743",            // if empty or null, make request to WorkItem Importer tool
               caseimportance="medium",             // defaults to high  if not given
               caseposneg="negative",               // defaults to positive if not given
               caselevel="component",               // defaults to component if not given
               testtype="non_functional",           // defaults to functional if not given
-              @Requirement(id="",                  // if empty, look for class Requirement.  If no class requirement
+              reqa={@Requirement(id="",            // if empty, look for class Requirement.  If no class requirement
                                                    // look for xmlDesc.  If none, that means request one.
-                           xmlDesc="/path/to/xml/description",
-                           feature="/path/to/a/gherkin/feature/file"),
+                                 xmlDesc="/path/to/xml/description",
+                                 feature="/path/to/a/gherkin/feature/file")},
               setup="Description of any preconditions that must be established for test case to run",
               teardown="The methods to clean up after a test method")
     @Test(groups={"testjong_polarize"},
@@ -142,7 +142,7 @@ This extra data can be contained as a parseable entity within the Feature descri
 ```gherkin
 Feature: Generate XML from annotated class
 
-  Polarion:
+  Definition:
     severity: must_have      # One of should_have, must_have, nice_to_have, will_not_have
     type: Functional         # One of Functional, NonFunctional,
     subType:                 # optional
@@ -188,12 +188,10 @@ requirements.xml.path/<project>/<class>/<methodName>.feature
 
 Currently, the heart of polarize lies in 2 concepts:
 
-1. A custom annotation processor
-2. XML description files (generated via the custom processor)
+1. XML description files (generated via the custom processor)
+2. A custom annotation processor
 
-The annotation processor will process any functions annotated by @Requirement or @Polarion, and since the processor now
-knows the name of the method/class that was annotated, the processor also knows where to look for an XML description
-file.  The XML description file is actually what is used to do the mapping from a method name to a unique Polarion ID.
+The XML description file is what is used to do the mapping from a method name to a unique Polarion ID.
 If no XML description file exists (in the path determined by configuration, work item type, class and method name) then
 the annotation processor will use the information in the annotation to create an XML description file.  If a description
 file needs to be created, the annotation processor will also make a request using the WorkItem importer to generate the
