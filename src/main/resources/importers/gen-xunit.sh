@@ -1,0 +1,1 @@
+xjc -p com.redhat.qe.rhsm.importer.xunit  -d ../../java .
