@@ -2,6 +2,11 @@ package com.redhat.qe.rhsm;
 
 import com.redhat.qe.rhsm.exceptions.XMLDescriptonCreationError;
 import com.redhat.qe.rhsm.exceptions.XSDValidationError;
+import com.redhat.qe.rhsm.importer.xunit.Testsuites;
+import com.redhat.qe.rhsm.schema.ReqType;
+import com.redhat.qe.rhsm.schema.TestCaseMetadata;
+import com.redhat.qe.rhsm.schema.Testcase;
+import com.redhat.qe.rhsm.schema.WorkItem;
 import org.xml.sax.SAXException;
 
 import javax.xml.XMLConstants;
@@ -124,4 +129,26 @@ public class JAXBHelper {
         return !returnEmpty;
     }
 
+    public static URL getXSDFromResource(Class<?> t) {
+        URL xsd;
+        if (t == WorkItem.class) {
+            xsd = JAXBHelper.class.getClassLoader().getResource("workitem.xsd");
+        }
+        else if (t == Testcase.class) {
+            xsd = JAXBHelper.class.getClass().getResource("testcase.xsd");
+        }
+        else if (t == ReqType.class) {
+            xsd = JAXBHelper.class.getClass().getResource("requirement.xsd");
+        }
+        else if (t == TestCaseMetadata.class) {
+            xsd = JAXBHelper.class.getClassLoader().getResource("workitems.xsd");
+        }
+        else if (t == Testsuites.class) {
+            xsd = JAXBHelper.class.getClassLoader().getResource("importers/xunit.xsd");
+        }
+        else
+            throw new XSDValidationError();
+
+        return xsd;
+    }
 }
