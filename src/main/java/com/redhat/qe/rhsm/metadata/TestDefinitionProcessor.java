@@ -5,6 +5,7 @@ import com.redhat.qe.rhsm.JAXBHelper;
 import com.redhat.qe.rhsm.exceptions.RequirementAnnotationException;
 import com.redhat.qe.rhsm.exceptions.XMLDescriptonCreationError;
 import com.redhat.qe.rhsm.exceptions.XSDValidationError;
+import com.redhat.qe.rhsm.importer.xunit.Testsuites;
 import com.redhat.qe.rhsm.schema.*;
 import org.testng.annotations.Test;
 
@@ -106,9 +107,8 @@ public class TestDefinitionProcessor extends AbstractProcessor {
     private <T extends Annotation> List<Meta<T>> makeMeta(List<? extends Element> elements, Class<T> ann){
         List<Meta<T>> metas = new ArrayList<>();
         for(Element e : elements) {
-            Meta m = new Meta<T>();
-            String full = this.getTopLevel(e, "", m);
-            m.qualifiedName = full;
+            Meta<T> m = new Meta<>();
+            m.qualifiedName = this.getTopLevel(e, "", m);
             m.annotation = e.getAnnotation(ann);
             metas.add(m);
         }
@@ -118,22 +118,17 @@ public class TestDefinitionProcessor extends AbstractProcessor {
     /**
      * Creates a List of Meta types from a Requirements annotation
      *
-     * TODO: Figure out how to parameterize this.  The ann variable is already Requirements.class
      * @param elements a list of Elements
-     * @param ann an annotation class (eg. Requirement.class)
-     * @param <T> type that extends an Annotation
-     * @return a list of Metas of type T
+     * @return a list of Metas of type Requirement
      */
-    private <T extends Annotation> List<Meta<T>>
-    makeMetaFromRequirements(List<? extends Element> elements,
-                             Class<? extends Annotation> ann){
-        List<Meta<T>> metas = new ArrayList<>();
+    private List<Meta<Requirement>>
+    makeMetaFromRequirements(List<? extends Element> elements){
+        List<Meta<Requirement>> metas = new ArrayList<>();
         for(Element e : elements) {
-            Requirements container = (Requirements) e.getAnnotation(ann);
+            Requirements container = e.getAnnotation(Requirements.class);
             for(Requirement r: container.value()) {
-                Meta m = new Meta<T>();
-                String full = this.getTopLevel(e, "", m);
-                m.qualifiedName = full;
+                Meta<Requirement> m = new Meta<>();
+                m.qualifiedName = this.getTopLevel(e, "", m);
                 m.annotation = r;
                 metas.add(m);
             }
@@ -179,7 +174,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         allowed.add(ElementKind.CLASS);
         String err = "Can only annotate classes with @Requirements";
         List<? extends Element> repeatedAnns = this.getAnnotations(roundEnvironment, Requirements.class, allowed, err);
-        List<Meta<Requirement>> requirements = this.makeMetaFromRequirements(repeatedAnns, Requirements.class);
+        List<Meta<Requirement>> requirements = this.makeMetaFromRequirements(repeatedAnns);
 
         // Get all the @Requirement annotated on a class that are not repeated. We will use the information here to
         // generate the XML for requirements.  If a @TestCase annotated test method has an empty reqs, we will look in
@@ -268,15 +263,27 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         return reqList;
     }
 
+    /**
+     * Creates an XML description file for a testcase
+     *
+     * @param tc the Testcase object to serialize to XML
+     * @param path path to generate the description file
+     */
     private void createTestCaseXML(Testcase tc, File path) {
         this.logger.info(String.format("Generating XML description in %s", path.toString()));
         WorkItem wi = new WorkItem();
         wi.setTestcase(tc);
         wi.setProjectId(tc.getProject());
         wi.setType(WiTypes.TEST_CASE);
-        JAXBHelper.marshaller(wi, path, this.getXSDFromResource(wi.getClass()));
+        JAXBHelper.marshaller(wi, path, JAXBHelper.getXSDFromResource(wi.getClass()));
     }
 
+    /**
+     * Generates an XML description file of a workitems type
+     *
+     * @param tests a list of all Testcase objects to serialize
+     * @param proj which project to create
+     */
     private void createWorkItems(List<Testcase> tests, ProjectVals proj) {
         // Convert the TestcaseType objects to XML
         TestCaseMetadata tcmd = new TestCaseMetadata();
@@ -301,6 +308,12 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         }
     }
 
+    /**
+     * Creates a map from qualified method name to {projectID: Meta object}
+     *
+     * @param metas a list of Metas to generate
+     * @return
+     */
     private Map<String, Map<String, Meta<TestCase>>>
     createMethodToMetaPolarionMap(List<Meta<TestCase>> metas) {
         Map<String, Map<String, Meta<TestCase>>> methods = new HashMap<>();
@@ -501,7 +514,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
             }
 
             Optional<WorkItem> witem;
-            witem = JAXBHelper.unmarshaller(WorkItem.class, xmlDesc, this.getXSDFromResource(WorkItem.class));
+            witem = JAXBHelper.unmarshaller(WorkItem.class, xmlDesc, JAXBHelper.getXSDFromResource(WorkItem.class));
             if (!witem.isPresent())
                 throw new XMLDescriptonCreationError();
 
@@ -520,26 +533,6 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         }
 
         return tc;
-    }
-
-    private URL getXSDFromResource(Class<?> t) {
-        URL xsd;
-        if (t == WorkItem.class) {
-            xsd = getClass().getClassLoader().getResource("workitem.xsd");
-        }
-        else if (t == Testcase.class) {
-            xsd = getClass().getClass().getResource("testcase.xsd");
-        }
-        else if (t == ReqType.class) {
-            xsd = getClass().getClass().getResource("requirement.xsd");
-        }
-        else if (t == TestCaseMetadata.class) {
-            xsd = getClass().getClassLoader().getResource("workitems.xsd");
-        }
-        else
-            throw new XSDValidationError();
-
-        return xsd;
     }
 
     /**
@@ -589,7 +582,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
             if (r.override()) {
                 this.createRequirementXML(req, xmlDesc);
             }
-            wi = JAXBHelper.unmarshaller(WorkItem.class, xmlDesc, this.getXSDFromResource(WorkItem.class));
+            wi = JAXBHelper.unmarshaller(WorkItem.class, xmlDesc, JAXBHelper.getXSDFromResource(WorkItem.class));
             if (!wi.isPresent())
                 throw new XMLDescriptonCreationError();
 
@@ -630,7 +623,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
             }
             else {
                 this.logger.info("TODO: TestCase ID was given. Chech if xmldesc has the same");
-                wi = JAXBHelper.unmarshaller(WorkItem.class, xmlDesc, this.getXSDFromResource(WorkItem.class));
+                wi = JAXBHelper.unmarshaller(WorkItem.class, xmlDesc, JAXBHelper.getXSDFromResource(WorkItem.class));
                 if (wi.isPresent())
                     return wi.get().getRequirement();
             }
@@ -654,7 +647,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         wi.setType(WiTypes.REQUIREMENT);
 
         // TODO: Validate that the xmlpath is a valid XML file conforming to the schema
-        JAXBHelper.marshaller(wi, xmlpath, this.getXSDFromResource(wi.getClass()));
+        JAXBHelper.marshaller(wi, xmlpath, JAXBHelper.getXSDFromResource(wi.getClass()));
         return wi.getRequirement();
     }
 
