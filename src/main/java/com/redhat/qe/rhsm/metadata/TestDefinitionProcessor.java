@@ -1,11 +1,10 @@
 package com.redhat.qe.rhsm.metadata;
 
+import com.redhat.qe.rhsm.Configurator;
 import com.redhat.qe.rhsm.FileHelper;
 import com.redhat.qe.rhsm.JAXBHelper;
 import com.redhat.qe.rhsm.exceptions.RequirementAnnotationException;
 import com.redhat.qe.rhsm.exceptions.XMLDescriptonCreationError;
-import com.redhat.qe.rhsm.exceptions.XSDValidationError;
-import com.redhat.qe.rhsm.importer.xunit.Testsuites;
 import com.redhat.qe.rhsm.schema.*;
 import org.testng.annotations.Test;
 
@@ -16,14 +15,10 @@ import javax.lang.model.element.Element;
 import javax.lang.model.element.ElementKind;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.util.Elements;
-import javax.lang.model.util.Types;
 import javax.tools.Diagnostic;
 import javax.xml.bind.*;
 import java.io.*;
 import java.lang.annotation.Annotation;
-import java.net.URL;
-import java.nio.file.FileSystems;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -42,8 +37,6 @@ import org.slf4j.LoggerFactory;
  * Created by stoner on 5/16/16.
  */
 public class TestDefinitionProcessor extends AbstractProcessor {
-    private Types types;
-    private Filer filer;
     private Elements elements;
     private Messager msgr;
     private Logger logger;
@@ -161,9 +154,9 @@ public class TestDefinitionProcessor extends AbstractProcessor {
      * - @Requirement: to get Requirement WorkItem information
      * - @Test: to get the existing description
      *
-     * @param set
-     * @param roundEnvironment
-     * @return
+     * @param set passed from compiler
+     * @param roundEnvironment passed from compiler
+     * @return true if processed successfully, false otherwise
      */
     @Override
     public boolean process(Set<? extends TypeElement> set, RoundEnvironment roundEnvironment) {
@@ -562,7 +555,9 @@ public class TestDefinitionProcessor extends AbstractProcessor {
      * - If xml description file does not exist:
      *   - Generate XML description and request for WorkItem importer
      *   - Wait for return value to get the Requirement ID
-     * @param meta
+     * @param meta Meta of type Requirement that holds data to fully initialize req
+     * @param req (possibly) partially initialized ReqType
+     * @return fully initialized ReqType object
      */
     private ReqType processRequirement(Meta<Requirement> meta, ReqType req) {
         Requirement r = meta.annotation;
@@ -635,9 +630,9 @@ public class TestDefinitionProcessor extends AbstractProcessor {
     /**
      * Creates an xml file based on information from a ReqType
      *
-     * @param req
-     * @param xmlpath
-     * @return
+     * @param req the ReqType that will be marshalled into XML
+     * @param xmlpath path to marshall the xml to
+     * @return fully initialized ReqType
      */
     private ReqType createRequirementXML(ReqType req, File xmlpath) {
         this.logger.info(String.format("Generating XML requirement descriptor in %s", xmlpath.toString()));
@@ -661,7 +656,8 @@ public class TestDefinitionProcessor extends AbstractProcessor {
      *
      * resources/requirements/{package}/{class}/{methodName}.xml
      *
-     * @param m
+     * @param m Meta of type Requirement that will be processed
+     * @param project eg RHEL_6
      */
     private ReqType processRequirement(Meta<Requirement> m, ProjectVals project) {
         ReqType init = this.createReqTypeFromRequirement(m.annotation);
@@ -685,65 +681,21 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         return req;
     }
 
-    /**
-     * Loads configuration data from the following in increasing order of precedence:
-     *
-     * - resources/polarize.properties
-     * - ~/.polarize/polarize.properties
-     * - Java -D options
-     *
-     * Two of the more important properties are requirements.xml.path and testcase.xml.path.  These fields describe
-     * where the XML equivalent of the annotations will be stored.  Normally, this will be some path inside of the
-     * project that will be scanned for annotations.  This is because polarize will generate the XML descriptions if
-     * they dont exist, and it is better to have these xml files under source control.  When the processor needs to
-     * generate an XML description based on the annotation data, it will do the following:
-     *
-     * - If processing @Requirement, look for/generate requirements.xml.path/class/methodName.xml
-     * - If processing @TestCase, look for/generate testcase.xml.path/class/methodName.xml
-     */
-    private void loadConfiguration() {
-        InputStream is = getClass().getClassLoader().getResourceAsStream("polarize.properties");
-        Properties props = new Properties();
 
-        try {
-            props.load(is);
-            reqPath = props.getProperty("requirements.xml.path", "/tmp/reqs");
-            tcPath = props.getProperty("testcases.xml.path", "/tmp/tcs");
-        } catch (IOException e) {
-            this.logger.info("Could not load polarize.properties.  Trying ~/.polarize/polarize.properties");
-        }
-
-        try {
-            String homeDir = System.getProperty("user.home");
-            BufferedReader rdr;
-            rdr = Files.newBufferedReader(FileSystems.getDefault().getPath(homeDir + "/.polarize/polarize.properties"));
-            props.load(rdr);
-            reqPath = props.getProperty("requirements.xml.path", "/tmp/reqs");
-            tcPath = props.getProperty("testcases.xml.path", "/tmp/tcs");
-        } catch (IOException e) {
-            //e.printStackTrace();
-        }
-
-        String xmlReqPath = System.getProperty("requirements.xml.path");
-        if (xmlReqPath != null)
-            reqPath = xmlReqPath;
-
-        String xmlTCPath = System.getProperty("testcases.xml.path");
-        if (xmlTCPath != null)
-            tcPath = xmlTCPath;
-    }
 
     @Override
     public synchronized void init(ProcessingEnvironment env) {
         System.out.println("In init() method");
         super.init(env);
-        this.types = env.getTypeUtils();
         this.elements = env.getElementUtils();
-        this.filer = env.getFiler();
         this.msgr = env.getMessager();
         this.logger = LoggerFactory.getLogger(TestDefinitionProcessor.class);
+        //this.types = env.getTypeUtils();
+        //this.filer = env.getFiler();
 
-        this.loadConfiguration();
+        Map<String, String> config = Configurator.loadConfiguration();
+        this.reqPath = config.get("reqPath");
+        this.tcPath = config.get("tcPath");
 
         this.methNameToTestNGDescription = new HashMap<>();
         this.methToRequirement = new HashMap<>();
