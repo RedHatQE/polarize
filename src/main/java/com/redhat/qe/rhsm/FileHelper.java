@@ -62,6 +62,18 @@ public class FileHelper {
         return Paths.get(fullPath);
     }
 
+    public static Path
+    makeXmlPath(String base, String project, String cName, String methName) throws InvalidArgumentType {
+        String xmlname;
+        xmlname = methName;
+        if (xmlname == null || xmlname.equals(""))
+            xmlname = cName;
+
+        Path basePath = Paths.get(base, project, cName);
+        String fullPath = Paths.get(basePath.toString(), xmlname + ".xml").toString();
+        return Paths.get(fullPath);
+    }
+
     public static Path makeRequirementXmlPath(String base, String last) throws InvalidArgumentType {
         return Paths.get(base, last);
     }
