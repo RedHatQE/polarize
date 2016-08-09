@@ -38,7 +38,7 @@ public class Configurator {
      * generate an XML description based on the annotation data, it will do the following:
      *
      * - If processing @Requirement, look for/generate requirements.xml.path/class/methodName.xml
-     * - If processing @TestCase, look for/generate testcase.xml.path/class/methodName.xml
+     * - If processing @TestDefinition, look for/generate testcase.xml.path/class/methodName.xml
      */
     public static Map<String, String> loadConfiguration() {
         InputStream is = Configurator.class.getClassLoader().getResourceAsStream("polarize.properties");

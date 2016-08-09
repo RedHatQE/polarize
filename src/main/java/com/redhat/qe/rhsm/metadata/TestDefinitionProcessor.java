@@ -28,7 +28,7 @@ import org.slf4j.LoggerFactory;
 
 
 /**
- * This is the Annotation processor that will look for @TestCase and @Requirement annotations
+ * This is the Annotation processor that will look for @TestDefinition and @Requirement annotations
  *
  * While compiling code, it will find methods (or classes for @Requirement) that are annotated and generate an XML
  * description which is suitable to be consumed by the WorkItem Importer.  The polarize.properties is used to set where
@@ -47,7 +47,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
     private Map<String, Map<String,
                             Meta<Requirement>>> methToProjectReq;
     private Map<String, Map<String,
-                            Meta<TestCase>>> methToProjectPol;
+                            Meta<TestDefinition>>> methToProjectPol;
     private Map<String, String> methNameToTestNGDescription;
 
     /**
@@ -93,7 +93,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
      * Creates a list of Meta objects from a list of Element objects
      *
      * @param elements list of Elements
-     * @param ann an Annotation class (eg TestCase.class)
+     * @param ann an Annotation class (eg TestDefinition.class)
      * @param <T> type that is of an Annotation
      * @return a list of Metas of type T
      */
@@ -134,8 +134,8 @@ public class TestDefinitionProcessor extends AbstractProcessor {
                           Class<? extends Annotation> ann){
         List<Meta<T>> metas = new ArrayList<>();
         for(Element e : elements) {
-            TestCases container = (TestCases) e.getAnnotation(ann);
-            for(TestCase r: container.value()) {
+            TestDefinitions container = (TestDefinitions) e.getAnnotation(ann);
+            for(TestDefinition r: container.value()) {
                 Meta m = new Meta<T>();
                 String full = this.getTopLevel(e, "", m);
                 this.logger.info(String.format("Fully qualified name is %s", full));
@@ -150,7 +150,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
 
     /**
      * The TestDefinitionProcessor actually needs to look for three annotation types:
-     * - @TestCase: to get TestCase WorkItem information
+     * - @TestDefinition: to get TestDefinition WorkItem information
      * - @Requirement: to get Requirement WorkItem information
      * - @Test: to get the existing description
      *
@@ -170,7 +170,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         List<Meta<Requirement>> requirements = this.makeMetaFromRequirements(repeatedAnns);
 
         // Get all the @Requirement annotated on a class that are not repeated. We will use the information here to
-        // generate the XML for requirements.  If a @TestCase annotated test method has an empty reqs, we will look in
+        // generate the XML for requirements.  If a @TestDefinition annotated test method has an empty reqs, we will look in
         // methToRequirements for the associated Requirement.
         allowed = new TreeSet<>();
         allowed.add(ElementKind.CLASS);
@@ -180,18 +180,18 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         requirements.addAll(this.makeMeta(reqAnns, Requirement.class));
         this.methToProjectReq.putAll(this.createMethodToMetaRequirementMap(requirements));
 
-        // Get all the @TestCase annotations which were annotated on an element only once.
-        // Make a list of Meta types that store the fully qualified name of every @TestCase annotated
-        // method.  We will use this to create a map of qualified_name => TestCase Annotation
+        // Get all the @TestDefinition annotations which were annotated on an element only once.
+        // Make a list of Meta types that store the fully qualified name of every @TestDefinition annotated
+        // method.  We will use this to create a map of qualified_name => TestDefinition Annotation
         allowed = new TreeSet<>();
         allowed.add(ElementKind.METHOD);
-        err = "Can only annotate methods with @TestCase";
-        List<? extends Element> polAnns = this.getAnnotations(roundEnvironment, TestCase.class, allowed, err);
-        List<Meta<TestCase>> metas = this.makeMeta(polAnns, TestCase.class);
+        err = "Can only annotate methods with @TestDefinition";
+        List<? extends Element> polAnns = this.getAnnotations(roundEnvironment, TestDefinition.class, allowed, err);
+        List<Meta<TestDefinition>> metas = this.makeMeta(polAnns, TestDefinition.class);
 
-        // Get all the @TestCase annotations which have been repeated on a single element.
-        List<? extends Element> pols = this.getAnnotations(roundEnvironment, TestCases.class, allowed, err);
-        metas.addAll(this.makeMetaFromPolarions(pols, TestCases.class));
+        // Get all the @TestDefinition annotations which have been repeated on a single element.
+        List<? extends Element> pols = this.getAnnotations(roundEnvironment, TestDefinitions.class, allowed, err);
+        metas.addAll(this.makeMetaFromPolarions(pols, TestDefinitions.class));
 
         this.methToProjectPol = this.createMethodToMetaPolarionMap(metas);
 
@@ -216,14 +216,14 @@ public class TestDefinitionProcessor extends AbstractProcessor {
      * @return List of Testcase
      */
     private List<Testcase> processAllTestCase() {
-        // We now have the mapping from qualified name to annotation.  So, process each TestCase object
+        // We now have the mapping from qualified name to annotation.  So, process each TestDefinition object
         return this.methToProjectPol.entrySet().stream()
                 .flatMap(es -> {
                     String qualifiedName = es.getKey();
                     @Nonnull String desc = methNameToTestNGDescription.get(qualifiedName);
                     return es.getValue().entrySet().stream()
                             .map(val -> {
-                                Meta<TestCase> meta = val.getValue();
+                                Meta<TestDefinition> meta = val.getValue();
                                 return this.processTestCase(meta, desc);
                             })
                             .collect(Collectors.toList()).stream();
@@ -307,21 +307,21 @@ public class TestDefinitionProcessor extends AbstractProcessor {
      * @param metas a list of Metas to generate
      * @return
      */
-    private Map<String, Map<String, Meta<TestCase>>>
-    createMethodToMetaPolarionMap(List<Meta<TestCase>> metas) {
-        Map<String, Map<String, Meta<TestCase>>> methods = new HashMap<>();
-        for(Meta<TestCase> m: metas) {
-            TestCase ann = m.annotation;
+    private Map<String, Map<String, Meta<TestDefinition>>>
+    createMethodToMetaPolarionMap(List<Meta<TestDefinition>> metas) {
+        Map<String, Map<String, Meta<TestDefinition>>> methods = new HashMap<>();
+        for(Meta<TestDefinition> m: metas) {
+            TestDefinition ann = m.annotation;
             String meth = m.qualifiedName;
             String project = ann.projectID();
 
             if (!methods.containsKey(meth)) {
-                Map<String, Meta<TestCase>> projects = new HashMap<>();
+                Map<String, Meta<TestDefinition>> projects = new HashMap<>();
                 projects.put(project, m);
                 methods.put(meth, projects);
             }
             else {
-                Map<String, Meta<TestCase>> projects = methods.get(meth);
+                Map<String, Meta<TestDefinition>> projects = methods.get(meth);
                 if (!projects.containsKey(project)) {
                     projects.put(project, m);
                 }
@@ -399,7 +399,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
 
 
     /**
-     * TODO: Looks for the xmlDesc file for a TestCase or Requirement
+     * TODO: Looks for the xmlDesc file for a TestDefinition or Requirement
      *
      * @param elem
      * @return
@@ -419,14 +419,14 @@ public class TestDefinitionProcessor extends AbstractProcessor {
     }
 
     /**
-     * Examines a TestCase object to obtain its values and generates an XML file if needed.
+     * Examines a TestDefinition object to obtain its values and generates an XML file if needed.
      *
      * @param meta
      * @param description
      * @return
      */
-    private Testcase processTestCase(Meta<TestCase> meta, String description) {
-        TestCase pol = meta.annotation;
+    private Testcase processTestCase(Meta<TestDefinition> meta, String description) {
+        TestDefinition pol = meta.annotation;
         Testcase tc = new Testcase();
         tc.setAuthor(pol.author());
         tc.setDescription(description);
@@ -461,6 +461,8 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         tc.setWorkitemId(pol.testCaseID());
         tc.setWorkitemType(WiTypes.TEST_CASE);
 
+        // the setup, teardown and teststeps fields are optional
+
         tc.setProject(ProjectVals.fromValue(meta.annotation.projectID()));
 
         Requirement[] reqs = pol.reqs();
@@ -476,7 +478,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
             else {
                 String err = String.format("\nThere is no requirement for %s.", tc.getTitle());
                 String err2 = "\nEither the class must be annotated with @Requirement, or the " +
-                        "@TestCase(reqs={@Requirement(...)}) must be filled in";
+                        "@TestDefinition(reqs={@Requirement(...)}) must be filled in";
                 this.logger.error(err + err2);
                 throw new RequirementAnnotationException();
             }
@@ -492,7 +494,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         }
         tc.setRequirements(treq);
 
-        //TODO: Check for XML Desc file for TestCase
+        //TODO: Check for XML Desc file for TestDefinition
         Path path = FileHelper.makeXmlPath(this.tcPath, meta);
         File xmlDesc = path.toFile();
         WorkItem wi;
@@ -548,10 +550,10 @@ public class TestDefinitionProcessor extends AbstractProcessor {
      * Given the Requirement annotation data, do the following:
      *
      * - Check if requirements.xml.path/class/methodName.xml exists
-     *   - Verify the XML has TestCase ID
+     *   - Verify the XML has TestDefinition ID
      *     - If the ID doesn't exist, look in the annotation.
      *       - If the annotation doesn't have it, issue a WorkItem importer request
-     *   - Verify that the TestCase ID matches the method
+     *   - Verify that the TestDefinition ID matches the method
      * - If xml description file does not exist:
      *   - Generate XML description and request for WorkItem importer
      *   - Wait for return value to get the Requirement ID
@@ -617,7 +619,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
                 }
             }
             else {
-                this.logger.info("TODO: TestCase ID was given. Chech if xmldesc has the same");
+                this.logger.info("TODO: TestDefinition ID was given. Chech if xmldesc has the same");
                 wi = JAXBHelper.unmarshaller(WorkItem.class, xmlDesc, JAXBHelper.getXSDFromResource(WorkItem.class));
                 if (wi.isPresent())
                     return wi.get().getRequirement();
@@ -674,7 +676,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         try {
             req.setProject(ProjectVals.fromValue(r.project()));
         } catch (Exception ex) {
-            this.logger.warn("No projectID...will try from @TestCase");
+            this.logger.warn("No projectID...will try from @TestDefinition");
         }
         req.setReqtype(r.reqtype());
         req.setSeverity(r.severity());
@@ -705,7 +707,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
     @Override
     public Set<String> getSupportedAnnotationTypes() {
         Set<String> anns = new LinkedHashSet<>();
-        anns.add(TestCase.class.getCanonicalName());
+        anns.add(TestDefinition.class.getCanonicalName());
         anns.add(Requirement.class.getCanonicalName());
         anns.add(Test.class.getCanonicalName());
         return anns;
@@ -718,5 +720,13 @@ public class TestDefinitionProcessor extends AbstractProcessor {
 
     private void errorMsg(Element elem, String msg, Object... args) {
         this.msgr.printMessage(Diagnostic.Kind.ERROR, String.format(msg, args), elem);
+    }
+
+    /**
+     * Given a requirement annotation
+     * @return
+     */
+    private File createGraph() {
+        return null;
     }
 }

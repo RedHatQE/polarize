@@ -9,7 +9,8 @@
                namespace="com.redhat.qe.rhsm.RequirementType"/>
     <xs:complexType name="testcase">
         <xs:all>
-            <xs:element name="description" minOccurs="1" maxOccurs="1" type="xs:string"/>
+            <!-- The description might come from @Test annotation -->
+            <xs:element name="description" minOccurs="0" maxOccurs="1" type="xs:string"/>
             <xs:element name="title" minOccurs="1" maxOccurs="1" type="xs:string"/>
             <xs:element name="caseimportance">
                 <xs:complexType>
@@ -62,8 +63,8 @@
             methods for @BeforeClass, @BeforeGroups and @BeforeSuite-->
             <xs:element name="setup" minOccurs="0" maxOccurs="1" type="xs:string"/>
 
-            <!-- A list of the test steps.  Must be at least 1 -->
-            <xs:element name="teststeps" minOccurs="1">
+            <!-- A list of the test steps -->
+            <xs:element name="teststeps" minOccurs="0">
                 <xs:complexType>
                     <xs:sequence>
                         <xs:element name="teststep" type="pt:teststep-type" minOccurs="0"/>

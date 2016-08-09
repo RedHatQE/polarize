@@ -31,7 +31,8 @@ public class JAXBHelper {
     // TODO: define the schema files used for validation here
 
     /**
-     * Generates
+     * Generates an XML file given an object and xsd schema
+     *
      * @param t An object whose class is annotated with @XmlRootElement
      * @param xmlpath
      * @param <T>
@@ -132,16 +133,16 @@ public class JAXBHelper {
     public static URL getXSDFromResource(Class<?> t) {
         URL xsd;
         if (t == WorkItem.class) {
-            xsd = JAXBHelper.class.getClassLoader().getResource("workitem.xsd");
+            xsd = JAXBHelper.class.getClassLoader().getResource("schema/workitem.xsd");
         }
         else if (t == Testcase.class) {
-            xsd = JAXBHelper.class.getClass().getResource("testcase.xsd");
+            xsd = JAXBHelper.class.getClass().getResource("schema/testcase.xsd");
         }
         else if (t == ReqType.class) {
-            xsd = JAXBHelper.class.getClass().getResource("requirement.xsd");
+            xsd = JAXBHelper.class.getClass().getResource("schema/requirement.xsd");
         }
         else if (t == TestCaseMetadata.class) {
-            xsd = JAXBHelper.class.getClassLoader().getResource("workitems.xsd");
+            xsd = JAXBHelper.class.getClassLoader().getResource("schema/workitems.xsd");
         }
         else if (t == Testsuites.class) {
             xsd = JAXBHelper.class.getClassLoader().getResource("importers/xunit.xsd");

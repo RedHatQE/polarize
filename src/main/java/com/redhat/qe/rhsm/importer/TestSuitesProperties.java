@@ -1,6 +1,5 @@
 package com.redhat.qe.rhsm.importer;
 
-import com.sun.org.apache.xpath.internal.operations.Bool;
 
 import java.util.Map;
 
@@ -87,8 +86,8 @@ public class TestSuitesProperties {
         return customFields;
     }
 
-    public TestSuitesProperties (String id, String user) {
-        this.projectID = id;
+    public TestSuitesProperties (String projId, String user) {
+        this.projectID = projId;
         this.user = user;
         this.responseName = null;
         this.testrunID = null;

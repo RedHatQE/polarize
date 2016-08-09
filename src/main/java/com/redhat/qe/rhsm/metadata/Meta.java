@@ -1,7 +1,7 @@
 package com.redhat.qe.rhsm.metadata;
 
 /**
- * Contains the fully qualified name of a @TestCase decorated method
+ * Contains the fully qualified name of a @TestDefinition decorated method
  */
 public class Meta<T> {
     public String packName;

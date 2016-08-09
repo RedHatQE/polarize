@@ -7,7 +7,7 @@ import java.util.Optional;
 
 import com.redhat.qe.rhsm.exceptions.InvalidArgumentType;
 import com.redhat.qe.rhsm.metadata.Meta;
-import com.redhat.qe.rhsm.metadata.TestCase;
+import com.redhat.qe.rhsm.metadata.TestDefinition;
 import com.redhat.qe.rhsm.metadata.Requirement;
 
 /**
@@ -42,8 +42,8 @@ public class FileHelper {
     public static <T> Path makeXmlPath(String base, Meta<T> meta) throws InvalidArgumentType {
         String proj;
         String xmlname;
-        if (meta.annotation instanceof TestCase) {
-            TestCase p = (TestCase) meta.annotation;
+        if (meta.annotation instanceof TestDefinition) {
+            TestDefinition p = (TestDefinition) meta.annotation;
             proj = p.projectID();
         }
         else if (meta.annotation instanceof Requirement){

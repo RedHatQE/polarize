@@ -10,8 +10,11 @@ import com.redhat.qe.rhsm.schema.WorkItem;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.xml.bind.UnmarshalException;
 import java.io.File;
 import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.rmi.MarshalException;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -52,9 +55,13 @@ public class XUnitHelper {
         String projectID = props.getProjectID();
 
         for(Testsuite suite : suites.getTestsuite()) {
-            for(Testcase tc : suite.getTestcase()) {
-                XUnitHelper.addTestCasesProperties(tc, projectID);
-            }
+            XUnitHelper.addPropertiesTestSuite(suite, projectID);
+        }
+    }
+
+    public static void addPropertiesTestSuite(Testsuite suite, String project) {
+        for(Testcase tc : suite.getTestcase()) {
+            XUnitHelper.addTestCasesProperties(tc, project);
         }
     }
 
@@ -89,5 +96,30 @@ public class XUnitHelper {
         id.setName("polarion-testcase-id");
         id.setValue(polarionID);
         props.add(id);
+        tc.setProperties(properties);
+    }
+
+    /**
+     * FIXME: Really need to have real unit tests in place
+     *
+     * Loads a junit report file
+     *
+     * @param args
+     */
+    public static void main(String[] args) throws UnmarshalException {
+        TestSuitesProperties props = new TestSuitesProperties("RHEL6", "ci-user");
+        String junit = args[0];
+        File junitFile = Paths.get(junit).toFile();
+        if (!junitFile.exists()) {
+            XUnitHelper.logger.error("The path to the junit file does not exist");
+            return;
+        }
+
+        Optional<Testsuite> suite;
+        suite = JAXBHelper.unmarshaller(Testsuite.class, junitFile, JAXBHelper.getXSDFromResource(Testsuites.class));
+        if (!suite.isPresent())
+            throw new javax.xml.bind.UnmarshalException("Could not unmarshall object");
+
+        XUnitHelper.addPropertiesTestSuite(suite.get(), props.getProjectID());
     }
 }

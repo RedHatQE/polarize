@@ -1,7 +1,7 @@
 <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
 targetNamespace="com.redhat.qe.rhsm.PolarizeTypes"
 elementFormDefault="qualified">
-    <!-- custom fields for TestCase
+    <!-- custom fields for TestDefinition
     caseimportance -> critical, high, medium, low
     caselevel -> component, integration, system, acceptance
     component -> subscription-manager, subscription-manager-migration-data
