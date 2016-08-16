@@ -3,10 +3,8 @@ plugins {
     id 'com.github.johnrengelman.shadow' version '1.2.3'
 }
 
-
 group 'com.redhat.qe.rhsm'
 version '1.0-SNAPSHOT'
-
 
 apply plugin: 'java'
 apply plugin: 'com.github.johnrengelman.shadow'

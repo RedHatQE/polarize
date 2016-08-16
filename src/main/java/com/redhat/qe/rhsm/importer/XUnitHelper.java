@@ -1,8 +1,6 @@
 package com.redhat.qe.rhsm.importer;
 
-import com.redhat.qe.rhsm.Configurator;
-import com.redhat.qe.rhsm.FileHelper;
-import com.redhat.qe.rhsm.JAXBHelper;
+import com.redhat.qe.rhsm.*;
 import com.redhat.qe.rhsm.exceptions.PolarionMappingError;
 import com.redhat.qe.rhsm.exceptions.XMLDescriptionError;
 import com.redhat.qe.rhsm.importer.xunit.*;
@@ -39,7 +37,8 @@ public class XUnitHelper {
      * @return
      */
     public static Optional<Testsuites> loadXunitFile(File xunitFile) {
-        return JAXBHelper.unmarshaller(Testsuites.class, xunitFile, JAXBHelper.getXSDFromResource(Testsuites.class));
+        JAXBHelper jaxb = new JAXBHelper();
+        return IJAXBHelper.unmarshaller(Testsuites.class, xunitFile, jaxb.getXSDFromResource(Testsuites.class));
     }
 
     /**
@@ -71,11 +70,12 @@ public class XUnitHelper {
 
         Map<String, String> config = Configurator.loadConfiguration();
         String tcPath = config.get("tcPath");
-        Path descFile = FileHelper.makeXmlPath(tcPath, projectID, cName, mName);
+        Path descFile = IFileHelper.makeXmlPath(tcPath, projectID, cName, mName);
         File descPath = descFile.toFile();
 
         Optional<WorkItem> wi;
-        wi = JAXBHelper.unmarshaller(WorkItem.class, descPath, JAXBHelper.getXSDFromResource(WorkItem.class));
+        JAXBHelper jaxb = new JAXBHelper();
+        wi = IJAXBHelper.unmarshaller(WorkItem.class, descPath, jaxb.getXSDFromResource(WorkItem.class));
 
         if (!wi.isPresent()) {
             logger.error(String.format("No xml description file found for %s.%s", cName, mName));
@@ -116,7 +116,8 @@ public class XUnitHelper {
         }
 
         Optional<Testsuite> suite;
-        suite = JAXBHelper.unmarshaller(Testsuite.class, junitFile, JAXBHelper.getXSDFromResource(Testsuites.class));
+        JAXBHelper jaxb = new JAXBHelper();
+        suite = IJAXBHelper.unmarshaller(Testsuite.class, junitFile, jaxb.getXSDFromResource(Testsuites.class));
         if (!suite.isPresent())
             throw new javax.xml.bind.UnmarshalException("Could not unmarshall object");
 

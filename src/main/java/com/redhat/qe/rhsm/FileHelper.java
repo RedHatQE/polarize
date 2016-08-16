@@ -1,9 +1,7 @@
 package com.redhat.qe.rhsm;
 
-import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.Optional;
 
 import com.redhat.qe.rhsm.exceptions.InvalidArgumentType;
 import com.redhat.qe.rhsm.metadata.Meta;
@@ -13,20 +11,7 @@ import com.redhat.qe.rhsm.metadata.Requirement;
 /**
  * Created by stoner on 7/7/16.
  */
-public class FileHelper {
-    public static Optional<Path> makePath(String path) {
-        Path p = null;
-        try {
-           p = Paths.get(path);
-        } catch (InvalidPathException ip) {
-
-        }
-        return Optional.of(p);
-    }
-
-    public static boolean pathExists(Path p) {
-        return p.toFile().exists();
-    }
+public class FileHelper implements IFileHelper {
 
     /**
      * Creates a Path to look up or create an xml description
@@ -62,24 +47,4 @@ public class FileHelper {
         return Paths.get(fullPath);
     }
 
-    public static Path
-    makeXmlPath(String base, String project, String cName, String methName) throws InvalidArgumentType {
-        String xmlname;
-        xmlname = methName;
-        if (xmlname == null || xmlname.equals(""))
-            xmlname = cName;
-
-        Path basePath = Paths.get(base, project, cName);
-        String fullPath = Paths.get(basePath.toString(), xmlname + ".xml").toString();
-        return Paths.get(fullPath);
-    }
-
-    public static Path makeRequirementXmlPath(String base, String last) throws InvalidArgumentType {
-        return Paths.get(base, last);
-    }
-
-    public static Boolean makeDirs(Path path) {
-        Path parent = path.getParent();
-        return parent.toFile().mkdirs();
-    }
 }

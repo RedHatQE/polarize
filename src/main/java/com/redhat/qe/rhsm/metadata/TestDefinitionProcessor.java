@@ -1,8 +1,6 @@
 package com.redhat.qe.rhsm.metadata;
 
-import com.redhat.qe.rhsm.Configurator;
-import com.redhat.qe.rhsm.FileHelper;
-import com.redhat.qe.rhsm.JAXBHelper;
+import com.redhat.qe.rhsm.*;
 import com.redhat.qe.rhsm.exceptions.RequirementAnnotationException;
 import com.redhat.qe.rhsm.exceptions.XMLDescriptonCreationError;
 import com.redhat.qe.rhsm.schema.*;
@@ -49,6 +47,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
     private Map<String, Map<String,
                             Meta<TestDefinition>>> methToProjectPol;
     private Map<String, String> methNameToTestNGDescription;
+    public JAXBHelper jaxb = new JAXBHelper();
 
     /**
      * Recursive function that will get the fully qualified name of a method.
@@ -268,7 +267,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         wi.setTestcase(tc);
         wi.setProjectId(tc.getProject());
         wi.setType(WiTypes.TEST_CASE);
-        JAXBHelper.marshaller(wi, path, JAXBHelper.getXSDFromResource(wi.getClass()));
+        IJAXBHelper.marshaller(wi, path, this.jaxb.getXSDFromResource(wi.getClass()));
     }
 
     /**
@@ -509,7 +508,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
             }
 
             Optional<WorkItem> witem;
-            witem = JAXBHelper.unmarshaller(WorkItem.class, xmlDesc, JAXBHelper.getXSDFromResource(WorkItem.class));
+            witem = IJAXBHelper.unmarshaller(WorkItem.class, xmlDesc, this.jaxb.getXSDFromResource(WorkItem.class));
             if (!witem.isPresent())
                 throw new XMLDescriptonCreationError();
 
@@ -579,7 +578,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
             if (r.override()) {
                 this.createRequirementXML(req, xmlDesc);
             }
-            wi = JAXBHelper.unmarshaller(WorkItem.class, xmlDesc, JAXBHelper.getXSDFromResource(WorkItem.class));
+            wi = IJAXBHelper.unmarshaller(WorkItem.class, xmlDesc, this.jaxb.getXSDFromResource(WorkItem.class));
             if (!wi.isPresent())
                 throw new XMLDescriptonCreationError();
 
@@ -593,7 +592,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
 
         }
         else {
-            FileHelper.makeDirs(path);
+            IFileHelper.makeDirs(path);
 
             if(r.id().equals("")) {
                 this.logger.info("No polarionID...");
@@ -607,11 +606,11 @@ public class TestDefinitionProcessor extends AbstractProcessor {
                 }
                 else {
                     String finalPath = r.xmlDesc();
-                    Path xmlpath = FileHelper.makeRequirementXmlPath(this.reqPath, finalPath);
+                    Path xmlpath = IFileHelper.makeRequirementXmlPath(this.reqPath, finalPath);
                     File desc = xmlpath.toFile();
                     if (!desc.exists()) {
                         this.logger.info("xmlDesc was given but doesn't exist.  Generating one...");
-                        FileHelper.makeDirs(xmlpath);
+                        IFileHelper.makeDirs(xmlpath);
                         ReqType generated = this.createRequirementXML(req, desc);
                         this.workItemImporterRequest(desc);
                         return generated;
@@ -620,7 +619,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
             }
             else {
                 this.logger.info("TODO: TestDefinition ID was given. Chech if xmldesc has the same");
-                wi = JAXBHelper.unmarshaller(WorkItem.class, xmlDesc, JAXBHelper.getXSDFromResource(WorkItem.class));
+                wi = IJAXBHelper.unmarshaller(WorkItem.class, xmlDesc, this.jaxb.getXSDFromResource(WorkItem.class));
                 if (wi.isPresent())
                     return wi.get().getRequirement();
             }
@@ -644,7 +643,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         wi.setType(WiTypes.REQUIREMENT);
 
         // TODO: Validate that the xmlpath is a valid XML file conforming to the schema
-        JAXBHelper.marshaller(wi, xmlpath, JAXBHelper.getXSDFromResource(wi.getClass()));
+        IJAXBHelper.marshaller(wi, xmlpath, this.jaxb.getXSDFromResource(wi.getClass()));
         return wi.getRequirement();
     }
 

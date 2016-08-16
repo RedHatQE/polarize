@@ -22,12 +22,12 @@ import com.google.gson.Gson;
  *
  * Takes a jar file from the classpath,
  */
-public class JarHelper {
+public class JarHelper implements IJarHelper {
     List<URL> jarPaths;
     String paths;
 
     public JarHelper(String paths) {
-        this.jarPaths = JarHelper.convertToUrl(paths);
+        this.jarPaths = IJarHelper.convertToUrl(paths);
         this.paths = this.jarPaths.stream()
                 .map( u -> u.getFile() )
                 .reduce("", (i, c) -> c + "," + i);
@@ -35,31 +35,14 @@ public class JarHelper {
     }
 
 
-    /**
-     * Given the path to a jar file, get all the .class files
-     * @param jarPath
-     */
-    public static List<String> loadJar(String jarPath, String pkg) throws IOException {
-       try(ZipFile zf = new ZipFile(jarPath)) {
-           return zf.stream()
-                   .filter(e -> !e.isDirectory() && e.getName().endsWith(".class") && !e.getName().contains("$"))
-                   .map(e -> {
-                       String className = e.getName().replace('/', '.');
-                       String test = className.substring(0, className.length() - ".class".length());
-                       return test;
-                   })
-                   .filter(e -> e.contains(pkg))
-                   .collect(Collectors.toList());
-       }
-    }
-
-
-    public URLClassLoader makeLoader () {
+    @Override
+    public URLClassLoader makeLoader() {
         List<URL> urls = this.jarPaths;
         return new URLClassLoader(urls.toArray(new URL[urls.size()]));
     }
 
 
+    @Override
     public Reflector loadClasses(List<String> classes) {
         URLClassLoader ucl = this.makeLoader();
         Reflector refl = new Reflector();
@@ -74,29 +57,6 @@ public class JarHelper {
         return refl;
     }
 
-
-    /**
-     * Takes a possibly comma separated string of paths and converts it to a List of URLs
-     *
-     * @param paths
-     * @return
-     */
-    public static List<URL> convertToUrl(String paths) {
-        ArrayList<String> jars = new ArrayList<>(Arrays.asList(paths.split(",")));
-        List<URL> jarUrls = jars.stream()
-                .map(j -> {
-                    URL url = null;
-                    System.out.println(j);
-                    try {
-                        url = new URL(j);
-                    } catch (MalformedURLException e) {
-                        e.printStackTrace();
-                    }
-                    return url;
-                })
-                .collect(Collectors.toList());
-        return jarUrls;
-    }
 
     /**
      * Takes the jars (which must also be on the classpath) and the names of packages
@@ -122,7 +82,7 @@ public class JarHelper {
             List<String> classes = new ArrayList<>();
             for(String s: jh.paths.split(",")) {
                 for(String pn: packName.split(",")){
-                    classes.addAll(JarHelper.loadJar(s, pn));
+                    classes.addAll(IJarHelper.loadJar(s, pn));
                 }
                 classes.forEach(System.out::println);
                 Reflector refl = jh.loadClasses(classes);
