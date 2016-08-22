@@ -72,8 +72,10 @@ task javadocJar (type: Jar, dependsOn: myJavadocs) {
 
 task sourceJar(type: Jar) {
     from sourceSets.main.allJava
+    classifier "sources"
 }
 
+// Declares the artifacts that will be published
 artifacts {
     archives jar
     archives sourceJar
@@ -88,8 +90,9 @@ task signPom(type: Sign) {
     sign configurations.pom
 }
 
-task signJars (type : Sign, dependsOn: [jar]) {
+task signJars (type : Sign, dependsOn: [jar, javadocJar, sourceJar]) {
     sign configurations.archives
+    println configurations.archives
 }
 
 def getPomSignature = {
@@ -102,12 +105,9 @@ if (project.ext.pomFile.exists()) {
     task preparePublication (dependsOn : signJars)
 }
 
-// call signJar task before publish task
-task preparePublish(dependsOn: signJars)
-
-//signing {
-//    sign configurations.archives
-//}
+signing {
+    sign configurations.archives
+}
 
 // extract signature file and give them proper name
 def getSignatureFiles = {
@@ -116,11 +116,65 @@ def getSignatureFiles = {
     return [[archive: signedJar,     classifier: null,      extension: 'jar.asc']]
 }
 
+
 publishing {
+    publications {
+        gpgJars(MavenPublication) {
+            getSignatureFiles().each {signature ->
+                artifact (signature.archive) {
+                    classifier = signature.classifier
+                    extension  = signature.extension
+                }
+            }
+        }
+        if (project.ext.pomFile.exists()) {
+            gpgPom(MavenPublication) {
+                artifact (getPomSignature()) {
+                    classifier = null
+                    extension  = 'pom.asc'
+                }
+            }
+        }
+        
+        polarizeJar(MavenPublication) {
+            // telling gradle to publish project's jar archive and generate a pom.xml
+            from components.java
+
+            artifact javadocJar {
+                classifier 'javadoc'
+            }
+
+            artifact sourceJar {
+                classifier "sources"
+            }
+
+            artifact signJars {
+
+            }
+        }
+    }
+
+    repositories {
+        maven {
+            url "file:/${project.projectDir}/artifacts"
+        }
+    }
+}
+
+
+task displayProject {
+    println project.projectDir
+}
+
+/**
+ * Most of the below comes from
+ * http://mike-neck.github.io/blog/2013/06/21/how-to-publish-artifacts-with-gradle-maven-publish-plugin-version-1-dot-6/
+ *
+task publishing_test {
     publications {
         signatures (MavenPublication) {
             // give signature files to artifact method
-            getSignatureFiles().each {signature ->
+            getSignatureFiles().each { signature ->
                 artifact (signature.archive) {
                     classifier = signature.classifier
                     extension  = signature.extension
@@ -140,7 +194,7 @@ publishing {
                 classifier "sources"
             }
 
-            // Add what we need to the auto generated pom.xml
+            // Add what we need to the auto generated pom.xml to make it compliant to OSSRH
             pom.withXml {
                 if (!project.ext.pomFile.exists()) {
                     writeTo (project.ext.pomFile)
@@ -203,8 +257,4 @@ publishing {
         }
     }
 }
-
-
-task printProject {
-    println project.projectDir
-}
+*/

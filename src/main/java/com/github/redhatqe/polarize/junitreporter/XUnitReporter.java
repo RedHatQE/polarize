@@ -2,7 +2,6 @@ package com.github.redhatqe.polarize.junitreporter;
 
 import com.github.redhatqe.polarize.IJAXBHelper;
 import com.github.redhatqe.polarize.exceptions.XMLDescriptionError;
-import com.github.redhatqe.polarize.exceptions.XMLDescriptonCreationError;
 import com.github.redhatqe.polarize.exceptions.XMLUnmarshallError;
 import com.github.redhatqe.polarize.importer.xunit.Property;
 import com.github.redhatqe.polarize.importer.xunit.Testcase;
@@ -10,13 +9,11 @@ import com.github.redhatqe.polarize.importer.xunit.Testsuite;
 import com.github.redhatqe.polarize.importer.xunit.Testsuites;
 import com.github.redhatqe.polarize.metadata.Requirement;
 import com.github.redhatqe.polarize.metadata.TestDefinition;
-import com.github.redhatqe.polarize.schema.ReqType;
 import com.github.redhatqe.polarize.schema.WorkItem;
 import org.testng.*;
 import org.testng.xml.XmlSuite;
 import org.testng.xml.XmlTest;
 
-import javax.xml.bind.UnmarshalException;
 import java.io.*;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -112,14 +109,14 @@ public class XUnitReporter implements IReporter {
     }
 
 
-    public String validateNonEmptyProperty(String key, Properties props) throws KeyException {
+    private String validateNonEmptyProperty(String key, Properties props) throws KeyException {
         if (!props.containsKey(key)) {
             throw new KeyException(String.format("Missing %s in reporter.properties", key));
         }
 
         String val = props.getProperty(key);
         if (val.equals(""))
-            throw new KeyException(String.format("%s can not be empty string"));
+            throw new KeyException(String.format("%s can not be empty string", val));
         return val;
     }
 
@@ -176,7 +173,7 @@ public class XUnitReporter implements IReporter {
 
         // Now that we've gone through the suites, let's marshall this into an XML file for the XUnit Importer
         JAXBReporter jaxb = new JAXBReporter();
-        File reportPath = new File(outputDirectory + "/testing.xml");
+        File reportPath = new File(outputDirectory + "/testng-polarion.xml");
         IJAXBHelper.marshaller(tsuites, reportPath, jaxb.getXSDFromResource(Testsuites.class));
     }
 
