@@ -1,5 +1,5 @@
 #!/bin/bash
-# Run this script after making any code changes to the jong project
+# Run this script after making any code changes to the polarize project
 TESTPOLARIZE=/home/stoner/Projects/testpolarize
 OWD=`pwd`
 pushd ..

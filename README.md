@@ -70,8 +70,8 @@ Here is an example:
 ```java
 package com.redhat.qe.rhsm.testjong;
 
-import com.redhat.qe.rhsm.metadata.TestDefinition;
-import com.redhat.qe.rhsm.metadata.Requirement;
+import TestDefinition;
+import Requirement;
 import org.testng.annotations.Test;
 
 /**

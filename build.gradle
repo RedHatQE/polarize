@@ -3,17 +3,21 @@ plugins {
     id 'com.github.johnrengelman.shadow' version '1.2.3'
 }
 
-group 'com.redhat.qe.rhsm'
-version '1.0-SNAPSHOT'
-
-apply plugin: 'java'
-apply plugin: 'com.github.johnrengelman.shadow'
-
+group 'com.github.redhatqe.polarize'
+version '1.0.0'
+String archivesBaseName = "polarize"
+String projectURL = 'https://github.com/RedHatQE/polarize'
+String devURL = 'git@github.com:RedHatQE/polarize.git'
 sourceCompatibility = 1.8
 targetCompatibility = 1.8
 
+['java', 'com.github.johnrengelman.shadow',
+ 'maven', 'signing', 'maven-publish'].each {
+    apply plugin : it
+}
+
 task wrapper(type: Wrapper) {
-    gradleVersion = '2.14'
+    gradleVersion = '3.0'
 }
 
 repositories {
@@ -43,6 +47,164 @@ shadowJar {
     manifest {
         attributes('Implementation-Title': 'Jong',
                    'Implementation-Version': version,
-                   'Main-Class': 'com.redhat.qe.rhsm.JarHelper')
+                   'Main-Class': 'com.github.redhatqe.polarize.JarHelper')
     }
+}
+
+ext {
+    pomFilePath = "${project.projectDir}/tmp/pom.xml"
+    pomFile = file(pomFilePath)
+}
+
+configurations {
+    pom
+}
+
+task myJavadocs(type: Javadoc) {
+    source = sourceSets.main.allJava
+    options.addStringOption('Xdoclint:none', '-quiet')
+}
+
+task javadocJar (type: Jar, dependsOn: myJavadocs) {
+    classifier = 'javadoc'
+    from javadoc.destinationDir
+}
+
+task sourceJar(type: Jar) {
+    from sourceSets.main.allJava
+}
+
+artifacts {
+    archives jar
+    archives sourceJar
+    archives javadocJar
+    if (pomFile.exists()) {
+        pom pomFile
+    }
+}
+
+// We need to sign the POM
+task signPom(type: Sign) {
+    sign configurations.pom
+}
+
+task signJars (type : Sign, dependsOn: [jar]) {
+    sign configurations.archives
+}
+
+def getPomSignature = {
+    return project.tasks.signPom.signatureFiles.collect{it}[0]
+}
+
+if (project.ext.pomFile.exists()) {
+    task preparePublication (dependsOn : [signJars, signPom])
+} else {
+    task preparePublication (dependsOn : signJars)
+}
+
+// call signJar task before publish task
+task preparePublish(dependsOn: signJars)
+
+//signing {
+//    sign configurations.archives
+//}
+
+// extract signature file and give them proper name
+def getSignatureFiles = {
+    def allFiles = project.tasks.signJars.signatureFiles.collect { it }
+    def signedJar = allFiles[0]
+    return [[archive: signedJar,     classifier: null,      extension: 'jar.asc']]
+}
+
+publishing {
+    publications {
+        signatures (MavenPublication) {
+            // give signature files to artifact method
+            getSignatureFiles().each {signature ->
+                artifact (signature.archive) {
+                    classifier = signature.classifier
+                    extension  = signature.extension
+                }
+            }
+        }
+
+        polarize_jar(MavenPublication) {
+            // telling gradle to publish project's jar archive
+            from components.java
+
+            artifact javadocJar {
+                classifier 'javadoc'
+            }
+
+            artifact sourceJar {
+                classifier "sources"
+            }
+
+            // Add what we need to the auto generated pom.xml
+            pom.withXml {
+                if (!project.ext.pomFile.exists()) {
+                    writeTo (project.ext.pomFile)
+                }
+                asNode().children().last() + {
+                    resolveStrategy = Closure.DELEGATE_FIRST
+                    name archivesBaseName
+                    description 'Annotations to supply metadata for testcase management'
+                    url projectURL
+                    scm {
+                        url 'scm:git:' + projectURL
+                        connection 'scm:git:' + projectURL + '.git'
+                        developerConnection 'scm:git:' + devURL
+                    }
+                    licenses {
+                        license {
+                            name 'The Apache Software License, Version 2.0'
+                            url 'http://www.apache.org/license/LICENSE-2.0.txt'
+                            distribution 'repo'
+                        }
+                    }
+                    developers {
+                        developer {
+                            id 'stoner'
+                            name 'Sean Toner'
+                            email 'stoner@redhat.com'
+                        }
+                    }
+                }
+            }
+        }
+
+        gpgJars(MavenPublication) {
+            // publishing signature of jars
+        }
+
+        // dynamic publication definition
+        // pom file does exist signature of pom file is published
+        if (project.ext.pomFile.exists()) {
+            gpgPom(MavenPublication) {
+                artifact (getPomSignature()) {
+                    classifier = null
+                    extension  = 'pom.asc'
+                }
+            }
+        }
+    }
+    // telling gradle to publish artifact to local directory (3)
+    repositories {
+        maven {
+            if (project.ext.pomFile.exists()) {
+                url sonatypeUrl
+                credentials {
+                    username = ossrhUsername
+                    password = ossrhPassword
+                }
+            } else {
+                url "file:/${project.projectDir}/artifacts"
+            }
+        }
+    }
+}
+
+
+task printProject {
+    println project.projectDir
 }
