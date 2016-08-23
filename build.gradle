@@ -140,23 +140,56 @@ publishing {
             // telling gradle to publish project's jar archive and generate a pom.xml
             from components.java
 
-            artifact javadocJar {
-                classifier 'javadoc'
-            }
-
-            artifact sourceJar {
-                classifier "sources"
-            }
-
-            artifact signJars {
-
+            pom.withXml {
+                if (!project.ext.pomFile.exists()) {
+                    writeTo (project.ext.pomFile)
+                }
+                asNode().children().last() + {
+                    resolveStrategy = Closure.DELEGATE_FIRST
+                    name archivesBaseName
+                    description 'Annotations to supply metadata for testcase management'
+                    url projectURL
+                    scm {
+                        url 'scm:git:' + projectURL
+                        connection 'scm:git:' + projectURL + '.git'
+                        developerConnection 'scm:git:' + devURL
+                    }
+                    licenses {
+                        license {
+                            name 'The Apache Software License, Version 2.0'
+                            url 'http://www.apache.org/license/LICENSE-2.0.txt'
+                            distribution 'repo'
+                        }
+                    }
+                    developers {
+                        developer {
+                            id 'stoner'
+                            name 'Sean Toner'
+                            email 'stoner@redhat.com'
+                        }
+                    }
+                }
             }
         }
     }
 
     repositories {
         maven {
-            url "file:/${project.projectDir}/artifacts"
+            //if (project.ext.pomFile.exists()) {
+            if (false) {
+                if (project.version.contains("SNAPSHOT")) {
+                    url 'https://oss.sonatype.org/content/repositories/snapshots'
+                }
+                else {
+                    url 'https://oss.sonatype.org/service/local/staging/deploy/maven2'
+                }
+                credentials {
+                    username = ossrhUsername
+                    password = ossrhPassword
+                }
+            } else {
+                url "file:/${project.projectDir}/artifacts"
+            }
         }
     }
 }

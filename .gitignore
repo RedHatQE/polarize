@@ -3,4 +3,5 @@
 gradle/
 build/
 test-output/
+artifacts/
 *.iml
