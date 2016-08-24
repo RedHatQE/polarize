@@ -1,5 +1,7 @@
 package com.github.redhatqe.polarize.metadata;
 
+import org.testng.annotations.Test;
+
 import java.lang.annotation.*;
 
 /**
@@ -35,18 +37,37 @@ import java.lang.annotation.*;
 @Target(ElementType.METHOD)
 @Retention(RetentionPolicy.RUNTIME)
 public @interface TestDefinition {
-    String author() default "CI User";
-    String projectID();
-    String xmlDesc() default "";
+    DefTypes.Project projectID();
+
     String testCaseID() default "";
-    String caseimportance() default "high";
-    String caseposneg() default "positive";
-    String caselevel() default "component";
-    String testtype() default "functional";
+    String author() default "CI User";
+    String title() default "";
     String description() default "";           // Must have description but may come from @Test
     String setup() default "";
     String teardown() default "";
-    boolean override() default false;          // If true, when xml description file exists, generate a new one.
+
+    DefTypes.Importance importance() default DefTypes.Importance.HIGH;
+    DefTypes.PosNeg posneg() default DefTypes.PosNeg.POSITIVE;
+    DefTypes.Level level() default DefTypes.Level.COMPONENT;
+    DefTypes.Automation automation() default DefTypes.Automation.AUTOMATED;
+    String script() default "";                // path or name of automation script/method
+    TestType testtype() default @TestType();
+
+    // FIXME: In the TestCase importer, teststeps is actually just a string which seems wrong
     TestStep[] teststeps() default {};
-    Requirement[] reqs();  // eg. requirementIDs = {"RHEL6-25678", "RHEL6-27654"}
+
+    // TODO: Currently, there is no Requirements importer, so this is actually not used.  In fact, there is not even
+    // a way currently to link to other existing WorkItems
+    Requirement[] reqs();
+
+    // Rarely used
+    String assignee() default "";
+    String initialEstimate() default "";
+    String tags() default "";
+    String component() default "";
+    String subcomponent() default "";
+
+    // These are not directly used by the importer
+    String xmlDesc() default "";
+    boolean override() default false;          // If true, when xml description file exists, generate a new one.
 }

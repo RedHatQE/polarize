@@ -1,13 +1,20 @@
-Requirements and TestCases in Polarion by hand is just too time consuming.  Being able to auto-generate a Polarion 
-TestCase or Requirement given metadata that already exists in the source code is more ideal. Furthermore, it is better 
-to have a single source of truth (the source code) and have this reflected in Polarion, rather than try to maintain and
-keep synchronized two sets of data (annotations in the source code, and TestCase/Requirements in Polarion).
+# Why polarize?
+
+polarize has 3 goals:
+
+- Make the source code where testcase definitions and requirements live
+- A gherkin style feature file parser suitable for Product Owners
+- create a TestNG reporter suitable for use by the XUnit Reporter
+
+Requirements and TestCases in Polarion by hand is very time consuming.  Being able to auto-generate a Polarion TestCase
+or Requirement given metadata that already exists in the source code is more ideal. Furthermore, it is better to have a 
+single source of truth (the source code) and have this reflected in Polarion, rather than try to maintain and keep 
+synchronized two sets of data (annotations in the source code, and TestCase/Requirements in Polarion).
 
 
 ## Why not just write requirements and testcases directly in polarion?
 
-- Need an extra license for Product Manager to enter in information
-- Need extra licenses for Developers to review in Polarion
+- Need an extra license for Product Manager to enter in information and developer to review
 - Bypasses the test project as the canonical source of truth
 - Couples requirement/testcase definition to a specific implementation (Polarion)
 - Polarion does not allow upstream communities to review or submit requirements/workitems

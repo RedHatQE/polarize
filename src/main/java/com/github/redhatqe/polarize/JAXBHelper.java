@@ -32,6 +32,9 @@ public class JAXBHelper implements IJAXBHelper {
         else if (t == Testsuites.class) {
             xsd = JAXBHelper.class.getClassLoader().getResource("importers/xunit.xsd");
         }
+        else if (t == com.github.redhatqe.polarize.importer.testcase.Testcase.class) {
+            xsd = JAXBHelper.class.getClassLoader().getResource("importers/testcase-importer.xsd");
+        }
         else
             throw new XSDValidationError();
 
