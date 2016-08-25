@@ -227,29 +227,6 @@ public class TestDefinitionProcessor extends AbstractProcessor {
     }
 
     /**
-     * From the mapping of qualifiedName -> Annotation stored in methToProjectPol, process each item
-     *
-     * The primary role of this function is to run processTestCase method given the objects in methToProjectPol
-     *
-     * @return List of Testcase
-     */
-    @Deprecated
-    private List<Testcase> processAllTestCase() {
-        return this.methToProjectPol.entrySet().stream()
-                .flatMap(es -> {
-                    String qualifiedName = es.getKey();
-                    @Nonnull String desc = methNameToTestNGDescription.get(qualifiedName);
-                    return es.getValue().entrySet().stream()
-                            .map(val -> {
-                                Meta<TestDefinition> meta = val.getValue();
-                                return this.processTestCase(meta, desc);
-                            })
-                            .collect(Collectors.toList()).stream();
-                })
-                .collect(Collectors.toList());
-    }
-
-    /**
      *
      * @return
      */
@@ -292,33 +269,9 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         return reqList;
     }
 
-    /**
-     * Creates an XML description file for a testcase
-     *
-     * @param tc the Testcase object to serialize to XML
-     * @param path path to generate the description file
-     */
-    @Deprecated
-    private void createTestCaseXML(Testcase tc, File path) {
-        this.logger.info(String.format("Generating XML description in %s", path.toString()));
-        WorkItem wi = new WorkItem();
-        wi.setTestcase(tc);
-        wi.setProjectId(tc.getProject());
-        wi.setType(WiTypes.TEST_CASE);
-        IJAXBHelper.marshaller(wi, path, this.jaxb.getXSDFromResource(wi.getClass()));
-    }
-
     private com.github.redhatqe.polarize.importer.testcase.Testcase
     createImporterTestcase() {
         return new com.github.redhatqe.polarize.importer.testcase.Testcase();
-    }
-
-    private void addTestCaseXML(com.github.redhatqe.polarize.importer.testcase.Testcases tests,
-                                   com.github.redhatqe.polarize.importer.testcase.Testcase tc,
-                                   File path) {
-        this.logger.info(String.format("Generating XML description in %s", path.toString()));
-        List<com.github.redhatqe.polarize.importer.testcase.Testcase> testcases = tests.getTestcase();
-        testcases.add(tc);
     }
 
     private void createTestCaseXML(com.github.redhatqe.polarize.importer.testcase.Testcase tc,
@@ -334,18 +287,25 @@ public class TestDefinitionProcessor extends AbstractProcessor {
      */
     private void testcasesImporterRequest() {
         String projectID = this.config.getProjectID();
+        if (this.tcMap.get(projectID).isEmpty()) {
+            this.logger.info(String.format("No testcases for %s to import", projectID));
+            return;
+        }
+
         this.testcases.setProjectId(projectID);
         this.testcases.setUserId(this.config.getAuthor());
         this.testcases.getTestcase().addAll(this.tcMap.get(projectID));
 
-        File importerFile = new File(this.polarizeConfig.get("importer-testcases-file"));
+        File importerFile = new File(this.polarizeConfig.get("importer.testcases.file"));
         IFileHelper.makeDirs(importerFile.toPath());
         IJAXBHelper.marshaller(this.testcases, importerFile,
                 this.jaxb.getXSDFromResource(com.github.redhatqe.polarize.importer.testcase.Testcases.class));
 
         try {
-            String text = Files.lines(importerFile.toPath()).reduce("", (acc, c) -> acc + c);
-            HttpResponse<JsonNode> response = Unirest.post(this.polarizeConfig.get("polarion-url"))
+            String text = Files.lines(importerFile.toPath()).reduce("", (acc, c) -> acc + c + "\n");
+            this.logger.info("\n" + text);
+            String url = this.polarizeConfig.get("polarion.url");
+            HttpResponse<JsonNode> response = Unirest.post(url)
                     .header("Content-type", "application/octet-stream")
                     .body(text)
                     .asJson();
@@ -354,8 +314,6 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         } catch (UnirestException e) {
             e.printStackTrace();
         }
-
-
     }
 
     /**
@@ -678,119 +636,6 @@ public class TestDefinitionProcessor extends AbstractProcessor {
             //r.add(req);
         }
         //tc.setRequirements(treq);
-    }
-
-
-    /**
-     * Examines a TestDefinition object to obtain its values and generates an XML file if needed.
-     *
-     * @param meta
-     * @param description
-     * @return
-     */
-    @Deprecated
-    private Testcase processTestCase(Meta<TestDefinition> meta, String description) {
-        TestDefinition pol = meta.annotation;
-        Testcase tc = new Testcase();
-        tc.setAuthor(pol.author());
-        tc.setDescription(description);
-        tc.setTitle(meta.qualifiedName);
-        this.logger.info("Processing Testcase for " + meta.qualifiedName);
-
-        // For automation, let's always assume we're in draft state
-        Testcase.Status status = new Testcase.Status();
-        status.setValue("draft");
-        tc.setStatus(status);
-
-        Testcase.Caseautomation ca = new Testcase.Caseautomation();
-        ca.setValue(AutomationTypes.AUTOMATED);
-        tc.setCaseautomation(ca);
-
-        Testcase.Caseimportance ci = new Testcase.Caseimportance();
-        ci.setValue(ImpTypes.fromValue(pol.importance().stringify()));
-        tc.setCaseimportance(ci);
-
-        Testcase.Caselevel cl = new Testcase.Caselevel();
-        cl.setValue(CaseTypes.fromValue(pol.level().stringify()));
-        tc.setCaselevel(cl);
-
-        Testcase.Caseposneg cpn = new Testcase.Caseposneg();
-        cpn.setValue(PosnegTypes.fromValue(pol.posneg().stringify()));
-        tc.setCaseposneg(cpn);
-
-        Testcase.Testtype tt = new Testcase.Testtype();
-        tt.setValue(TestTypes.fromValue(pol.testtype().toString()));
-        tc.setTesttype(tt);
-
-        tc.setWorkitemId(pol.testCaseID());
-        tc.setWorkitemType(WiTypes.TEST_CASE);
-
-        // the setup, teardown and teststeps fields are optional
-
-        tc.setProject(ProjectVals.fromValue(meta.annotation.projectID().toString()));
-
-        Requirement[] reqs = pol.reqs();
-        // If reqs is empty look at the class annotated requirements contained in methToProjectReq
-        if (reqs.length == 0) {
-            String pkgClassname = String.format("%s.%s", meta.packName, meta.className);
-            String project = tc.getProject().value();
-            if (this.methToProjectReq.containsKey(pkgClassname)) {
-                Meta<Requirement> r = this.methToProjectReq.get(pkgClassname).get(project);
-                reqs = new Requirement[1];
-                reqs[0] = r.annotation;
-            }
-            else {
-                String err = String.format("\nThere is no requirement for %s.", tc.getTitle());
-                String err2 = "\nEither the class must be annotated with @Requirement, or the " +
-                        "@TestDefinition(reqs={@Requirement(...)}) must be filled in";
-                this.logger.error(err + err2);
-                throw new RequirementAnnotationException();
-            }
-        }
-        Testcase.Requirements treq = new Testcase.Requirements();
-        List<ReqType> r = treq.getRequirement();
-        for(Requirement e: reqs) {
-            Meta<Requirement> m = new Meta<>(meta);
-            m.annotation = e;
-            ProjectVals proj = tc.getProject();
-            ReqType req = this.processRequirement(m, proj);
-            r.add(req);
-        }
-        tc.setRequirements(treq);
-
-        //TODO: Check for XML Desc file for TestDefinition
-        Path path = FileHelper.makeXmlPath(this.tcPath, meta, tc.getProject().value());
-        File xmlDesc = path.toFile();
-        if (xmlDesc.exists()) {
-            this.logger.info("Description file already exists: " + xmlDesc.toString());
-            // TODO: verify the description file has everything needed
-            // TODO: validate the xml against the schema.
-
-            // If we override, regenerate the XML description file
-            if (pol.override()) {
-                this.createTestCaseXML(tc, xmlDesc);
-            }
-
-            Optional<WorkItem> witem;
-            witem = IJAXBHelper.unmarshaller(WorkItem.class, xmlDesc, this.jaxb.getXSDFromResource(WorkItem.class));
-            if (!witem.isPresent())
-                throw new XMLDescriptonCreationError();
-
-            // Check if the ID is in the xml description file
-            WorkItem item = witem.get();
-            String id = item.getTestcase().getWorkitemId();
-            if (id.equals("")) {
-                //this.testCaseImporterRequest(xmlDesc);
-            }
-            tc = witem.get().getTestcase();
-        }
-        else {
-            Path parent = path.getParent();
-            Boolean success = parent.toFile().mkdirs();
-            this.createTestCaseXML(tc, xmlDesc);
-        }
-
-        return tc;
     }
 
     /**
