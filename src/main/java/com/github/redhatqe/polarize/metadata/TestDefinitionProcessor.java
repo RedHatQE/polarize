@@ -10,14 +10,13 @@ import com.github.redhatqe.polarize.schema.*;
 
 import com.github.redhatqe.polarize.exceptions.RequirementAnnotationException;
 import com.github.redhatqe.polarize.exceptions.XMLDescriptonCreationError;
-import com.github.redhatqe.polarize.schema.Testcase;
+import com.github.redhatqe.polarize.importer.testcase.Testcase;
 import com.mashape.unirest.http.HttpResponse;
 import com.mashape.unirest.http.JsonNode;
 import com.mashape.unirest.http.Unirest;
 import com.mashape.unirest.http.exceptions.UnirestException;
 import org.testng.annotations.Test;
 
-import javax.annotation.Nonnull;
 import javax.annotation.processing.*;
 import javax.lang.model.SourceVersion;
 import javax.lang.model.element.Element;
@@ -58,10 +57,10 @@ public class TestDefinitionProcessor extends AbstractProcessor {
                             Meta<TestDefinition>>> methToProjectPol;
     private Map<String, String> methNameToTestNGDescription;
     public JAXBHelper jaxb = new JAXBHelper();
-    public Testcases testcases = new Testcases();
-    public ReporterConfig config = XUnitReporter.configure();
-    public Map<String, String> polarizeConfig = Configurator.loadConfiguration();
-    private Map<String, List<com.github.redhatqe.polarize.importer.testcase.Testcase>> tcMap = new HashMap<>();
+    private Testcases testcases = new Testcases();
+    private ReporterConfig config = XUnitReporter.configure();
+    private Map<String, String> polarizeConfig = Configurator.loadConfiguration();
+    private Map<String, List<Testcase>> tcMap = new HashMap<>();
 
     /**
      * Recursive function that will get the fully qualified name of a method.
@@ -218,7 +217,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         if (reqList == null)
             return false;
         //List<Testcase> tests = this.processAllTestCase();
-        List<com.github.redhatqe.polarize.importer.testcase.Testcase> tests = this.processAllTC();
+        List<Testcase> tests = this.processAllTC();
 
         // testcases holds all the methods that need a new or updated Polarion TestCase
         this.testcasesImporterRequest();
@@ -230,7 +229,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
      *
      * @return
      */
-    private List<com.github.redhatqe.polarize.importer.testcase.Testcase> processAllTC() {
+    private List<Testcase> processAllTC() {
         return this.methToProjectPol.entrySet().stream()
                 .flatMap(es -> {
                     String qualifiedName = es.getKey();
@@ -269,17 +268,17 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         return reqList;
     }
 
-    private com.github.redhatqe.polarize.importer.testcase.Testcase
+    private Testcase
     createImporterTestcase() {
-        return new com.github.redhatqe.polarize.importer.testcase.Testcase();
+        return new Testcase();
     }
 
-    private void createTestCaseXML(com.github.redhatqe.polarize.importer.testcase.Testcase tc,
+    private void createTestCaseXML(Testcase tc,
                                    File path) {
         this.logger.info(String.format("Generating XML description in %s", path.toString()));
         IFileHelper.makeDirs(path.toPath());
         IJAXBHelper.marshaller(tc, path,
-                this.jaxb.getXSDFromResource(com.github.redhatqe.polarize.importer.testcase.Testcase.class));
+                this.jaxb.getXSDFromResource(Testcase.class));
     }
 
     /**
@@ -299,7 +298,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         File importerFile = new File(this.polarizeConfig.get("importer.testcases.file"));
         IFileHelper.makeDirs(importerFile.toPath());
         IJAXBHelper.marshaller(this.testcases, importerFile,
-                this.jaxb.getXSDFromResource(com.github.redhatqe.polarize.importer.testcase.Testcases.class));
+                this.jaxb.getXSDFromResource(Testcases.class));
 
         try {
             String text = Files.lines(importerFile.toPath()).reduce("", (acc, c) -> acc + c + "\n");
@@ -450,8 +449,8 @@ public class TestDefinitionProcessor extends AbstractProcessor {
     }
 
     private Optional<String> getPolarionIDFromTestcase(Meta<TestDefinition> meta) {
-        Optional<com.github.redhatqe.polarize.importer.testcase.Testcase> tc =
-                this.getTypeFromMeta(meta, com.github.redhatqe.polarize.importer.testcase.Testcase.class);
+        Optional<Testcase> tc =
+                this.getTypeFromMeta(meta, Testcase.class);
 
         if (!tc.isPresent() || tc.get().getUpdate() == null || tc.get().getUpdate().getId().equals(""))
             return Optional.empty();
@@ -467,9 +466,9 @@ public class TestDefinitionProcessor extends AbstractProcessor {
 
     }
 
-    private com.github.redhatqe.polarize.importer.testcase.Testcase
+    private Testcase
     initImporterTestcase(Meta<TestDefinition> meta) {
-        com.github.redhatqe.polarize.importer.testcase.Testcase tc = this.createImporterTestcase();
+        Testcase tc = this.createImporterTestcase();
         TestDefinition def = meta.annotation;
         tc.setAutomation("true");
         tc.setImportance(def.importance().stringify());
@@ -515,9 +514,9 @@ public class TestDefinitionProcessor extends AbstractProcessor {
      * @param meta
      * @return
      */
-    private com.github.redhatqe.polarize.importer.testcase.Testcase
+    private Testcase
     processTC(Meta<TestDefinition> meta) {
-        com.github.redhatqe.polarize.importer.testcase.Testcase tc = this.initImporterTestcase(meta);
+        Testcase tc = this.initImporterTestcase(meta);
         TestDefinition def = meta.annotation;
 
         this.initRequirementsFromTestDef(meta, tc);
@@ -559,7 +558,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
             if (this.tcMap.containsKey(projId))
                 this.tcMap.get(projId).add(tc);
             else {
-                List<com.github.redhatqe.polarize.importer.testcase.Testcase> tcs = new ArrayList<>();
+                List<Testcase> tcs = new ArrayList<>();
                 tcs.add(tc);
                 this.tcMap.put(projId, tcs);
             }
@@ -567,7 +566,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         return tc;
     }
 
-    private void setTestType(TestType tType, com.github.redhatqe.polarize.importer.testcase.Testcase tc) {
+    private void setTestType(TestType tType, Testcase tc) {
         String sub1 = tType.subtype1().toString();
         String sub2 = tType.subtype2().toString();
         // FIXME: Ughhh I wish Java had something like clojure's extend protocol.  Great example of expression problem
@@ -604,7 +603,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
      */
     private void
     initRequirementsFromTestDef(Meta<TestDefinition> meta,
-                                com.github.redhatqe.polarize.importer.testcase.Testcase tc) {
+                                Testcase tc) {
         TestDefinition pol = meta.annotation;
         Requirement[] reqs = pol.reqs();
         // If reqs is empty look at the class annotated requirements contained in methToProjectReq

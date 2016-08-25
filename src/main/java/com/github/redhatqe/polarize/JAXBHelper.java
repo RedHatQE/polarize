@@ -4,9 +4,9 @@ import com.github.redhatqe.polarize.exceptions.XSDValidationError;
 import com.github.redhatqe.polarize.importer.xunit.Testsuites;
 import com.github.redhatqe.polarize.schema.ReqType;
 import com.github.redhatqe.polarize.schema.TestCaseMetadata;
-import com.github.redhatqe.polarize.schema.Testcase;
 import com.github.redhatqe.polarize.schema.WorkItem;
-
+import com.github.redhatqe.polarize.importer.testcase.Testcase;
+import com.github.redhatqe.polarize.importer.testcase.Testcases;
 import java.net.URL;
 
 
@@ -32,10 +32,10 @@ public class JAXBHelper implements IJAXBHelper {
         else if (t == Testsuites.class) {
             xsd = JAXBHelper.class.getClassLoader().getResource("importers/xunit.xsd");
         }
-        else if (t == com.github.redhatqe.polarize.importer.testcase.Testcase.class) {
+        else if (t == Testcase.class) {
             xsd = JAXBHelper.class.getClassLoader().getResource("testcase_importer/testcase-importer.xsd");
         }
-        else if (t == com.github.redhatqe.polarize.importer.testcase.Testcases.class) {
+        else if (t == Testcases.class) {
             xsd = JAXBHelper.class.getClassLoader().getResource("testcase_importer/testcase-importer.xsd");
         }
         else
