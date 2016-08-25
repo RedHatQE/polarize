@@ -1,0 +1,105 @@
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+targetNamespace="com.redhat.qe.rhsm.PolarizeTypes"
+elementFormDefault="qualified">
+    <!-- custom fields for TestDefinition
+    caseimportance -> critical, high, medium, low
+    caselevel -> component, integration, system, acceptance
+    component -> subscription-manager, subscription-manager-migration-data
+    caseposneg -> postive, negative
+    testtype -> functional, non_functional, structural
+    caseautomation -> automated, manual_only, not_automated
+    status -> draft
+    -->
+
+    <!-- fields for Requirement
+    severity -> should_have, must_have, nice_to_have, will_not_have
+    reqtype -> functional, non_functional
+    priority -> lowest, low, medium. high, highest
+    plannedin ->
+    -->
+
+    <xs:simpleType name="project-vals">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="RHEL6"/>
+            <xs:enumeration value="RedHatEnterpriseLinux7"/>
+            <xs:enumeration value="PLATTP"/>
+        </xs:restriction>
+    </xs:simpleType>
+
+    <xs:simpleType name="imp-types">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="critical"/>
+            <xs:enumeration value="high"/>
+            <xs:enumeration value="medium"/>
+            <xs:enumeration value="low"/>
+        </xs:restriction>
+    </xs:simpleType>
+
+    <xs:simpleType name="case-types">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="component"/>
+            <xs:enumeration value="integration"/>
+            <xs:enumeration value="system"/>
+            <xs:enumeration value="acceptance"/>
+        </xs:restriction>
+    </xs:simpleType>
+
+    <xs:simpleType name="automation-types">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="automated"/>
+            <xs:enumeration value="manual_only"/>
+            <xs:enumeration value="not_automated"/>
+        </xs:restriction>
+    </xs:simpleType>
+
+    <xs:simpleType name="test-types">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="functional"/>
+            <xs:enumeration value="non_functional"/>
+            <xs:enumeration value="structural"/>
+        </xs:restriction>
+    </xs:simpleType>
+
+    <xs:simpleType name="posneg-types">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="positive"/>
+            <xs:enumeration value="negative"/>
+        </xs:restriction>
+    </xs:simpleType>
+
+    <xs:simpleType name="wi-types">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="TestCase"/>
+            <xs:enumeration value="Requirement"/>
+        </xs:restriction>
+    </xs:simpleType>
+
+    <xs:simpleType name="arch-types">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="x8664"/>
+            <xs:enumeration value="ppc64"/>
+            <xs:enumeration value="ppc64le"/>
+            <xs:enumeration value="ia64"/>
+            <xs:enumeration value="aarch64"/>
+            <xs:enumeration value="i386"/>
+        </xs:restriction>
+    </xs:simpleType>
+
+    <xs:simpleType name="variant-types">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="server"/>
+            <xs:enumeration value="client"/>
+            <xs:enumeration value="workstation"/>
+            <xs:enumeration value="computenode"/>
+        </xs:restriction>
+    </xs:simpleType>
+
+    <xs:complexType name="teststep-type">
+        <xs:all>
+            <xs:element name="method" maxOccurs="1" type="xs:string"/>
+            <xs:element name="description" maxOccurs="1" type="xs:string"/>
+            <xs:element name="expected" maxOccurs="1" type="xs:string"/>
+        </xs:all>
+    </xs:complexType>
+
+</xs:schema>
