@@ -22,6 +22,7 @@ elementFormDefault="qualified">
         <xs:restriction base="xs:string">
             <xs:enumeration value="RHEL6"/>
             <xs:enumeration value="RedHatEnterpriseLinux7"/>
+            <xs:enumeration value="PLATTP"/>
         </xs:restriction>
     </xs:simpleType>
 

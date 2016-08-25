@@ -33,7 +33,10 @@ public class JAXBHelper implements IJAXBHelper {
             xsd = JAXBHelper.class.getClassLoader().getResource("importers/xunit.xsd");
         }
         else if (t == com.github.redhatqe.polarize.importer.testcase.Testcase.class) {
-            xsd = JAXBHelper.class.getClassLoader().getResource("importers/testcase-importer.xsd");
+            xsd = JAXBHelper.class.getClassLoader().getResource("testcase_importer/testcase-importer.xsd");
+        }
+        else if (t == com.github.redhatqe.polarize.importer.testcase.Testcases.class) {
+            xsd = JAXBHelper.class.getClassLoader().getResource("testcase_importer/testcase-importer.xsd");
         }
         else
             throw new XSDValidationError();

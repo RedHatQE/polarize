@@ -30,21 +30,21 @@ import java.util.stream.Collectors;
  * file, this file will be loaded instead.
  */
 public class XUnitReporter implements IReporter {
-    private XUnitReporterConfig config;
+    private ReporterConfig config;
     public final static File defaultPropertyFile =
             new File(System.getProperty("user.home") + "/.polarize/reporter.properties");
 
     public XUnitReporter() {
-        this.configure();
+        this.config = XUnitReporter.configure();
     }
 
-    private void configure() {
-        Properties props = this.getProperties();
+    public static ReporterConfig configure() {
+        Properties props = XUnitReporter.getProperties();
 
-        config = new XUnitReporterConfig();
+        ReporterConfig config = new ReporterConfig();
         try {
-            config.setAuthor(this.validateNonEmptyProperty("author-id", props));
-            config.setProjectID(this.validateNonEmptyProperty("project-id", props));
+            config.setAuthor(XUnitReporter.validateNonEmptyProperty("author-id", props));
+            config.setProjectID(XUnitReporter.validateNonEmptyProperty("project-id", props));
         } catch (KeyException e) {
             e.printStackTrace();
         }
@@ -68,9 +68,11 @@ public class XUnitReporter implements IReporter {
                         config.setCustomFields(kvs[0], kvs[1]);
                     });
         }
+
+        return config;
     }
 
-    private Properties getProperties() {
+    public static Properties getProperties() {
         Properties props = new Properties();
         Map<String, String> envs = System.getenv();
         if (envs.containsKey("XUNIT_IMPORTER_CONFIG")) {
@@ -109,7 +111,7 @@ public class XUnitReporter implements IReporter {
     }
 
 
-    private String validateNonEmptyProperty(String key, Properties props) throws KeyException {
+    private static String validateNonEmptyProperty(String key, Properties props) throws KeyException {
         if (!props.containsKey(key)) {
             throw new KeyException(String.format("Missing %s in reporter.properties", key));
         }
@@ -140,7 +142,7 @@ public class XUnitReporter implements IReporter {
      */
     @Override
     public void generateReport(List<XmlSuite> xmlSuites, List<ISuite> suites, String outputDirectory) {
-        Testsuites tsuites = this.getTestSuiteInfo();
+        Testsuites tsuites = XUnitReporter.getTestSuiteInfo(this);
         List<Testsuite> tsuite = tsuites.getTestsuite();
 
         // Get information for each <testsuite>
@@ -164,7 +166,7 @@ public class XUnitReporter implements IReporter {
                         ts.setTime(Float.toString(duration));
 
                         List<Testcase> tests = ts.getTestcase();
-                        this.getMethodInfo(suite, tests);
+                        XUnitReporter.getMethodInfo(this, suite, tests);
                         return ts;
                     })
                     .collect(Collectors.toList());
@@ -177,7 +179,7 @@ public class XUnitReporter implements IReporter {
         IJAXBHelper.marshaller(tsuites, reportPath, jaxb.getXSDFromResource(Testsuites.class));
     }
 
-    public List<Testcase> getMethodInfo(ISuite suite, List<Testcase> testcases) {
+    public static List<Testcase> getMethodInfo(XUnitReporter xUnitReporter, ISuite suite, List<Testcase> testcases) {
         // Get information for each <testcase>
         List<IInvokedMethod> invoked = suite.getAllInvokedMethods();
         for(IInvokedMethod meth: invoked) {
@@ -192,7 +194,6 @@ public class XUnitReporter implements IReporter {
             ITestClass clz = fn.getTestClass();
             String methname = fn.getMethodName();
             String classname = clz.getName();
-            String qualifiedName = classname + "." + methname;
 
             testcase.setName(methname);
             testcase.setClassname(classname);
@@ -203,9 +204,9 @@ public class XUnitReporter implements IReporter {
             List<Property> tcProps = props.getProperty();
 
             // Look up in the XML description file the qualifiedName to get the Polarion ID
-            File xmlDesc = this.getXMLDescFile(classname, methname);
-            String id = this.getPolarionIDFromXML(TestDefinition.class, xmlDesc);
-            Property polarionID = this.createProperty("polarion-testcase-id", id);
+            File xmlDesc = XUnitReporter.getXMLDescFile(xUnitReporter, classname, methname);
+            String id = XUnitReporter.getPolarionIDFromXML(TestDefinition.class, xmlDesc);
+            Property polarionID = XUnitReporter.createProperty("polarion-testcase-id", id);
             tcProps.add(polarionID);
 
             // Get all the iteration data
@@ -221,36 +222,36 @@ public class XUnitReporter implements IReporter {
         return testcases;
     }
 
-    public Testsuites getTestSuiteInfo() {
+    public static Testsuites getTestSuiteInfo(XUnitReporter xUnitReporter) {
         Testsuites tsuites = new Testsuites();
         com.github.redhatqe.polarize.importer.xunit.Properties props =
                 new com.github.redhatqe.polarize.importer.xunit.Properties();
         List<Property> properties = props.getProperty();
 
-        Property author = this.createProperty("polarion-user-id", this.config.getAuthor());
+        Property author = XUnitReporter.createProperty("polarion-user-id", xUnitReporter.config.getAuthor());
         properties.add(author);
 
-        Property projectID = this.createProperty("polarion-project-id", this.config.getProjectID());
+        Property projectID = XUnitReporter.createProperty("polarion-project-id", xUnitReporter.config.getProjectID());
         properties.add(projectID);
 
-        Property testRunFinished = this.createProperty("polarion-set-testrun-finished",
-                this.config.getSetTestRunFinished().toString());
+        Property testRunFinished = XUnitReporter.createProperty("polarion-set-testrun-finished",
+                xUnitReporter.config.getSetTestRunFinished().toString());
         properties.add(testRunFinished);
 
-        Property dryRun = this.createProperty("polarion-dry-run", this.config.getDryRun().toString());
+        Property dryRun = XUnitReporter.createProperty("polarion-dry-run", xUnitReporter.config.getDryRun().toString());
         properties.add(dryRun);
 
-        Property includeSkipped = this.createProperty("polarion-include-skipped",
-                this.config.getIncludeSkipped().toString());
+        Property includeSkipped = XUnitReporter.createProperty("polarion-include-skipped",
+                xUnitReporter.config.getIncludeSkipped().toString());
         properties.add(includeSkipped);
 
-        Configurator cfg = this.createConditionalProperty("polarion-response", "rhsm-qe", properties);
+        Configurator cfg = XUnitReporter.createConditionalProperty(xUnitReporter, "polarion-response", "rhsm-qe", properties);
         cfg.setter();
-        cfg = this.createConditionalProperty("polarion-custom", null, properties);
+        cfg = XUnitReporter.createConditionalProperty(xUnitReporter, "polarion-custom", null, properties);
         cfg.setter();
-        cfg = this.createConditionalProperty("polarion-testrun-title", null, properties);
+        cfg = XUnitReporter.createConditionalProperty(xUnitReporter, "polarion-testrun-title", null, properties);
         cfg.setter();
-        cfg = this.createConditionalProperty("polarion-testrun-id", null, properties);
+        cfg = XUnitReporter.createConditionalProperty(xUnitReporter, "polarion-testrun-id", null, properties);
         cfg.setter();
 
         tsuites.setProperties(props);
@@ -266,7 +267,7 @@ public class XUnitReporter implements IReporter {
      * @param value
      * @return
      */
-    private Property createProperty(String name, String value) {
+    private static Property createProperty(String name, String value) {
         Property prop = new Property();
         prop.setName(name);
         prop.setValue(value);
@@ -278,7 +279,8 @@ public class XUnitReporter implements IReporter {
         void setter();
     }
 
-    private Configurator createConditionalProperty(String name, String value, List<Property> properties) {
+    private static Configurator
+    createConditionalProperty(XUnitReporter xUnitReporter, String name, String value, List<Property> properties) {
         Configurator cfg;
         Property prop = new Property();
         prop.setName(name);
@@ -286,32 +288,32 @@ public class XUnitReporter implements IReporter {
         switch(name) {
             case "polarion-testrun-title":
                 cfg = () -> {
-                    if (this.config.getTestrunTitle().equals(""))
+                    if (xUnitReporter.config.getTestrunTitle().equals(""))
                         return;
-                    prop.setValue(this.config.getTestrunTitle());
+                    prop.setValue(xUnitReporter.config.getTestrunTitle());
                     properties.add(prop);
                 };
                 break;
             case "polarion-testrun-id":
                 cfg = () -> {
-                    if (this.config.getTestrunID().equals(""))
+                    if (xUnitReporter.config.getTestrunID().equals(""))
                         return;
-                    prop.setValue(this.config.getTestrunID());
+                    prop.setValue(xUnitReporter.config.getTestrunID());
                     properties.add(prop);
                 };
                 break;
             case "polarion-response":
                 cfg = () -> {
-                    if (this.config.getResponseName().equals(""))
+                    if (xUnitReporter.config.getResponseName().equals(""))
                         return;
                     prop.setName("polarion-response-" + value);
-                    prop.setValue(this.config.getResponseName());
+                    prop.setValue(xUnitReporter.config.getResponseName());
                     properties.add(prop);
                 };
                 break;
             case "polarion-custom":
                 cfg = () -> {
-                    Map<String, String> customFields = this.config.getCustomFields();
+                    Map<String, String> customFields = xUnitReporter.config.getCustomFields();
                     if (customFields.isEmpty())
                         return;
                     customFields.entrySet().forEach(entry -> {
@@ -332,12 +334,13 @@ public class XUnitReporter implements IReporter {
 
     /**
      * Given the fully qualified method name, find the xml description file
+     * @param xUnitReporter
      * @param className
      * @param methName
      */
-    private File getXMLDescFile(String className, String methName) {
-        String tcXMLPath = this.config.getTestcasesXMLPath();
-        String projID = this.config.getProjectID();
+    private static File getXMLDescFile(XUnitReporter xUnitReporter, String className, String methName) {
+        String tcXMLPath = xUnitReporter.config.getTestcasesXMLPath();
+        String projID = xUnitReporter.config.getProjectID();
 
         Path path = Paths.get(tcXMLPath, projID, className, methName + ".xml");
         File xmlDesc = path.toFile();
@@ -347,7 +350,7 @@ public class XUnitReporter implements IReporter {
         return xmlDesc;
     }
 
-    private <T> String getPolarionIDFromXML(Class<T> t, File xmldesc) {
+    private static <T> String getPolarionIDFromXML(Class<T> t, File xmldesc) {
         JAXBReporter jaxb = new JAXBReporter();
         Optional<WorkItem> wi;
         wi = IJAXBHelper.unmarshaller(WorkItem.class, xmldesc, jaxb.getXSDFromResource(WorkItem.class));

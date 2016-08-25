@@ -10,7 +10,7 @@ public enum DefTypes {
     }
 
     public enum Project {
-        RHEL6, RedHatEnterpriseLinux7
+        RHEL6, RedHatEnterpriseLinux7, PLATTP
     }
 
     public enum TestTypes implements ToString {

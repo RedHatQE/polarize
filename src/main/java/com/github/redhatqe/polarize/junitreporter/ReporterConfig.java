@@ -6,7 +6,7 @@ import java.util.Map;
 /**
  * Configuration class for the XUnitReporter
  */
-public class XUnitReporterConfig {
+public class ReporterConfig {
     private String author;
     private String projectID;
     private String responseName;

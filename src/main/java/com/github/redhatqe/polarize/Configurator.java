@@ -52,6 +52,8 @@ public class Configurator {
             props.load(rdr);
             config.put("reqPath", props.getProperty("requirements.xml.path", "/tmp/reqs"));
             config.put("tcPath", props.getProperty("testcases.xml.path", "/tmp/tcs"));
+            config.put("polarion-url", props.getProperty("polarion-url"));
+            config.put("importer-testcases-file", props.getProperty("importer-testcases-file", "/tmp/testcases.xml"));
             return config;
         } catch (IOException e) {
             logger.info("Could not load polarize.properties.  Looking for defines...");

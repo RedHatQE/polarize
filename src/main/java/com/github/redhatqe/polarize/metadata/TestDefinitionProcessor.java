@@ -3,14 +3,18 @@ package com.github.redhatqe.polarize.metadata;
 import com.github.redhatqe.polarize.*;
 import com.github.redhatqe.polarize.exceptions.TestDefinitionAnnotationError;
 import com.github.redhatqe.polarize.exceptions.XMLDescriptionError;
-import com.github.redhatqe.polarize.importer.testcase.Create;
-import com.github.redhatqe.polarize.importer.testcase.Functional;
-import com.github.redhatqe.polarize.importer.testcase.Nonfunctional;
-import com.github.redhatqe.polarize.importer.testcase.Structural;
+import com.github.redhatqe.polarize.importer.testcase.*;
+import com.github.redhatqe.polarize.junitreporter.ReporterConfig;
+import com.github.redhatqe.polarize.junitreporter.XUnitReporter;
 import com.github.redhatqe.polarize.schema.*;
 
 import com.github.redhatqe.polarize.exceptions.RequirementAnnotationException;
 import com.github.redhatqe.polarize.exceptions.XMLDescriptonCreationError;
+import com.github.redhatqe.polarize.schema.Testcase;
+import com.mashape.unirest.http.HttpResponse;
+import com.mashape.unirest.http.JsonNode;
+import com.mashape.unirest.http.Unirest;
+import com.mashape.unirest.http.exceptions.UnirestException;
 import org.testng.annotations.Test;
 
 import javax.annotation.Nonnull;
@@ -21,10 +25,10 @@ import javax.lang.model.element.ElementKind;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.util.Elements;
 import javax.tools.Diagnostic;
-import javax.xml.bind.*;
 import java.io.*;
 import java.lang.annotation.Annotation;
 import java.net.URL;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -54,6 +58,10 @@ public class TestDefinitionProcessor extends AbstractProcessor {
                             Meta<TestDefinition>>> methToProjectPol;
     private Map<String, String> methNameToTestNGDescription;
     public JAXBHelper jaxb = new JAXBHelper();
+    public Testcases testcases = new Testcases();
+    public ReporterConfig config = XUnitReporter.configure();
+    public Map<String, String> polarizeConfig = Configurator.loadConfiguration();
+    private Map<String, List<com.github.redhatqe.polarize.importer.testcase.Testcase>> tcMap = new HashMap<>();
 
     /**
      * Recursive function that will get the fully qualified name of a method.
@@ -177,8 +185,8 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         List<Meta<Requirement>> requirements = this.makeMetaFromRequirements(repeatedAnns);
 
         // Get all the @Requirement annotated on a class that are not repeated. We will use the information here to
-        // generate the XML for requirements.  If a @TestDefinition annotated test method has an empty reqs, we will look in
-        // methToRequirements for the associated Requirement.
+        // generate the XML for requirements.  If a @TestDefinition annotated test method has an empty reqs, we will
+        // look in methToRequirements for the associated Requirement.
         allowed = new TreeSet<>();
         allowed.add(ElementKind.CLASS);
         allowed.add(ElementKind.METHOD);
@@ -212,7 +220,9 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         //List<Testcase> tests = this.processAllTestCase();
         List<com.github.redhatqe.polarize.importer.testcase.Testcase> tests = this.processAllTC();
 
-        //this.createWorkItems(tests, ProjectVals.RED_HAT_ENTERPRISE_LINUX_7);
+        // testcases holds all the methods that need a new or updated Polarion TestCase
+        this.testcasesImporterRequest();
+
         return true;
     }
 
@@ -223,8 +233,8 @@ public class TestDefinitionProcessor extends AbstractProcessor {
      *
      * @return List of Testcase
      */
+    @Deprecated
     private List<Testcase> processAllTestCase() {
-        // We now have the mapping from qualified name to annotation.  So, process each TestDefinition object
         return this.methToProjectPol.entrySet().stream()
                 .flatMap(es -> {
                     String qualifiedName = es.getKey();
@@ -244,15 +254,13 @@ public class TestDefinitionProcessor extends AbstractProcessor {
      * @return
      */
     private List<com.github.redhatqe.polarize.importer.testcase.Testcase> processAllTC() {
-        // We now have the mapping from qualified name to annotation.  So, process each TestDefinition object
         return this.methToProjectPol.entrySet().stream()
                 .flatMap(es -> {
                     String qualifiedName = es.getKey();
-                    @Nonnull String desc = methNameToTestNGDescription.get(qualifiedName);
                     return es.getValue().entrySet().stream()
                             .map(val -> {
                                 Meta<TestDefinition> meta = val.getValue();
-                                return this.processTC(meta, desc);
+                                return this.processTC(meta);
                             })
                             .collect(Collectors.toList()).stream();
                 })
@@ -290,6 +298,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
      * @param tc the Testcase object to serialize to XML
      * @param path path to generate the description file
      */
+    @Deprecated
     private void createTestCaseXML(Testcase tc, File path) {
         this.logger.info(String.format("Generating XML description in %s", path.toString()));
         WorkItem wi = new WorkItem();
@@ -299,34 +308,54 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         IJAXBHelper.marshaller(wi, path, this.jaxb.getXSDFromResource(wi.getClass()));
     }
 
-    /**
-     * Generates an XML description file of a workitems type
-     *
-     * @param tests a list of all Testcase objects to serialize
-     * @param proj which project to create
-     */
-    private void createWorkItems(List<Testcase> tests, ProjectVals proj) {
-        // Convert the TestcaseType objects to XML
-        TestCaseMetadata tcmd = new TestCaseMetadata();
-        tcmd.setProjectId(proj);
-        tcmd.setDryRun(true);
+    private com.github.redhatqe.polarize.importer.testcase.Testcase
+    createImporterTestcase() {
+        return new com.github.redhatqe.polarize.importer.testcase.Testcase();
+    }
 
-        TestCaseMetadata.Workitems wis = new TestCaseMetadata.Workitems();
-        List<Testcase> tcs = wis.getTestcase();
-        tcs.addAll(tests);
-        tcmd.setWorkitems(wis);
+    private void addTestCaseXML(com.github.redhatqe.polarize.importer.testcase.Testcases tests,
+                                   com.github.redhatqe.polarize.importer.testcase.Testcase tc,
+                                   File path) {
+        this.logger.info(String.format("Generating XML description in %s", path.toString()));
+        List<com.github.redhatqe.polarize.importer.testcase.Testcase> testcases = tests.getTestcase();
+        testcases.add(tc);
+    }
+
+    private void createTestCaseXML(com.github.redhatqe.polarize.importer.testcase.Testcase tc,
+                                   File path) {
+        this.logger.info(String.format("Generating XML description in %s", path.toString()));
+        IFileHelper.makeDirs(path.toPath());
+        IJAXBHelper.marshaller(tc, path,
+                this.jaxb.getXSDFromResource(com.github.redhatqe.polarize.importer.testcase.Testcase.class));
+    }
+
+    /**
+     * Generates the xml file that will be sent via a REST call to the XUnit Importer
+     */
+    private void testcasesImporterRequest() {
+        String projectID = this.config.getProjectID();
+        this.testcases.setProjectId(projectID);
+        this.testcases.setUserId(this.config.getAuthor());
+        this.testcases.getTestcase().addAll(this.tcMap.get(projectID));
+
+        File importerFile = new File(this.polarizeConfig.get("importer-testcases-file"));
+        IFileHelper.makeDirs(importerFile.toPath());
+        IJAXBHelper.marshaller(this.testcases, importerFile,
+                this.jaxb.getXSDFromResource(com.github.redhatqe.polarize.importer.testcase.Testcases.class));
 
         try {
-            JAXBContext jaxbc = JAXBContext.newInstance(TestCaseMetadata.class);
-            Marshaller marshaller = jaxbc.createMarshaller();
-            marshaller.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, true);
-            marshaller.marshal(tcmd, new File("/tmp/testing.xml"));
-            marshaller.marshal(tcmd, System.out);
-        } catch (PropertyException pe){
-            pe.printStackTrace();
-        } catch (JAXBException e) {
+            String text = Files.lines(importerFile.toPath()).reduce("", (acc, c) -> acc + c);
+            HttpResponse<JsonNode> response = Unirest.post(this.polarizeConfig.get("polarion-url"))
+                    .header("Content-type", "application/octet-stream")
+                    .body(text)
+                    .asJson();
+        } catch (IOException e) {
+            e.printStackTrace();
+        } catch (UnirestException e) {
             e.printStackTrace();
         }
+
+
     }
 
     /**
@@ -438,7 +467,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
      * @param meta
      * @return
      */
-    private Optional<WorkItem> getWorkItemFromMeta(Meta<TestDefinition> meta) {
+    private <T> Optional<T> getTypeFromMeta(Meta<TestDefinition> meta, Class<T> t) {
         //TODO: Check for XML Desc file for TestDefinition
         TestDefinition def = meta.annotation;
         Path path = FileHelper.makeXmlPath(this.tcPath, meta, def.projectID().toString());
@@ -447,21 +476,29 @@ public class TestDefinitionProcessor extends AbstractProcessor {
             return Optional.empty();
 
         this.logger.info("Description file exists: " + xmlDesc.toString());
-        Optional<WorkItem> witem;
-        witem = IJAXBHelper.unmarshaller(WorkItem.class, xmlDesc, this.jaxb.getXSDFromResource(WorkItem.class));
+        Optional<T> witem;
+        witem = IJAXBHelper.unmarshaller(t, xmlDesc, this.jaxb.getXSDFromResource(t));
         if (!witem.isPresent())
             throw new XMLDescriptonCreationError();
         return witem;
     }
 
-    private Optional<String> getPolarionID(Meta<TestDefinition> meta) {
-        Optional<WorkItem> wi = this.getWorkItemFromMeta(meta);
+    private Optional<String> getPolarionIDFromWorkItem(Meta<TestDefinition> meta) {
+        Optional<WorkItem> wi = this.getTypeFromMeta(meta, WorkItem.class);
 
         if (!wi.isPresent() || wi.get().getTestcase().getWorkitemId().equals(""))
             return Optional.empty();
         return Optional.of(wi.get().getTestcase().getWorkitemId());
     }
 
+    private Optional<String> getPolarionIDFromTestcase(Meta<TestDefinition> meta) {
+        Optional<com.github.redhatqe.polarize.importer.testcase.Testcase> tc =
+                this.getTypeFromMeta(meta, com.github.redhatqe.polarize.importer.testcase.Testcase.class);
+
+        if (!tc.isPresent() || tc.get().getUpdate() == null || tc.get().getUpdate().getId().equals(""))
+            return Optional.empty();
+        return Optional.of(tc.get().getUpdate().getId());
+    }
 
     /**
      * TODO: Takes a feature file in gherkin style, and generates an XML file
@@ -472,58 +509,103 @@ public class TestDefinitionProcessor extends AbstractProcessor {
 
     }
 
-    /**
-     *
-     * @param meta
-     * @param description
-     */
     private com.github.redhatqe.polarize.importer.testcase.Testcase
-    processTC(Meta<TestDefinition> meta, String description) {
-        com.github.redhatqe.polarize.importer.testcase.Testcase tc =
-                new com.github.redhatqe.polarize.importer.testcase.Testcase();
-
+    initImporterTestcase(Meta<TestDefinition> meta) {
+        com.github.redhatqe.polarize.importer.testcase.Testcase tc = this.createImporterTestcase();
         TestDefinition def = meta.annotation;
         tc.setAutomation("true");
-
-        // Check to see if there is an existing XML description file with Polarion ID
-        Optional<String> maybePolarion = this.getPolarionID(meta);
-        Boolean createTestCase = false;
-        if (!maybePolarion.isPresent()) {
-            // This means that there wasn't an ID in the XML description file.  Make a TestCase importer call
-            Create create = new Create();
-            create.setAuthorId(def.author());
-            tc.setCreate(create);
-            createTestCase = true;
-        }
-
-        tc.setDescription(description);
-        tc.setAutomation(def.automation().stringify());
-        tc.setAutomationScript(def.script());
-        tc.setComponent(def.component());
         tc.setImportance(def.importance().stringify());
-        tc.setAssignee(def.assignee());
-        tc.setInitialEstimate(def.initialEstimate());
         tc.setLevel(def.level().stringify());
         tc.setPosneg(def.posneg().stringify());
-        tc.setSetup(def.setup());
-        tc.setTeardown(def.teardown());
-        tc.setSubcomponent(def.subcomponent());
-        tc.setTitle(def.title());
-        tc.setTags(def.tags());
+
+        if (!def.automation().stringify().equals(""))
+            tc.setAutomation(def.automation().stringify());
+        if (!def.script().equals(""))
+            tc.setAutomationScript(def.script());
+        if (!def.component().equals(""))
+            tc.setComponent(def.component());
+        if (!def.assignee().equals(""))
+            tc.setAssignee(def.assignee());
+        if (!def.initialEstimate().equals(""))
+            tc.setInitialEstimate(def.initialEstimate());
+        if (!def.setup().equals(""))
+            tc.setSetup(def.setup());
+        if (!def.teardown().equals(""))
+            tc.setTeardown(def.teardown());
+        if (!def.subcomponent().equals(""))
+            tc.setSubcomponent(def.subcomponent());
+        if (!def.tags().equals(""))
+            tc.setTags(def.tags());
+
+        if (def.title().equals(""))
+            tc.setTitle(meta.qualifiedName);
+        else
+            tc.setTitle(def.title());
+
+        if (def.description().equals(""))
+            tc.setDescription(this.methNameToTestNGDescription.get(meta.qualifiedName));
+        else
+            tc.setDescription(def.description());
 
         TestType tType = def.testtype();
         this.setTestType(tType, tc);
+        return tc;
+    }
 
-        if (createTestCase) {
-            JAXBHelper jaxb = new JAXBHelper();
-            File path = FileHelper.makeXmlPath(this.tcPath, meta, meta.annotation.projectID().toString()).toFile();
-            if (path.exists()) {
-                this.logger.warn("Going to overwrite existing xml description");
-            }
-            IJAXBHelper.marshaller(tc, path,
-                    jaxb.getXSDFromResource(com.github.redhatqe.polarize.importer.testcase.Testcase.class));
+    /**
+     *
+     * @param meta
+     * @return
+     */
+    private com.github.redhatqe.polarize.importer.testcase.Testcase
+    processTC(Meta<TestDefinition> meta) {
+        com.github.redhatqe.polarize.importer.testcase.Testcase tc = this.initImporterTestcase(meta);
+        TestDefinition def = meta.annotation;
+
+        this.initRequirementsFromTestDef(meta, tc);
+
+        // Check to see if there is an existing XML description file with Polarion ID
+        Optional<File> xml = this.getFileFromMeta(meta, meta.annotation.projectID().toString());
+        Boolean doCreate = !xml.isPresent();
+        Optional<String> maybePolarionID = this.getPolarionIDFromTestcase(meta);
+        Boolean idExists = maybePolarionID.isPresent();
+
+        Boolean importRequest = false;
+        // doCreate   | maybePolarion  | action
+        // false      | false          | file exists, but there's no Polarion ID.  Set Create
+        // false      | true           | file exists and Polarion ID is there.  Set Update if override is there
+        // true       | false          | no description file.  Make file and Set Create
+        // true       | _              | as above
+        if (!idExists) {
+            Create create = new Create();
+            create.setAuthorId(def.author());
+            tc.setCreate(create);
+            importRequest = true;
+        }
+        else {
+            Update update = new Update();
+            update.setId(maybePolarionID.get());
+            tc.setUpdate(update);
+            if (def.override())
+                importRequest = true;
         }
 
+        if (doCreate) {
+            Path path = FileHelper.makeXmlPath(this.tcPath, meta, meta.annotation.projectID().toString());
+            File xmlDesc = path.toFile();
+            this.createTestCaseXML(tc, xmlDesc);
+        }
+
+        if (importRequest) {
+            String projId = def.projectID().toString();
+            if (this.tcMap.containsKey(projId))
+                this.tcMap.get(projId).add(tc);
+            else {
+                List<com.github.redhatqe.polarize.importer.testcase.Testcase> tcs = new ArrayList<>();
+                tcs.add(tc);
+                this.tcMap.put(projId, tcs);
+            }
+        }
         return tc;
     }
 
@@ -556,6 +638,48 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         }
     }
 
+    /**
+     * Gets @Requirements from within a @TestDefinition and processes them
+     *
+     * @param meta a Meta type representing metadata of a method
+     * @param tc
+     */
+    private void
+    initRequirementsFromTestDef(Meta<TestDefinition> meta,
+                                com.github.redhatqe.polarize.importer.testcase.Testcase tc) {
+        TestDefinition pol = meta.annotation;
+        Requirement[] reqs = pol.reqs();
+        // If reqs is empty look at the class annotated requirements contained in methToProjectReq
+        if (reqs.length == 0) {
+            String pkgClassname = String.format("%s.%s", meta.packName, meta.className);
+            String project = pol.projectID().toString();
+            if (this.methToProjectReq.containsKey(pkgClassname)) {
+                Meta<Requirement> r = this.methToProjectReq.get(pkgClassname).get(project);
+                reqs = new Requirement[1];
+                reqs[0] = r.annotation;
+            }
+            else {
+                String err = String.format("\nThere is no requirement for %s.", tc.getTitle());
+                String err2 = "\nEither the class must be annotated with @Requirement, or the " +
+                        "@TestDefinition(reqs={@Requirement(...)}) must be filled in";
+                this.logger.error(err + err2);
+                throw new RequirementAnnotationException();
+            }
+        }
+        // FIXME: The TestCase importer does not yet have a linked work item section.  So we can't add Requirements
+        //Testcase.Requirements treq = new Testcase.Requirements();
+        //List<ReqType> r = treq.getRequirement();
+        for(Requirement e: reqs) {
+            Meta<Requirement> m = new Meta<>(meta);
+            m.annotation = e;
+            String projID = pol.projectID().toString();
+            ProjectVals proj = ProjectVals.fromValue(projID);
+            ReqType req = this.processRequirement(m, proj);
+            //r.add(req);
+        }
+        //tc.setRequirements(treq);
+    }
+
 
     /**
      * Examines a TestDefinition object to obtain its values and generates an XML file if needed.
@@ -564,6 +688,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
      * @param description
      * @return
      */
+    @Deprecated
     private Testcase processTestCase(Meta<TestDefinition> meta, String description) {
         TestDefinition pol = meta.annotation;
         Testcase tc = new Testcase();
@@ -655,7 +780,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
             WorkItem item = witem.get();
             String id = item.getTestcase().getWorkitemId();
             if (id.equals("")) {
-                this.workItemImporterRequest(xmlDesc);
+                //this.testCaseImporterRequest(xmlDesc);
             }
             tc = witem.get().getTestcase();
         }
@@ -666,16 +791,6 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         }
 
         return tc;
-    }
-
-    /**
-     * TODO: stub to make a request to the WorkItem importer
-     *
-     * @param descFile the xml description file to pass to the importer
-     */
-    private void workItemImporterRequest(File descFile) {
-        this.logger.info(String.format("TODO: Need to make a WorkItem importer request for %s", descFile.toString()));
-        this.logger.info("TODO: Look for return from WorkItem importer.  Should contain ID");
     }
 
     /**
@@ -716,11 +831,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         File xmlDesc = path.toFile();
         Optional<WorkItem> wi;
 
-        // If the xml description file exists, verify that it conforms to the schema.
-        // If the description file does not exist, make a request to the WorkItem importer
         if (path.toFile().exists()) {
-            // TODO: validate the xml against the schema.
-
             // If we override, regenerate the XML description file
             if (r.override()) {
                 this.createRequirementXML(req, xmlDesc);
@@ -733,14 +844,12 @@ public class TestDefinitionProcessor extends AbstractProcessor {
             WorkItem item = wi.get();
             String id = item.getRequirement().getId();
             if (id.equals("")) {
-                this.workItemImporterRequest(xmlDesc);
+                //this.testCaseImporterRequest(xmlDesc);
             }
             return wi.get().getRequirement();
-
         }
         else {
             IFileHelper.makeDirs(path);
-
             if(r.id().equals("")) {
                 this.logger.info("No polarionID...");
                 // Check for xmlDesc.  If both the id and xmlDesc are empty strings, then we need to generate XML file
@@ -748,7 +857,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
                 // it to a WorkItem
                 if (r.xmlDesc().equals("")) {
                     ReqType generated = this.createRequirementXML(req, xmlDesc);  // generate the desc file
-                    this.workItemImporterRequest(xmlDesc);
+                    //this.testCaseImporterRequest(xmlDesc);
                     return generated;
                 }
                 else {
@@ -760,7 +869,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
                         this.logger.info("xmlDesc was given but doesn't exist.  Generating one...");
                         IFileHelper.makeDirs(xmlpath);
                         ReqType generated = this.createRequirementXML(req, desc);
-                        this.workItemImporterRequest(desc);
+                        //this.testCaseImporterRequest(desc);
                         return generated;
                     }
                     else {

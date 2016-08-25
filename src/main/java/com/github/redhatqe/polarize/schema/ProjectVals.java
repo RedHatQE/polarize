@@ -35,7 +35,9 @@ public enum ProjectVals {
     @XmlEnumValue("RHEL6")
     RHEL_6("RHEL6"),
     @XmlEnumValue("RedHatEnterpriseLinux7")
-    RED_HAT_ENTERPRISE_LINUX_7("RedHatEnterpriseLinux7");
+    RED_HAT_ENTERPRISE_LINUX_7("RedHatEnterpriseLinux7"),
+    @XmlEnumValue("PLATTP")
+    PLATTP("PLATTP");
     private final String value;
 
     ProjectVals(String v) {
