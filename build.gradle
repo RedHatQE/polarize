@@ -36,6 +36,11 @@ dependencies {
     compile group: 'org.slf4j', name: 'slf4j-api', version: '1.7.21'
     compile group: 'ch.qos.logback', name: 'logback-classic', version: '1.1.7'
     compile 'org.apache.tinkerpop:gremlin-core:3.2.1'
+    compile 'org.apache.httpcomponents:httpclient:4.3.6'
+    compile 'org.apache.httpcomponents:httpasyncclient:4.0.2'
+    compile 'org.apache.httpcomponents:httpmime:4.3.6'
+    compile 'org.json:json:20140107'
+    compile 'com.mashape.unirest:unirest-java:1.4.9'
 }
 
 test {
