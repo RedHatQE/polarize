@@ -69,5 +69,5 @@ public @interface TestDefinition {
 
     // These are not directly used by the importer
     String xmlDesc() default "";
-    boolean override() default false;          // If true, when xml description file exists, generate a new one.
+    boolean update() default false;          // If true, when xml description file exists, update with new one
 }

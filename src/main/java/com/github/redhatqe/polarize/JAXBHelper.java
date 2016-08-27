@@ -7,6 +7,8 @@ import com.github.redhatqe.polarize.schema.TestCaseMetadata;
 import com.github.redhatqe.polarize.schema.WorkItem;
 import com.github.redhatqe.polarize.importer.testcase.Testcase;
 import com.github.redhatqe.polarize.importer.testcase.Testcases;
+
+import java.io.*;
 import java.net.URL;
 
 

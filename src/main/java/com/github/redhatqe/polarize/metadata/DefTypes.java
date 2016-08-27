@@ -59,4 +59,8 @@ public enum DefTypes {
             return thisName.toLowerCase();
         }
     }
+
+    public enum Severity implements ToString {
+        MUSTHAVE, SHOULDHAVE, NICETOHAVE, WILLNOTHAVE
+    }
 }

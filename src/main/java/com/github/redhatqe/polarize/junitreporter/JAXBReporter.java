@@ -24,6 +24,9 @@ public class JAXBReporter implements IJAXBHelper {
         else if (t == WorkItem.class) {
             xsd = JAXBReporter.class.getClassLoader().getResource("schema/workitem.xsd");
         }
+        else if (t == com.github.redhatqe.polarize.importer.testcase.Testcase.class) {
+            xsd = JAXBReporter.class.getClassLoader().getResource("testcase_importer/testcase-importer.xsd");
+        }
         else
             throw new XSDValidationError();
         return xsd;

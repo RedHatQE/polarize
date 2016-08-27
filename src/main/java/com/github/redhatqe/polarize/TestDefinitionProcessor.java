@@ -1,20 +1,23 @@
-package com.github.redhatqe.polarize.metadata;
+package com.github.redhatqe.polarize;
 
-import com.github.redhatqe.polarize.*;
 import com.github.redhatqe.polarize.exceptions.TestDefinitionAnnotationError;
 import com.github.redhatqe.polarize.exceptions.XMLDescriptionError;
 import com.github.redhatqe.polarize.importer.testcase.*;
 import com.github.redhatqe.polarize.junitreporter.ReporterConfig;
 import com.github.redhatqe.polarize.junitreporter.XUnitReporter;
+import com.github.redhatqe.polarize.metadata.*;
 import com.github.redhatqe.polarize.schema.*;
 
 import com.github.redhatqe.polarize.exceptions.RequirementAnnotationException;
 import com.github.redhatqe.polarize.exceptions.XMLDescriptonCreationError;
 import com.github.redhatqe.polarize.importer.testcase.Testcase;
-import com.mashape.unirest.http.HttpResponse;
-import com.mashape.unirest.http.JsonNode;
-import com.mashape.unirest.http.Unirest;
-import com.mashape.unirest.http.exceptions.UnirestException;
+import org.apache.http.client.methods.CloseableHttpResponse;
+import org.apache.http.client.methods.HttpPost;
+import org.apache.http.conn.ssl.NoopHostnameVerifier;
+import org.apache.http.entity.ContentType;
+import org.apache.http.entity.InputStreamEntity;
+import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.impl.client.HttpClients;
 import org.testng.annotations.Test;
 
 import javax.annotation.processing.*;
@@ -285,6 +288,14 @@ public class TestDefinitionProcessor extends AbstractProcessor {
      * Generates the xml file that will be sent via a REST call to the XUnit Importer
      */
     private void testcasesImporterRequest() {
+        if (this.tcMap.isEmpty()) {
+            this.logger.info("No more testcases to import ...");
+            return;
+        }
+
+        // TODO: Need to listen to the CI message bus.  Spawn this in a new thread since we need to start it first
+        // Look at Java 8's CompleteableFuture
+
         String projectID = this.config.getProjectID();
         if (this.tcMap.get(projectID).isEmpty()) {
             this.logger.info(String.format("No testcases for %s to import", projectID));
@@ -295,6 +306,21 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         this.testcases.setUserId(this.config.getAuthor());
         this.testcases.getTestcase().addAll(this.tcMap.get(projectID));
 
+        // If it has both <create> and <update> we need to delete the update
+        List<Testcase> tests = this.testcases.getTestcase().stream()
+                .map(tc -> {
+                    Create create = tc.getCreate();
+                    Update update = tc.getUpdate();
+                    // If both are non-null delete the Update
+                    if (create != null && update != null) {
+                        tc.setUpdate(null);
+                    }
+                    return tc;
+                })
+                .collect(Collectors.toList());
+        this.testcases.getTestcase().clear();
+        this.testcases.getTestcase().addAll(tests);
+
         File importerFile = new File(this.polarizeConfig.get("importer.testcases.file"));
         IFileHelper.makeDirs(importerFile.toPath());
         IJAXBHelper.marshaller(this.testcases, importerFile,
@@ -302,16 +328,25 @@ public class TestDefinitionProcessor extends AbstractProcessor {
 
         try {
             String text = Files.lines(importerFile.toPath()).reduce("", (acc, c) -> acc + c + "\n");
-            this.logger.info("\n" + text);
+            this.logger.info("Sending this file to Testcase importer:\n" + text);
             String url = this.polarizeConfig.get("polarion.url");
-            HttpResponse<JsonNode> response = Unirest.post(url)
-                    .header("Content-type", "application/octet-stream")
-                    .body(text)
-                    .asJson();
+
+            CloseableHttpClient httpClient =
+                    HttpClients.custom()
+                            .setSSLHostnameVerifier(new NoopHostnameVerifier())
+                            .build();
+            HttpPost postMethod = new HttpPost(url);
+            //postMethod.addHeader("Content-type", "application/octet-stream");
+            InputStreamEntity body = new InputStreamEntity(new FileInputStream(importerFile), -1,
+                    ContentType.APPLICATION_OCTET_STREAM);
+            postMethod.setEntity(body);
+            CloseableHttpResponse response = httpClient.execute(postMethod);
+
         } catch (IOException e) {
             e.printStackTrace();
-        } catch (UnirestException e) {
-            e.printStackTrace();
+        } finally {
+            this.testcases = new Testcases();
+            this.tcMap = new HashMap<>();
         }
     }
 
@@ -420,6 +455,10 @@ public class TestDefinitionProcessor extends AbstractProcessor {
     }
 
     /**
+     * Unmarshalls a type T from the given Meta object
+     *
+     * From the data contained in the Meta object, function looks for the XML description file and unmarshalls it to
+     * the class given by class t.
      *
      * @param meta
      * @return
@@ -440,21 +479,20 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         return witem;
     }
 
-    private Optional<String> getPolarionIDFromWorkItem(Meta<TestDefinition> meta) {
-        Optional<WorkItem> wi = this.getTypeFromMeta(meta, WorkItem.class);
-
-        if (!wi.isPresent() || wi.get().getTestcase().getWorkitemId().equals(""))
-            return Optional.empty();
-        return Optional.of(wi.get().getTestcase().getWorkitemId());
-    }
-
-    private Optional<String> getPolarionIDFromTestcase(Meta<TestDefinition> meta) {
-        Optional<Testcase> tc =
-                this.getTypeFromMeta(meta, Testcase.class);
+    private Optional<String> getPolarionIDFromXML(Meta<TestDefinition> meta) {
+        Optional<Testcase> tc = this.getTypeFromMeta(meta, Testcase.class);
 
         if (!tc.isPresent() || tc.get().getUpdate() == null || tc.get().getUpdate().getId().equals(""))
             return Optional.empty();
         return Optional.of(tc.get().getUpdate().getId());
+    }
+
+    private Optional<String> getPolarionIDFromTestcase(Meta<TestDefinition> meta) {
+        TestDefinition def = meta.annotation;
+        String id = def.projectID().toString();
+        if (id.equals(""))
+            return Optional.empty();
+        return Optional.of(id);
     }
 
     /**
@@ -525,25 +563,27 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         Optional<File> xml = this.getFileFromMeta(meta, meta.annotation.projectID().toString());
         Boolean doCreate = !xml.isPresent();
         Optional<String> maybePolarionID = this.getPolarionIDFromTestcase(meta);
+        Optional<String> maybeIDXml = this.getPolarionIDFromXML(meta);
         Boolean idExists = maybePolarionID.isPresent();
+        Boolean xmlIdExists = maybeIDXml.isPresent();
 
         Boolean importRequest = false;
-        // doCreate   | maybePolarion  | action
-        // false      | false          | file exists, but there's no Polarion ID.  Set Create
-        // false      | true           | file exists and Polarion ID is there.  Set Update if override is there
-        // true       | false          | no description file.  Make file and Set Create
-        // true       | _              | as above
-        if (!idExists) {
+        // xmlIdExists  | idExists       | action
+        // false        | false          | create
+        // false        | true           | create then update
+        // true         | false          | update
+        // true         | true           | update
+        if (!xmlIdExists) {
             Create create = new Create();
             create.setAuthorId(def.author());
             tc.setCreate(create);
             importRequest = true;
         }
-        else {
+        if (idExists) {
             Update update = new Update();
             update.setId(maybePolarionID.get());
             tc.setUpdate(update);
-            if (def.override())
+            if (def.update())
                 importRequest = true;
         }
 
@@ -677,7 +717,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
 
         if (path.toFile().exists()) {
             // If we override, regenerate the XML description file
-            if (r.override()) {
+            if (r.update()) {
                 this.createRequirementXML(req, xmlDesc);
             }
             wi = IJAXBHelper.unmarshaller(WorkItem.class, xmlDesc, this.jaxb.getXSDFromResource(WorkItem.class));
@@ -787,8 +827,8 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         } catch (Exception ex) {
             this.logger.warn("No projectID...will try from @TestDefinition");
         }
-        req.setReqtype(r.reqtype());
-        req.setSeverity(r.severity());
+        req.setReqtype(r.reqtype().stringify());
+        req.setSeverity(r.severity().stringify());
         return req;
     }
 

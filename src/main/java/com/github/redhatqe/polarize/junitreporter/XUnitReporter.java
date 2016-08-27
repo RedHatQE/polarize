@@ -352,16 +352,24 @@ public class XUnitReporter implements IReporter {
 
     private static <T> String getPolarionIDFromXML(Class<T> t, File xmldesc) {
         JAXBReporter jaxb = new JAXBReporter();
-        Optional<WorkItem> wi;
-        wi = IJAXBHelper.unmarshaller(WorkItem.class, xmldesc, jaxb.getXSDFromResource(WorkItem.class));
-        if (!wi.isPresent())
-            throw new XMLUnmarshallError();
-        WorkItem item = wi.get();
         if (t == TestDefinition.class) {
-            return item.getTestcase().getWorkitemId();
+            Optional<com.github.redhatqe.polarize.importer.testcase.Testcase> tc;
+            tc = IJAXBHelper.unmarshaller(com.github.redhatqe.polarize.importer.testcase.Testcase.class, xmldesc,
+                    jaxb.getXSDFromResource(com.github.redhatqe.polarize.importer.testcase.Testcase.class));
+            if (!tc.isPresent())
+                throw new XMLUnmarshallError();
+            com.github.redhatqe.polarize.importer.testcase.Testcase tcase = tc.get();
+            if (tcase.getUpdate() == null)
+                return "";
+            return tcase.getUpdate().getId();
         }
         else if (t == Requirement.class) {
-            return item.getRequirement().getId();
+            Optional<WorkItem> wi;
+            wi = IJAXBHelper.unmarshaller(WorkItem.class, xmldesc, jaxb.getXSDFromResource(WorkItem.class));
+            if (wi.isPresent())
+                return wi.get().getRequirement().getId();
+            else
+                return "";
         }
         else
             throw new XMLDescriptionError();

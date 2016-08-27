@@ -3,6 +3,8 @@ package com.github.redhatqe.polarize.metadata;
 import java.lang.annotation.*;
 import com.github.redhatqe.polarize.metadata.DefTypes.Importance;
 import com.github.redhatqe.polarize.metadata.DefTypes.Project;
+import com.github.redhatqe.polarize.metadata.DefTypes.TestTypes;
+import com.github.redhatqe.polarize.metadata.DefTypes.Severity;
 
 
 /**
@@ -18,9 +20,9 @@ public @interface Requirement {
     String author() default "";                      // if "", must have xmlDesc
     String description() default "";                 // if "", must have xmlDesc
     String xmlDesc() default "";                     // Optional if id, author and description are supplied
-    String severity() default "Must Have";           // defaults to Must Have
-    String reqtype() default "Functional";           // defaults to Functional
+    Severity severity() default Severity.MUSTHAVE;   // defaults to Must Have
+    TestTypes reqtype() default TestTypes.FUNCTIONAL;// defaults to Functional
     Importance priority() default Importance.MEDIUM; // defaults to medium
     String feature() default "";                     // Optional: path to a gherkin feature file
-    boolean override() default false;                // If true, if xml desc file exists, generate new one
+    boolean update() default false;                  // If true, if xml desc file exists, update with new one
 }
