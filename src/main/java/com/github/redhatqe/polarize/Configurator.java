@@ -9,12 +9,12 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Properties;
+import java.util.*;
+import java.util.stream.Collectors;
 
 /**
- * Created by stoner on 8/3/16.
+ * TODO: The properties are starting to get a little more complicated.  Let's use jackson or snake to make a YAML
+ * based configuration file.
  */
 public class Configurator {
 
@@ -42,7 +42,7 @@ public class Configurator {
      */
     public static Map<String, String> loadConfiguration() {
         Properties props = new Properties();
-        Map<String, String> config = new HashMap<>();
+        Map<String, String> config = null; // = new HashMap<>();
 
         // Preference is for ~/.polarize/polarize.properties file
         try {
@@ -50,42 +50,28 @@ public class Configurator {
             BufferedReader rdr;
             rdr = Files.newBufferedReader(FileSystems.getDefault().getPath(homeDir + "/.polarize/polarize.properties"));
             props.load(rdr);
-            config.put("reqPath", props.getProperty("requirements.xml.path", "/tmp/reqs"));
-            config.put("tcPath", props.getProperty("testcases.xml.path", "/tmp/tcs"));
-            config.put("polarion.url", props.getProperty("polarion.url"));
-            config.put("importer.testcases.file", props.getProperty("importer.testcases.file", "/tmp/testcases.xml"));
-            return config;
+            Set<String> keyset = props.stringPropertyNames();
+            config = keyset.stream().collect(Collectors.toMap(k -> k, props::getProperty));
+            //config.put("testcases.xml.path", props.getProperty("testcases.xml.path", "/tmp/tcs"));
+            //config.put("polarion.url", props.getProperty("polarion.url"));
+            //config.put("importer.testcases.file", props.getProperty("importer.testcases.file", "/tmp/testcases.xml"));
         } catch (IOException e) {
             logger.info("Could not load polarize.properties.  Looking for defines...");
         }
 
+        if (config == null) {
+            config = new HashMap<>();
+        }
+
+        // FIXME: There are a lot of properties now.  Require a config file, but allow env vars to override
         Boolean tryDefault = false;
         String xmlReqPath = System.getProperty("requirements.xml.path");
         if (xmlReqPath != null)
-            config.put("reqPath", xmlReqPath);
-        else
-            tryDefault = true;
+            config.put("requirements.xml.path", xmlReqPath);
 
         String xmlTCPath = System.getProperty("testcases.xml.path");
         if (xmlTCPath != null)
-            config.put("tcPath", xmlTCPath);
-        else
-            tryDefault = true;
-
-        if (tryDefault) {
-            logger.warn("Using default from project polarize.properties");
-            InputStream is = Configurator.class.getClassLoader().getResourceAsStream("polarize.properties");
-            try {
-                props.load(is);
-                String reqPath = props.getProperty("requirements.xml.path", "/tmp/reqs");
-                String tcPath = props.getProperty("testcases.xml.path", "/tmp/reqs");
-                config.put("reqPath", reqPath);
-                config.put("tcPath", tcPath);
-                return config;
-            } catch (IOException e) {
-                throw new ConfigurationError();
-            }
-        }
+            config.put("testcases.xml.path", xmlTCPath);
 
         return config;
     }

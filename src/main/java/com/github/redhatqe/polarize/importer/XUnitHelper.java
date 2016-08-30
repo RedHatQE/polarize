@@ -75,7 +75,7 @@ public class XUnitHelper {
         String mName = tc.getName();
 
         Map<String, String> config = Configurator.loadConfiguration();
-        String tcPath = config.get("tcPath");
+        String tcPath = config.get("testcases.xml.path");
         Path descFile = IFileHelper.makeXmlPath(tcPath, projectID, cName, mName);
         File descPath = descFile.toFile();
 
