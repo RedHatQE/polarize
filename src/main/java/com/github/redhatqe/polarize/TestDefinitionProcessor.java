@@ -1,16 +1,14 @@
 package com.github.redhatqe.polarize;
 
-import com.github.redhatqe.polarize.exceptions.TestDefinitionAnnotationError;
-import com.github.redhatqe.polarize.exceptions.XMLDescriptionError;
+import com.github.redhatqe.polarize.exceptions.*;
 import com.github.redhatqe.polarize.importer.testcase.*;
 import com.github.redhatqe.polarize.junitreporter.ReporterConfig;
 import com.github.redhatqe.polarize.junitreporter.XUnitReporter;
 import com.github.redhatqe.polarize.metadata.*;
 import com.github.redhatqe.polarize.schema.*;
 
-import com.github.redhatqe.polarize.exceptions.RequirementAnnotationException;
-import com.github.redhatqe.polarize.exceptions.XMLDescriptonCreationError;
 import com.github.redhatqe.polarize.importer.testcase.Testcase;
+import org.apache.activemq.ActiveMQConnectionFactory;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.conn.ssl.NoopHostnameVerifier;
@@ -21,6 +19,7 @@ import org.apache.http.impl.client.HttpClients;
 import org.testng.annotations.Test;
 
 import javax.annotation.processing.*;
+import javax.jms.*;
 import javax.lang.model.SourceVersion;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ElementKind;
@@ -186,9 +185,11 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         List<? extends Element> repeatedAnns = this.getAnnotations(roundEnvironment, Requirements.class, allowed, err);
         List<Meta<Requirement>> requirements = this.makeMetaFromRequirements(repeatedAnns);
 
-        // Get all the @Requirement annotated on a class that are not repeated. We will use the information here to
-        // generate the XML for requirements.  If a @TestDefinition annotated test method has an empty reqs, we will
-        // look in methToRequirements for the associated Requirement.
+        /* ************************************************************************************
+         * Get all the @Requirement annotated on a class that are not repeated. We will use the information here to
+         * generate the XML for requirements.  If a @TestDefinition annotated test method has an empty reqs, we will
+         * look in methToRequirements for the associated Requirement.
+         **************************************************************************************/
         allowed = new TreeSet<>();
         allowed.add(ElementKind.CLASS);
         allowed.add(ElementKind.METHOD);
@@ -197,32 +198,33 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         requirements.addAll(this.makeMeta(reqAnns, Requirement.class));
         this.methToProjectReq.putAll(this.createMethodToMetaRequirementMap(requirements));
 
-        // Get all the @TestDefinition annotations which were annotated on an element only once.
-        // Make a list of Meta types that store the fully qualified name of every @TestDefinition annotated
-        // method.  We will use this to create a map of qualified_name => TestDefinition Annotation
+        /* ************************************************************************************
+         * Get all the @TestDefinition annotations which were annotated on an element only once.
+         * Make a list of Meta types that store the fully qualified name of every @TestDefinition annotated
+         * method.  We will use this to create a map of qualified_name => TestDefinition Annotation
+         **************************************************************************************/
         allowed = new TreeSet<>();
         allowed.add(ElementKind.METHOD);
         err = "Can only annotate methods with @TestDefinition";
         List<? extends Element> polAnns = this.getAnnotations(roundEnvironment, TestDefinition.class, allowed, err);
         List<Meta<TestDefinition>> metas = this.makeMeta(polAnns, TestDefinition.class);
 
-        // Get all the @TestDefinition annotations which have been repeated on a single element.
+        /* Get all the @TestDefinition annotations which have been repeated on a single element. */
         List<? extends Element> pols = this.getAnnotations(roundEnvironment, TestDefinitions.class, allowed, err);
         metas.addAll(this.makeMetaFromPolarions(pols, TestDefinitions.class));
 
         this.methToProjectPol = this.createMethodToMetaPolarionMap(metas);
 
-        // Get all the @Test annotations in order to get the description
+        /* Get all the @Test annotations in order to get the description */
         Map<String, String> methToDescription = this.getTestAnnotations(roundEnvironment);
         this.methNameToTestNGDescription.putAll(methToDescription);
 
         List<ReqType> reqList = this.processAllRequirements();
         if (reqList == null)
             return false;
-        //List<Testcase> tests = this.processAllTestCase();
         List<Testcase> tests = this.processAllTC();
 
-        // testcases holds all the methods that need a new or updated Polarion TestCase
+        /* testcases holds all the methods that need a new or updated Polarion TestCase */
         this.testcasesImporterRequest();
 
         return true;
@@ -271,11 +273,6 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         return reqList;
     }
 
-    private Testcase
-    createImporterTestcase() {
-        return new Testcase();
-    }
-
     private void createTestCaseXML(Testcase tc,
                                    File path) {
         this.logger.info(String.format("Generating XML description in %s", path.toString()));
@@ -283,6 +280,8 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         IJAXBHelper.marshaller(tc, path,
                 this.jaxb.getXSDFromResource(Testcase.class));
     }
+
+
 
     /**
      * Generates the xml file that will be sent via a REST call to the XUnit Importer
@@ -295,6 +294,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
 
         // TODO: Need to listen to the CI message bus.  Spawn this in a new thread since we need to start it first
         // Look at Java 8's CompleteableFuture
+
 
         String projectID = this.config.getProjectID();
         if (this.tcMap.get(projectID).isEmpty()) {
@@ -311,7 +311,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
                 .map(tc -> {
                     Create create = tc.getCreate();
                     Update update = tc.getUpdate();
-                    // If both are non-null delete the Update
+                    // If both are non-null delete the Update otherwise it's invalid to the schema
                     if (create != null && update != null) {
                         tc.setUpdate(null);
                     }
@@ -326,6 +326,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         IJAXBHelper.marshaller(this.testcases, importerFile,
                 this.jaxb.getXSDFromResource(Testcases.class));
 
+        // FIXME: This should probably go into a helper class since the XUnitReporter is going to need this too
         try {
             String text = Files.lines(importerFile.toPath()).reduce("", (acc, c) -> acc + c + "\n");
             this.logger.info("Sending this file to Testcase importer:\n" + text);
@@ -336,7 +337,6 @@ public class TestDefinitionProcessor extends AbstractProcessor {
                             .setSSLHostnameVerifier(new NoopHostnameVerifier())
                             .build();
             HttpPost postMethod = new HttpPost(url);
-            //postMethod.addHeader("Content-type", "application/octet-stream");
             InputStreamEntity body = new InputStreamEntity(new FileInputStream(importerFile), -1,
                     ContentType.APPLICATION_OCTET_STREAM);
             postMethod.setEntity(body);
@@ -446,6 +446,16 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         return nameToDesc;
     }
 
+    /**
+     * Returns possible file location to the XML description file based on a Meta type and a project
+     *
+     * Uses the information from the meta type and project to know where to find XML description file
+     *
+     * @param meta
+     * @param project
+     * @param <T>
+     * @return
+     */
     private <T> Optional<File> getFileFromMeta(Meta<T> meta, String project) {
         Path path = FileHelper.makeXmlPath(this.tcPath, meta, project);
         File xmlDesc = path.toFile();
@@ -455,12 +465,14 @@ public class TestDefinitionProcessor extends AbstractProcessor {
     }
 
     /**
-     * Unmarshalls a type T from the given Meta object
+     *  Unmarshalls an Optional of type T from the given Meta object
      *
      * From the data contained in the Meta object, function looks for the XML description file and unmarshalls it to
      * the class given by class t.
      *
      * @param meta
+     * @param t class type
+     * @param <T> class to unmarshall to
      * @return
      */
     private <T> Optional<T> getTypeFromMeta(Meta<TestDefinition> meta, Class<T> t) {
@@ -495,18 +507,9 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         return Optional.of(id);
     }
 
-    /**
-     * TODO: Takes a feature file in gherkin style, and generates an XML file
-     *
-     * @param featureFile
-     */
-    private void featureToRequirement(String featureFile) {
-
-    }
-
     private Testcase
     initImporterTestcase(Meta<TestDefinition> meta) {
-        Testcase tc = this.createImporterTestcase();
+        Testcase tc = new Testcase();
         TestDefinition def = meta.annotation;
         tc.setAutomation("true");
         tc.setImportance(def.importance().stringify());
@@ -845,8 +848,8 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         //this.filer = env.getFiler();
 
         Map<String, String> config = Configurator.loadConfiguration();
-        this.reqPath = config.get("reqPath");
-        this.tcPath = config.get("tcPath");
+        this.reqPath = config.get("requirements.xml.path");
+        this.tcPath = config.get("testcases.xml.path");
 
         this.methNameToTestNGDescription = new HashMap<>();
         this.methToRequirement = new HashMap<>();
