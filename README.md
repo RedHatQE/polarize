@@ -204,3 +204,14 @@ the annotation processor will use the information in the annotation to create an
 file needs to be created, the annotation processor will also make a request using the WorkItem importer to generate the
 Requirement and/or TestCase in Polarion.
 
+# Limitations
+
+One limitation of polarize is that it assumes that there are no overloaded testmethods.  This is because polarize maps
+the qualified name of a test method to a file on the system.  If you have an overloaded method (a method with the same
+name but different type signature) then there will no longer be a one-to-one mapping from qualified method name to a 
+file.  Note that this does not apply to data driven tests.  It is perfectly fine to have a test method with data driven
+parameters.
+
+This limitation can be overcome if you specify a custom xmlDesc in the annotations.  If you do have overloaded methods, 
+then you must supply a (unique) file system path.  If no file exists, polarize will generate it there.  When it needs to
+get the Polarion ID, it will read in this file (which is why the path must be unique for each method).
