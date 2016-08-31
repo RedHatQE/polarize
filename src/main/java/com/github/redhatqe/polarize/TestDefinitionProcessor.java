@@ -1,6 +1,7 @@
 package com.github.redhatqe.polarize;
 
 import com.github.redhatqe.polarize.exceptions.*;
+import com.github.redhatqe.polarize.importer.ImporterRequest;
 import com.github.redhatqe.polarize.importer.testcase.*;
 import com.github.redhatqe.polarize.junitreporter.ReporterConfig;
 import com.github.redhatqe.polarize.junitreporter.XUnitReporter;
@@ -10,16 +11,9 @@ import com.github.redhatqe.polarize.schema.*;
 import com.github.redhatqe.polarize.importer.testcase.Testcase;
 import org.apache.activemq.ActiveMQConnectionFactory;
 import org.apache.http.client.methods.CloseableHttpResponse;
-import org.apache.http.client.methods.HttpPost;
-import org.apache.http.conn.ssl.NoopHostnameVerifier;
-import org.apache.http.entity.ContentType;
-import org.apache.http.entity.InputStreamEntity;
-import org.apache.http.impl.client.CloseableHttpClient;
-import org.apache.http.impl.client.HttpClients;
 import org.testng.annotations.Test;
 
 import javax.annotation.processing.*;
-import javax.jms.*;
 import javax.lang.model.SourceVersion;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ElementKind;
@@ -29,7 +23,6 @@ import javax.tools.Diagnostic;
 import java.io.*;
 import java.lang.annotation.Annotation;
 import java.net.URL;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -58,6 +51,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
     private Map<String, Map<String,
                             Meta<TestDefinition>>> methToProjectPol;
     private Map<String, String> methNameToTestNGDescription;
+    private Map<Testcase, Meta<TestDefinition>> testCaseToMeta;
     public JAXBHelper jaxb = new JAXBHelper();
     private Testcases testcases = new Testcases();
     private ReporterConfig config = XUnitReporter.configure();
@@ -225,7 +219,26 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         List<Testcase> tests = this.processAllTC();
 
         /* testcases holds all the methods that need a new or updated Polarion TestCase */
-        this.testcasesImporterRequest();
+        this.logger.info("Updating testcases that had <update>...");
+        Map<Testcase, Update> updated = this.testcasesImporterRequest();
+        this.testcases.getTestcase().forEach(
+                tc -> {
+                    if(updated.containsKey(tc)) {
+                        tc.setUpdate(updated.get(tc));
+                        if (tc.getCreate() != null)
+                            tc.setCreate(null);
+                    }
+                }
+        );
+        this.logger.info("Regenerating testcases...");
+        List<Testcase> testcases = this.testcases.getTestcase();
+        for (Testcase tc: testcases) {
+            Meta<TestDefinition> m = this.testCaseToMeta.get(tc);
+            Optional<File> fpath = this.getFileFromMeta(m, m.annotation.projectID().toString());
+            if (fpath.isPresent())
+                this.createTestCaseXML(tc, fpath.get());
+        }
+        this.tcMap = new HashMap<>();
 
         return true;
     }
@@ -281,30 +294,42 @@ public class TestDefinitionProcessor extends AbstractProcessor {
                 this.jaxb.getXSDFromResource(Testcase.class));
     }
 
-
-
     /**
      * Generates the xml file that will be sent via a REST call to the XUnit Importer
      */
-    private void testcasesImporterRequest() {
+    private Map<Testcase, Update> testcasesImporterRequest() {
+        Map<Testcase, Update> updatedTests = new HashMap<>();
         if (this.tcMap.isEmpty()) {
             this.logger.info("No more testcases to import ...");
-            return;
+            return updatedTests;
         }
 
         // TODO: Need to listen to the CI message bus.  Spawn this in a new thread since we need to start it first
         // Look at Java 8's CompleteableFuture
 
-
         String projectID = this.config.getProjectID();
         if (this.tcMap.get(projectID).isEmpty()) {
             this.logger.info(String.format("No testcases for %s to import", projectID));
-            return;
+            return updatedTests;
         }
 
         this.testcases.setProjectId(projectID);
         this.testcases.setUserId(this.config.getAuthor());
         this.testcases.getTestcase().addAll(this.tcMap.get(projectID));
+
+        // Find all the testcases that have both <create> and <update>.  Save them in updatedTests
+        this.testcases.getTestcase().forEach(
+                tc -> {
+                    Create create = tc.getCreate();
+                    Update update = tc.getUpdate();
+                    // If both are non-null delete the Update otherwise it's invalid to the schema
+                    if (create != null && update != null) {
+                        Update upd = new Update();
+                        upd.setId(tc.getUpdate().getId());
+                        updatedTests.put(tc, upd);
+                    }
+                }
+        );
 
         // If it has both <create> and <update> we need to delete the update
         List<Testcase> tests = this.testcases.getTestcase().stream()
@@ -321,33 +346,12 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         this.testcases.getTestcase().clear();
         this.testcases.getTestcase().addAll(tests);
 
-        File importerFile = new File(this.polarizeConfig.get("importer.testcases.file"));
-        IFileHelper.makeDirs(importerFile.toPath());
-        IJAXBHelper.marshaller(this.testcases, importerFile,
-                this.jaxb.getXSDFromResource(Testcases.class));
-
-        // FIXME: This should probably go into a helper class since the XUnitReporter is going to need this too
-        try {
-            String text = Files.lines(importerFile.toPath()).reduce("", (acc, c) -> acc + c + "\n");
-            this.logger.info("Sending this file to Testcase importer:\n" + text);
-            String url = this.polarizeConfig.get("polarion.url");
-
-            CloseableHttpClient httpClient =
-                    HttpClients.custom()
-                            .setSSLHostnameVerifier(new NoopHostnameVerifier())
-                            .build();
-            HttpPost postMethod = new HttpPost(url);
-            InputStreamEntity body = new InputStreamEntity(new FileInputStream(importerFile), -1,
-                    ContentType.APPLICATION_OCTET_STREAM);
-            postMethod.setEntity(body);
-            CloseableHttpResponse response = httpClient.execute(postMethod);
-
-        } catch (IOException e) {
-            e.printStackTrace();
-        } finally {
-            this.testcases = new Testcases();
-            this.tcMap = new HashMap<>();
-        }
+        if (this.polarizeConfig.get("do.xunit").equals("no"))
+            return updatedTests;
+        String url = this.polarizeConfig.get("polarion.url") + this.polarizeConfig.get("importer.testcase.endpoint");
+        String testcaseXml = this.polarizeConfig.get("importer.testcases.file");
+        CloseableHttpResponse resp = ImporterRequest.request(this.testcases, Testcases.class, url, testcaseXml);
+        return updatedTests;
     }
 
     /**
@@ -487,21 +491,39 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         Optional<T> witem;
         witem = IJAXBHelper.unmarshaller(t, xmlDesc, this.jaxb.getXSDFromResource(t));
         if (!witem.isPresent())
-            throw new XMLDescriptonCreationError();
+            return Optional.empty();
         return witem;
     }
 
+    /**
+     * Unmarshalls Testcase from XML pointed at in meta, and checks for Update
+     *
+     * @param meta
+     * @return
+     */
     private Optional<String> getPolarionIDFromXML(Meta<TestDefinition> meta) {
         Optional<Testcase> tc = this.getTypeFromMeta(meta, Testcase.class);
 
-        if (!tc.isPresent() || tc.get().getUpdate() == null || tc.get().getUpdate().getId().equals(""))
+        if (!tc.isPresent()) {
+            this.logger.info("Unmarshalling failed.  No Testcase present...");
             return Optional.empty();
-        return Optional.of(tc.get().getUpdate().getId());
+        }
+        else if (tc.get().getUpdate() == null) {
+            this.logger.info("No <update> element, therefore no ID");
+            return Optional.empty();
+        }
+        else if (tc.get().getUpdate().getId().equals("")) {
+            this.logger.info("<update> element exists, but is empty string");
+            return Optional.empty();
+        }
+        Testcase tcase = tc.get();
+        this.logger.info("Polarion ID for testcase " + tcase.getTitle() + " is " + tcase.getUpdate().getId());
+        return Optional.of(tcase.getUpdate().getId());
     }
 
     private Optional<String> getPolarionIDFromTestcase(Meta<TestDefinition> meta) {
         TestDefinition def = meta.annotation;
-        String id = def.projectID().toString();
+        String id = def.testCaseID();
         if (id.equals(""))
             return Optional.empty();
         return Optional.of(id);
@@ -558,24 +580,30 @@ public class TestDefinitionProcessor extends AbstractProcessor {
     private Testcase
     processTC(Meta<TestDefinition> meta) {
         Testcase tc = this.initImporterTestcase(meta);
+        this.testCaseToMeta.put(tc, meta);
         TestDefinition def = meta.annotation;
-
         this.initRequirementsFromTestDef(meta, tc);
 
         // Check to see if there is an existing XML description file with Polarion ID
         Optional<File> xml = this.getFileFromMeta(meta, meta.annotation.projectID().toString());
-        Boolean doCreate = !xml.isPresent();
+        if (!xml.isPresent()) {
+            Path path = FileHelper.makeXmlPath(this.tcPath, meta, meta.annotation.projectID().toString());
+            File xmlDesc = path.toFile();
+            this.createTestCaseXML(tc, xmlDesc);
+        }
+
         Optional<String> maybePolarionID = this.getPolarionIDFromTestcase(meta);
         Optional<String> maybeIDXml = this.getPolarionIDFromXML(meta);
         Boolean idExists = maybePolarionID.isPresent();
         Boolean xmlIdExists = maybeIDXml.isPresent();
 
         Boolean importRequest = false;
-        // xmlIdExists  | idExists       | action
-        // false        | false          | create
-        // false        | true           | create then update
-        // true         | false          | update
-        // true         | true           | update
+        // xmlIdExists  | idExists       | action            | How does this happen?
+        // =============|================|===================|=============================================
+        // false        | false          | create            | no <update> or "" and no id in annotation
+        // false        | true           | create and update | no <update> or "" but id is in annotation
+        // true         | false          | update            | <update> is valid, but not in annotation
+        // true         | true           | update            | <update> is valid, and in annotation
         if (!xmlIdExists) {
             Create create = new Create();
             create.setAuthorId(def.author());
@@ -588,12 +616,6 @@ public class TestDefinitionProcessor extends AbstractProcessor {
             tc.setUpdate(update);
             if (def.update())
                 importRequest = true;
-        }
-
-        if (doCreate) {
-            Path path = FileHelper.makeXmlPath(this.tcPath, meta, meta.annotation.projectID().toString());
-            File xmlDesc = path.toFile();
-            this.createTestCaseXML(tc, xmlDesc);
         }
 
         if (importRequest) {
@@ -854,6 +876,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         this.methNameToTestNGDescription = new HashMap<>();
         this.methToRequirement = new HashMap<>();
         this.methToProjectReq = new HashMap<>();
+        this.testCaseToMeta = new HashMap<>();
     }
 
     @Override
