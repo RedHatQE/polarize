@@ -37,10 +37,11 @@ dependencies {
     compile group: 'ch.qos.logback', name: 'logback-classic', version: '1.1.7'
     compile 'org.apache.tinkerpop:gremlin-core:3.2.1'
     compile group: 'org.apache.httpcomponents', name: 'httpclient', version: '4.5.2'
-    //compile 'org.apache.httpcomponents:httpasyncclient:4.0.2'
-    //compile 'org.apache.httpcomponents:httpmime:4.3.6'
     compile 'org.json:json:20140107'
-    //compile 'com.mashape.unirest:unirest-java:1.4.9'
+
+    // https://mvnrepository.com/artifact/org.apache.activemq/activemq-client
+    compile group: 'org.apache.activemq', name: 'activemq-client', version: '5.14.0'
+
 }
 
 test {
