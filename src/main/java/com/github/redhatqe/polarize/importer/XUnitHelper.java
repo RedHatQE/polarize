@@ -113,7 +113,7 @@ public class XUnitHelper {
      * @param args
      */
     public static void main(String[] args) throws UnmarshalException {
-        TestSuitesProperties props = new TestSuitesProperties("RHEL6", "ci-user");
+        TestSuitesProperties props = new TestSuitesProperties("PLATTP", "ci-user");
         String junit = args[0];
         File junitFile = Paths.get(junit).toFile();
         if (!junitFile.exists()) {

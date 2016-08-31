@@ -1,8 +1,10 @@
 package com.github.redhatqe.polarize.junitreporter;
 
+import com.github.redhatqe.polarize.Configurator;
 import com.github.redhatqe.polarize.IJAXBHelper;
 import com.github.redhatqe.polarize.exceptions.XMLDescriptionError;
 import com.github.redhatqe.polarize.exceptions.XMLUnmarshallError;
+import com.github.redhatqe.polarize.importer.ImporterRequest;
 import com.github.redhatqe.polarize.importer.xunit.Property;
 import com.github.redhatqe.polarize.importer.xunit.Testcase;
 import com.github.redhatqe.polarize.importer.xunit.Testsuite;
@@ -30,8 +32,9 @@ import java.util.stream.Collectors;
  * file, this file will be loaded instead.
  */
 public class XUnitReporter implements IReporter {
-    private ReporterConfig config;
-    public final static File defaultPropertyFile =
+    private final ReporterConfig config;
+    private Map<String, String> polarizeConfig = com.github.redhatqe.polarize.Configurator.loadConfiguration();
+    private final static File defaultPropertyFile =
             new File(System.getProperty("user.home") + "/.polarize/reporter.properties");
 
     public XUnitReporter() {
@@ -166,7 +169,7 @@ public class XUnitReporter implements IReporter {
                         ts.setTime(Float.toString(duration));
 
                         List<Testcase> tests = ts.getTestcase();
-                        XUnitReporter.getMethodInfo(this, suite, tests);
+                        List<Testcase> after = XUnitReporter.getMethodInfo(this, suite, tests);
                         return ts;
                     })
                     .collect(Collectors.toList());
@@ -174,9 +177,9 @@ public class XUnitReporter implements IReporter {
         });
 
         // Now that we've gone through the suites, let's marshall this into an XML file for the XUnit Importer
-        JAXBReporter jaxb = new JAXBReporter();
         File reportPath = new File(outputDirectory + "/testng-polarion.xml");
-        IJAXBHelper.marshaller(tsuites, reportPath, jaxb.getXSDFromResource(Testsuites.class));
+        String url = this.polarizeConfig.get("polarion.url") + this.polarizeConfig.get("importer.xunit.endpoint");
+        ImporterRequest.request(tsuites, Testsuites.class, url, reportPath.toString());
     }
 
     public static List<Testcase> getMethodInfo(XUnitReporter xUnitReporter, ISuite suite, List<Testcase> testcases) {
