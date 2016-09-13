@@ -9,7 +9,6 @@ import com.github.redhatqe.polarize.metadata.*;
 import com.github.redhatqe.polarize.schema.*;
 
 import com.github.redhatqe.polarize.importer.testcase.Testcase;
-import org.apache.activemq.ActiveMQConnectionFactory;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.testng.annotations.Test;
 
@@ -49,7 +48,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
     private Map<String, Map<String,
                             Meta<Requirement>>> methToProjectReq;
     private Map<String, Map<String,
-                            Meta<TestDefinition>>> methToProjectPol;
+                            Meta<TestDefinition>>> methToProjectDef;
     private Map<String, String> methNameToTestNGDescription;
     private Map<Testcase, Meta<TestDefinition>> testCaseToMeta;
     public JAXBHelper jaxb = new JAXBHelper();
@@ -207,7 +206,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         List<? extends Element> pols = this.getAnnotations(roundEnvironment, TestDefinitions.class, allowed, err);
         metas.addAll(this.makeMetaFromPolarions(pols, TestDefinitions.class));
 
-        this.methToProjectPol = this.createMethodToMetaPolarionMap(metas);
+        this.methToProjectDef = this.createMethodToMetaPolarionMap(metas);
 
         /* Get all the @Test annotations in order to get the description */
         Map<String, String> methToDescription = this.getTestAnnotations(roundEnvironment);
@@ -244,20 +243,18 @@ public class TestDefinitionProcessor extends AbstractProcessor {
     }
 
     /**
+     * Runs processTC on all the entries in methToProjectDef
      *
      * @return
      */
     private List<Testcase> processAllTC() {
-        return this.methToProjectPol.entrySet().stream()
-                .flatMap(es -> {
-                    String qualifiedName = es.getKey();
-                    return es.getValue().entrySet().stream()
-                            .map(val -> {
-                                Meta<TestDefinition> meta = val.getValue();
-                                return this.processTC(meta);
-                            })
-                            .collect(Collectors.toList()).stream();
-                })
+        return this.methToProjectDef.entrySet().stream()
+                .flatMap(es -> es.getValue().entrySet().stream()
+                        .map(val -> {
+                            Meta<TestDefinition> meta = val.getValue();
+                            return this.processTC(meta);
+                        })
+                        .collect(Collectors.toList()).stream())
                 .collect(Collectors.toList());
     }
 
@@ -278,11 +275,8 @@ public class TestDefinitionProcessor extends AbstractProcessor {
                         })
                         .collect(Collectors.toList()).stream())
                 .collect(Collectors.toList());
-        for(ReqType rt: reqList) {
-            if (rt == null) {
-                reqList = null;
-            }
-        }
+        if(reqList.stream().anyMatch(rt -> rt == null))
+            return null;
         return reqList;
     }
 
@@ -292,6 +286,18 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         IFileHelper.makeDirs(path.toPath());
         IJAXBHelper.marshaller(tc, path,
                 this.jaxb.getXSDFromResource(Testcase.class));
+    }
+
+    private Optional<String> setTestcaseProjectID() {
+        String projectID = this.config.getProjectID();
+        if (this.tcMap.get(projectID).isEmpty()) {
+            this.logger.info(String.format("No testcases for %s to import", projectID));
+            return Optional.empty();
+        }
+        this.testcases.setProjectId(projectID);
+        this.testcases.setUserId(this.config.getAuthor());
+        this.testcases.getTestcase().addAll(this.tcMap.get(projectID));
+        return Optional.of(projectID);
     }
 
     /**
@@ -307,15 +313,8 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         // TODO: Need to listen to the CI message bus.  Spawn this in a new thread since we need to start it first
         // Look at Java 8's CompleteableFuture
 
-        String projectID = this.config.getProjectID();
-        if (this.tcMap.get(projectID).isEmpty()) {
-            this.logger.info(String.format("No testcases for %s to import", projectID));
+        if (!this.setTestcaseProjectID().isPresent())
             return updatedTests;
-        }
-
-        this.testcases.setProjectId(projectID);
-        this.testcases.setUserId(this.config.getAuthor());
-        this.testcases.getTestcase().addAll(this.tcMap.get(projectID));
 
         // Find all the testcases that have both <create> and <update>.  Save them in updatedTests
         this.testcases.getTestcase().forEach(
@@ -332,7 +331,18 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         );
 
         // If it has both <create> and <update> we need to delete the update
-        List<Testcase> tests = this.testcases.getTestcase().stream()
+        List<Testcase> tests = this.clearTestcaseWithBothCreateAndUpdate();
+        this.testcases.getTestcase().clear();
+        this.testcases.getTestcase().addAll(tests);
+
+        if (this.polarizeConfig.get("do.xunit").equals("no"))
+            return updatedTests;
+        CloseableHttpResponse resp = this.sendImporterRequest();
+        return updatedTests;
+    }
+
+    private List<Testcase> clearTestcaseWithBothCreateAndUpdate() {
+        return this.testcases.getTestcase().stream()
                 .map(tc -> {
                     Create create = tc.getCreate();
                     Update update = tc.getUpdate();
@@ -340,18 +350,18 @@ public class TestDefinitionProcessor extends AbstractProcessor {
                     if (create != null && update != null) {
                         tc.setUpdate(null);
                     }
+                    // TODO: Add a <response-property id=>
                     return tc;
                 })
                 .collect(Collectors.toList());
-        this.testcases.getTestcase().clear();
-        this.testcases.getTestcase().addAll(tests);
+    }
 
-        if (this.polarizeConfig.get("do.xunit").equals("no"))
-            return updatedTests;
+    private CloseableHttpResponse sendImporterRequest() {
         String url = this.polarizeConfig.get("polarion.url") + this.polarizeConfig.get("importer.testcase.endpoint");
         String testcaseXml = this.polarizeConfig.get("importer.testcases.file");
-        CloseableHttpResponse resp = ImporterRequest.request(this.testcases, Testcases.class, url, testcaseXml);
-        return updatedTests;
+        String user = this.polarizeConfig.get("kerb.user");
+        String pw = this.polarizeConfig.get("kerb.pass");
+        return ImporterRequest.request(this.testcases, Testcases.class, url, testcaseXml, user, pw);
     }
 
     /**
@@ -573,12 +583,12 @@ public class TestDefinitionProcessor extends AbstractProcessor {
     }
 
     /**
+     * Main function that processes metadata annotated on test methods, generating XML description files
      *
-     * @param meta
-     * @return
+     * @param meta a Meta object holding annotation data from a test method
+     * @return a Testcase object that can be unmarshalled into XML
      */
-    private Testcase
-    processTC(Meta<TestDefinition> meta) {
+    private Testcase processTC(Meta<TestDefinition> meta) {
         Testcase tc = this.initImporterTestcase(meta);
         this.testCaseToMeta.put(tc, meta);
         TestDefinition def = meta.annotation;
@@ -666,9 +676,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
      * @param meta a Meta type representing metadata of a method
      * @param tc
      */
-    private void
-    initRequirementsFromTestDef(Meta<TestDefinition> meta,
-                                Testcase tc) {
+    private void initRequirementsFromTestDef(Meta<TestDefinition> meta, Testcase tc) {
         TestDefinition pol = meta.annotation;
         Requirement[] reqs = pol.reqs();
         // If reqs is empty look at the class annotated requirements contained in methToProjectReq

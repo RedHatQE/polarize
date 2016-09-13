@@ -5,10 +5,7 @@ import org.apache.activemq.ActiveMQConnectionFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.jms.Connection;
-import javax.jms.JMSException;
-import javax.jms.MessageConsumer;
-import javax.jms.Session;
+import javax.jms.*;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -42,14 +39,16 @@ public class CIBusListener {
 
             // FIXME: need to understand how transactions affect session
             Session session = connection.createSession(false, Session.AUTO_ACKNOWLEDGE);
-            // FIXME: Do I need a Queue?  From the docs that appears to be point-to-point.  Maybe DurableScheduler?
-            javax.jms.Queue queue = session.createQueue("/topic/CI");
-            String responseName = this.polarizeConfig.get("xunit.importer.response.name");
+
+            // FIXME: Do I need a Queue?  From the docs that appears to be point-to-point.  Maybe DurableSubscriber?
+            //javax.jms.Queue queue = session.createQueue("/topic/CI");
+            Topic dest = session.createTopic("/topic/CI");
+            String responseName = this.polarizeConfig.get("importer.xunit.response.name");
             if (responseName == null || responseName.equals("")) {
-                this.logger.error("Must supply a value for xunit.importer.response.name");
+                this.logger.error("Must supply a value for importer.xunit.response.name");
                 throw new ConfigurationError();
             }
-            MessageConsumer consumer = session.createConsumer(queue, responseName);
+            MessageConsumer consumer = session.createConsumer(dest, responseName);
 
             // FIXME: We need to have some way to know when we see our message.
             consumer.setMessageListener(msg -> {
@@ -81,11 +80,12 @@ public class CIBusListener {
     public static void main(String[] args) throws ExecutionException, InterruptedException, JMSException {
         CIBusListener bl = new CIBusListener(Configurator.loadConfiguration());
 
-        CompletableFuture<Optional<Connection>> future;
-        future = CompletableFuture.supplyAsync(bl::tapIntoMessageBus);
+        //CompletableFuture<Optional<Connection>> future;
+        //future = CompletableFuture.supplyAsync(bl::tapIntoMessageBus);
+
 
         // Call to get() will block.  However, tapIntoMessageBus() will return immediately.
-        Optional<Connection> maybeConn = future.get();
+        Optional<Connection> maybeConn = bl.tapIntoMessageBus();
         if (!maybeConn.isPresent()) {
             bl.logger.error("No Connection object found");
             return;

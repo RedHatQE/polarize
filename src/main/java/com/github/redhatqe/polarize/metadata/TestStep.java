@@ -7,7 +7,8 @@ import java.lang.annotation.Repeatable;
  */
 @Repeatable(TestSteps.class)
 public @interface TestStep {
-    String expected() default "";
-    String description() default "";
+    String expected() default "";         // Optional: What the expected value should be from running this
+    String description() default "";      // Optional: Description of what the step does
     String method() default "";
+    int numParams() default 0;
 }

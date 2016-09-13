@@ -4,13 +4,17 @@ import com.github.redhatqe.polarize.IFileHelper;
 import com.github.redhatqe.polarize.IJAXBHelper;
 import com.github.redhatqe.polarize.JAXBHelper;
 import com.github.redhatqe.polarize.importer.testcase.Testcases;
+import org.apache.http.auth.AuthScope;
+import org.apache.http.auth.UsernamePasswordCredentials;
+import org.apache.http.client.CredentialsProvider;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.conn.ssl.NoopHostnameVerifier;
 import org.apache.http.entity.ContentType;
+import org.apache.http.entity.FileEntity;
 import org.apache.http.entity.InputStreamEntity;
-import org.apache.http.impl.client.CloseableHttpClient;
-import org.apache.http.impl.client.HttpClients;
+import org.apache.http.entity.mime.content.FileBody;
+import org.apache.http.impl.client.*;
 import org.apache.http.ssl.SSLContextBuilder;
 import org.apache.http.ssl.TrustStrategy;
 import org.slf4j.Logger;
@@ -44,12 +48,22 @@ public class ImporterRequest {
      * @param <T> type of t
      * @return response from sending request
      */
-    public static <T> CloseableHttpResponse request(T t, Class<T> tclass, String url, String xml) {
+    public static <T> CloseableHttpResponse request(T t, Class<T> tclass, String url, String xml,
+                                                    String user, String pw) {
         CloseableHttpResponse response = null;
         JAXBHelper jaxb = new JAXBHelper();
         File importerFile = new File(xml);
         IFileHelper.makeDirs(importerFile.toPath());
         IJAXBHelper.marshaller(t, importerFile, jaxb.getXSDFromResource(tclass));
+        FileBody fbody = new FileBody(importerFile, ContentType.APPLICATION_OCTET_STREAM);
+
+        CredentialsProvider provider = new BasicCredentialsProvider();
+        UsernamePasswordCredentials credentials = new UsernamePasswordCredentials(user, pw);
+        provider.setCredentials(AuthScope.ANY, credentials);
+
+        HttpClientBuilder builder = HttpClients.custom()
+                .setDefaultCredentialsProvider(provider)
+                .setRedirectStrategy(new LaxRedirectStrategy());
 
         // FIXME: This should probably go into a helper class since the XUnitReporter is going to need this too
         try {
@@ -77,18 +91,16 @@ public class ImporterRequest {
                     ImporterRequest.logger.error("KeyStore error");
                     e.printStackTrace();
                 }
-                httpClient = HttpClients.custom()
-                        .setSSLHostnameVerifier(new NoopHostnameVerifier())
+                builder.setSSLHostnameVerifier(new NoopHostnameVerifier())
                         .setSSLContext(sslContext)
-                        .build();
-            }
-            else {
-                httpClient = HttpClients.custom().build();
+                        .setDefaultCredentialsProvider(provider)
+                        .setRedirectStrategy(new LaxRedirectStrategy());
             }
 
+            httpClient = builder.build();
             HttpPost postMethod = new HttpPost(url);
-            InputStreamEntity body = new InputStreamEntity(new FileInputStream(importerFile), -1,
-                    ContentType.APPLICATION_OCTET_STREAM);
+            FileEntity body = new FileEntity(importerFile);
+            body.setContentType(ContentType.MULTIPART_FORM_DATA.getMimeType());
             postMethod.setEntity(body);
             response = httpClient.execute(postMethod);
             ImporterRequest.logger.info(response.toString());

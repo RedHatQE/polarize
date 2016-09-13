@@ -2,16 +2,20 @@ package com.github.redhatqe.polarize.junitreporter;
 
 import com.github.redhatqe.polarize.Configurator;
 import com.github.redhatqe.polarize.IJAXBHelper;
+import com.github.redhatqe.polarize.TestDefinitionProcessor;
 import com.github.redhatqe.polarize.exceptions.XMLDescriptionError;
 import com.github.redhatqe.polarize.exceptions.XMLUnmarshallError;
 import com.github.redhatqe.polarize.importer.ImporterRequest;
-import com.github.redhatqe.polarize.importer.xunit.Property;
-import com.github.redhatqe.polarize.importer.xunit.Testcase;
-import com.github.redhatqe.polarize.importer.xunit.Testsuite;
-import com.github.redhatqe.polarize.importer.xunit.Testsuites;
+import com.github.redhatqe.polarize.importer.xunit.*;
 import com.github.redhatqe.polarize.metadata.Requirement;
 import com.github.redhatqe.polarize.metadata.TestDefinition;
 import com.github.redhatqe.polarize.schema.WorkItem;
+import org.apache.http.HttpEntity;
+import org.apache.http.client.methods.CloseableHttpResponse;
+import org.apache.http.entity.ContentType;
+import org.apache.http.entity.mime.content.FileBody;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.testng.*;
 import org.testng.xml.XmlSuite;
 import org.testng.xml.XmlTest;
@@ -21,6 +25,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.security.KeyException;
 import java.util.*;
+import java.util.Properties;
 import java.util.stream.Collectors;
 
 /**
@@ -32,6 +37,7 @@ import java.util.stream.Collectors;
  * file, this file will be loaded instead.
  */
 public class XUnitReporter implements IReporter {
+    private static Logger logger = LoggerFactory.getLogger(XUnitReporter.class);
     private final ReporterConfig config;
     private Map<String, String> polarizeConfig = com.github.redhatqe.polarize.Configurator.loadConfiguration();
     private final static File defaultPropertyFile =
@@ -179,7 +185,43 @@ public class XUnitReporter implements IReporter {
         // Now that we've gone through the suites, let's marshall this into an XML file for the XUnit Importer
         File reportPath = new File(outputDirectory + "/testng-polarion.xml");
         String url = this.polarizeConfig.get("polarion.url") + this.polarizeConfig.get("importer.xunit.endpoint");
-        ImporterRequest.request(tsuites, Testsuites.class, url, reportPath.toString());
+        String user = this.polarizeConfig.get("kerb.user");
+        String pw = this.polarizeConfig.get("kerb.pass");
+        CloseableHttpResponse resp =
+                ImporterRequest.request(tsuites, Testsuites.class, url, reportPath.toString(), user, pw);
+        HttpEntity entity = resp.getEntity();
+        try {
+            BufferedReader bfr = new BufferedReader(new InputStreamReader(entity.getContent()));
+            System.out.println(bfr.lines().collect(Collectors.joining("\n")));
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        System.out.println(resp.toString());
+    }
+
+    /**
+     * Sets the status for a Testcase object given values from ITestResult
+     * 
+     * @param result
+     * @param tc
+     */
+    public static void getStatus(ITestResult result, Testcase tc) {
+        int status = result.getStatus();
+        switch(status) {
+            case ITestResult.FAILURE:
+                Failure fail = new Failure();
+                tc.getFailure().add(fail);
+                break;
+            case ITestResult.SKIP:
+                tc.setSkipped("true");
+                break;
+            case ITestResult.SUCCESS:
+                tc.setStatus("success");
+                break;
+            default:
+                XUnitReporter.logger.warn("Unused status for testcase");
+                break;
+        }
     }
 
     public static List<Testcase> getMethodInfo(XUnitReporter xUnitReporter, ISuite suite, List<Testcase> testcases) {
@@ -211,6 +253,9 @@ public class XUnitReporter implements IReporter {
             String id = XUnitReporter.getPolarionIDFromXML(TestDefinition.class, xmlDesc);
             Property polarionID = XUnitReporter.createProperty("polarion-testcase-id", id);
             tcProps.add(polarionID);
+
+            // Get status
+            XUnitReporter.getStatus(result, testcase);
 
             // Get all the iteration data
             Object[] params = result.getParameters();
@@ -249,13 +294,13 @@ public class XUnitReporter implements IReporter {
         properties.add(includeSkipped);
 
         Configurator cfg = XUnitReporter.createConditionalProperty(xUnitReporter, "polarion-response", "rhsm-qe", properties);
-        cfg.setter();
+        cfg.set();
         cfg = XUnitReporter.createConditionalProperty(xUnitReporter, "polarion-custom", null, properties);
-        cfg.setter();
+        cfg.set();
         cfg = XUnitReporter.createConditionalProperty(xUnitReporter, "polarion-testrun-title", null, properties);
-        cfg.setter();
+        cfg.set();
         cfg = XUnitReporter.createConditionalProperty(xUnitReporter, "polarion-testrun-id", null, properties);
-        cfg.setter();
+        cfg.set();
 
         tsuites.setProperties(props);
         return tsuites;
@@ -279,7 +324,7 @@ public class XUnitReporter implements IReporter {
 
     @FunctionalInterface
     interface Configurator {
-        void setter();
+        void set();
     }
 
     private static Configurator
