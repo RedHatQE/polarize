@@ -10,6 +10,7 @@ public class ReporterConfig {
     private String author;
     private String projectID;
     private String responseName;
+    private String responseTag;
     private Boolean includeSkipped = false;
     private Boolean dryRun = false;
     private Boolean setTestRunFinished = true;
@@ -113,6 +114,14 @@ public class ReporterConfig {
 
     public void setTestrunTitle(String testrunTitle) {
         this.testrunTitle = testrunTitle;
+    }
+
+    public String getResponseTag() {
+        return responseTag;
+    }
+
+    public void setResponseTag(String responseTag) {
+        this.responseTag = responseTag;
     }
 
 

@@ -1,5 +1,6 @@
 package com.github.redhatqe.polarize;
 
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.github.redhatqe.polarize.exceptions.*;
 import com.github.redhatqe.polarize.importer.ImporterRequest;
 import com.github.redhatqe.polarize.importer.testcase.*;
@@ -9,10 +10,16 @@ import com.github.redhatqe.polarize.metadata.*;
 import com.github.redhatqe.polarize.schema.*;
 
 import com.github.redhatqe.polarize.importer.testcase.Testcase;
+import com.github.redhatqe.polarize.utils.Tuple;
+import org.apache.http.StatusLine;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.testng.annotations.Test;
 
+
 import javax.annotation.processing.*;
+import javax.jms.Connection;
+import javax.jms.JMSException;
+import javax.jms.Message;
 import javax.lang.model.SourceVersion;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ElementKind;
@@ -24,6 +31,7 @@ import java.lang.annotation.Annotation;
 import java.net.URL;
 import java.nio.file.Path;
 import java.util.*;
+import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
@@ -220,23 +228,6 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         /* testcases holds all the methods that need a new or updated Polarion TestCase */
         this.logger.info("Updating testcases that had <update>...");
         Map<Testcase, Update> updated = this.testcasesImporterRequest();
-        this.testcases.getTestcase().forEach(
-                tc -> {
-                    if(updated.containsKey(tc)) {
-                        tc.setUpdate(updated.get(tc));
-                        if (tc.getCreate() != null)
-                            tc.setCreate(null);
-                    }
-                }
-        );
-        this.logger.info("Regenerating testcases...");
-        List<Testcase> testcases = this.testcases.getTestcase();
-        for (Testcase tc: testcases) {
-            Meta<TestDefinition> m = this.testCaseToMeta.get(tc);
-            Optional<File> fpath = this.getFileFromMeta(m, m.annotation.projectID().toString());
-            if (fpath.isPresent())
-                this.createTestCaseXML(tc, fpath.get());
-        }
         this.tcMap = new HashMap<>();
 
         return true;
@@ -290,6 +281,10 @@ public class TestDefinitionProcessor extends AbstractProcessor {
 
     private Optional<String> setTestcaseProjectID() {
         String projectID = this.config.getProjectID();
+        if (!this.tcMap.containsKey(projectID)) {
+            this.logger.error("Project ID does not exist within Testcase Map");
+            return Optional.empty();
+        }
         if (this.tcMap.get(projectID).isEmpty()) {
             this.logger.info(String.format("No testcases for %s to import", projectID));
             return Optional.empty();
@@ -301,7 +296,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
     }
 
     /**
-     * Generates the xml file that will be sent via a REST call to the XUnit Importer
+     * Generates the xml file that will be sent via a REST call to the TestCase Importer
      */
     private Map<Testcase, Update> testcasesImporterRequest() {
         Map<Testcase, Update> updatedTests = new HashMap<>();
@@ -316,7 +311,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         if (!this.setTestcaseProjectID().isPresent())
             return updatedTests;
 
-        // Find all the testcases that have both <create> and <update>.  Save them in updatedTests
+        /* Find all the testcases that have both <create> and <update>.  Save them in updatedTests
         this.testcases.getTestcase().forEach(
                 tc -> {
                     Create create = tc.getCreate();
@@ -330,38 +325,52 @@ public class TestDefinitionProcessor extends AbstractProcessor {
                 }
         );
 
+
         // If it has both <create> and <update> we need to delete the update
         List<Testcase> tests = this.clearTestcaseWithBothCreateAndUpdate();
         this.testcases.getTestcase().clear();
         this.testcases.getTestcase().addAll(tests);
+        */
 
         if (this.polarizeConfig.get("do.xunit").equals("no"))
             return updatedTests;
-        CloseableHttpResponse resp = this.sendImporterRequest();
+        CloseableHttpResponse resp = this.sendTCImporterRequest();
+        StatusLine status = resp.getStatusLine();
+        if (status.getStatusCode() != 200) {
+            this.logger.error(String.format("Http POST failed with %d", status.getStatusCode()));
+            return updatedTests;
+        }
+
+        // TODO: Listen to the message bus, and get the returned data.  We need to get the returned message back
+        CIBusListener bl = new CIBusListener(Configurator.loadConfiguration());
+        String selector = bl.polarizeConfig.get("importer.testcase.response.name");
+        // Optional<Tuple<Connection, ObjectNode>> maybe;
+        // maybe = bl.tapIntoMessageBus(selector);
+        Optional<Tuple<Connection, Message>> maybe = bl.waitForMessage(selector);
+        if (maybe.isPresent()) {
+            Tuple<Connection, Message> tuple = maybe.get();
+            Connection conn = tuple.first;
+            Message msg = tuple.second;
+            try {
+                ObjectNode root = bl.parseMessage(msg);
+            } catch (ExecutionException e) {
+                e.printStackTrace();
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            } catch (JMSException e) {
+                e.printStackTrace();
+            }
+        }
+
         return updatedTests;
     }
 
-    private List<Testcase> clearTestcaseWithBothCreateAndUpdate() {
-        return this.testcases.getTestcase().stream()
-                .map(tc -> {
-                    Create create = tc.getCreate();
-                    Update update = tc.getUpdate();
-                    // If both are non-null delete the Update otherwise it's invalid to the schema
-                    if (create != null && update != null) {
-                        tc.setUpdate(null);
-                    }
-                    // TODO: Add a <response-property id=>
-                    return tc;
-                })
-                .collect(Collectors.toList());
-    }
-
-    private CloseableHttpResponse sendImporterRequest() {
+    private CloseableHttpResponse sendTCImporterRequest() {
         String url = this.polarizeConfig.get("polarion.url") + this.polarizeConfig.get("importer.testcase.endpoint");
         String testcaseXml = this.polarizeConfig.get("importer.testcases.file");
         String user = this.polarizeConfig.get("kerb.user");
         String pw = this.polarizeConfig.get("kerb.pass");
-        return ImporterRequest.request(this.testcases, Testcases.class, url, testcaseXml, user, pw);
+        return ImporterRequest.post(this.testcases, Testcases.class, url, testcaseXml, user, pw);
     }
 
     /**
@@ -518,17 +527,13 @@ public class TestDefinitionProcessor extends AbstractProcessor {
             this.logger.info("Unmarshalling failed.  No Testcase present...");
             return Optional.empty();
         }
-        else if (tc.get().getUpdate() == null) {
-            this.logger.info("No <update> element, therefore no ID");
-            return Optional.empty();
-        }
-        else if (tc.get().getUpdate().getId().equals("")) {
-            this.logger.info("<update> element exists, but is empty string");
+        else if (tc.get().getId() == null || tc.get().getId().equals("")) {
+            this.logger.info("No id attribute for <testcase>");
             return Optional.empty();
         }
         Testcase tcase = tc.get();
-        this.logger.info("Polarion ID for testcase " + tcase.getTitle() + " is " + tcase.getUpdate().getId());
-        return Optional.of(tcase.getUpdate().getId());
+        this.logger.info("Polarion ID for testcase " + tcase.getTitle() + " is " + tcase.getId());
+        return Optional.of(tcase.getId());
     }
 
     private Optional<String> getPolarionIDFromTestcase(Meta<TestDefinition> meta) {
@@ -610,22 +615,29 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         Boolean importRequest = false;
         // xmlIdExists  | idExists       | action            | How does this happen?
         // =============|================|===================|=============================================
-        // false        | false          | create            | no <update> or "" and no id in annotation
-        // false        | true           | create and update | no <update> or "" but id is in annotation
-        // true         | false          | update            | <update> is valid, but not in annotation
-        // true         | true           | update            | <update> is valid, and in annotation
+        // false        | false          | request and edit  | id="" in xml and in annotation
+        // false        | true           | edit XML          | id="" in xml, but id is in annotation
+        // true         | false          | nothing           | non-empty id in xml, but not in annotation
+        // true         | true           | validate          | non-empty id in xml and in annotation
         if (!xmlIdExists) {
-            Create create = new Create();
-            create.setAuthorId(def.author());
-            tc.setCreate(create);
             importRequest = true;
         }
-        if (idExists) {
-            Update update = new Update();
-            update.setId(maybePolarionID.get());
-            tc.setUpdate(update);
+        if (idExists && !xmlIdExists) {
+            // This means that the ID exists in the annotation, but not the XML file.  Edit the xml file
             if (def.update())
                 importRequest = true;
+            else {
+                importRequest = false;
+                Optional<Testcase> maybeTC = this.getTypeFromMeta(meta, Testcase.class);
+                if (maybeTC.isPresent()) {
+                    Testcase tcase = maybeTC.get();
+                    tcase.setId(maybePolarionID.get());
+                    Optional<File> path = this.getFileFromMeta(meta, meta.annotation.projectID().toString());
+                    if (path.isPresent()) {
+                        IJAXBHelper.marshaller(tcase, path.get(), jaxb.getXSDFromResource(Testcase.class));
+                    }
+                }
+            }
         }
 
         if (importRequest) {

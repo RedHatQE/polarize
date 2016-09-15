@@ -39,10 +39,9 @@ dependencies {
     compile group: 'org.apache.httpcomponents', name: 'httpclient', version: '4.5.2'
     compile 'org.apache.httpcomponents:httpmime:4.5.2'
     compile 'org.json:json:20140107'
-
-    // https://mvnrepository.com/artifact/org.apache.activemq/activemq-client
+    compile group: 'com.fasterxml.jackson.core', name: 'jackson-core', version: '2.8.2'
+    compile group: 'com.fasterxml.jackson.core', name: 'jackson-databind', version: '2.8.2'
     compile group: 'org.apache.activemq', name: 'activemq-client', version: '5.14.0'
-
 }
 
 test {
