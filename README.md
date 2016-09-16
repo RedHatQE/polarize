@@ -34,6 +34,12 @@ files serve 2 purposes:
 - Create the Polarion TestCase if the ID is empty
 - A way to map the test method to the Polarion Testcase if it is not
 
+This means that if your test ware is not annotated with the necessary metadata, then polarize is really no good.  This
+is done on purpose.  The author originally wrote a tool that would auto-create TestCases in Polarion if they didn't 
+already exist.  This is not only a bad idea technically, it's also wrong from a methodology perspective.  The TestCase
+and Requirements really should be written before the automation is.  Disregarding the methodology, there's also a 
+practical technical requirement.
+
 One of the requirements for the XUnit importer is that each <testcase> must have a polarion ID or custom ID set.  This 
 is to map the testcase to the Polarion ID.  The XML files that polarize generates will either contain the ID or not.  As
 the annotation processor runs, it will use an algorithm to map the qualified name of the testmethod to where the XML 
