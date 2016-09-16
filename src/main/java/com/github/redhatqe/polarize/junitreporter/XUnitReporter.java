@@ -1,5 +1,7 @@
 package com.github.redhatqe.polarize.junitreporter;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.github.redhatqe.polarize.CIBusListener;
 import com.github.redhatqe.polarize.IJAXBHelper;
@@ -28,7 +30,10 @@ import java.nio.file.Paths;
 import java.security.KeyException;
 import java.util.*;
 import java.util.Properties;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.function.Consumer;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 /**
@@ -45,6 +50,7 @@ public class XUnitReporter implements IReporter {
     private final static File defaultPropertyFile =
             new File(System.getProperty("user.home") + "/.polarize/reporter.properties");
     private final static ReporterConfig config = XUnitReporter.configure();
+    private static List<String> failedSuites = new ArrayList<>();
 
     public static ReporterConfig configure() {
         Properties props = XUnitReporter.getProperties();
@@ -175,7 +181,7 @@ public class XUnitReporter implements IReporter {
                         ts.setTime(Float.toString(duration));
 
                         List<Testcase> tests = ts.getTestcase();
-                        List<Testcase> after = XUnitReporter.getMethodInfo(this, suite, tests);
+                        List<Testcase> after = XUnitReporter.getMethodInfo(suite, tests);
                         return ts;
                     })
                     .collect(Collectors.toList());
@@ -216,7 +222,25 @@ public class XUnitReporter implements IReporter {
         System.out.println(resp.toString());
     }
 
-    public static void sendXunitImportRequest(String url, String user, String pw, File reportPath, String selector) {
+    /**
+     * Makes an XUnit importer REST call to upload testrun results
+     * 
+     * @param url
+     * @param user
+     * @param pw
+     * @param reportPath
+     * @param selector
+     * @throws InterruptedException
+     * @throws ExecutionException
+     * @throws JMSException
+     */
+    public static void sendXunitImportRequest(String url, String user, String pw, File reportPath, String selector)
+            throws InterruptedException, ExecutionException, JMSException {
+        // FIXME: Need to throw this in another thread.  This only works because it takes about 20 seconds for message
+        Supplier<Optional<ObjectNode>> sup = XUnitReporter.getCIMessage(selector);
+        CompletableFuture<Optional<ObjectNode>> future = CompletableFuture.supplyAsync(sup);
+        //future.thenAccept(messageHandler());
+
         CloseableHttpResponse resp = ImporterRequest.post(url, reportPath, user, pw);
         HttpEntity entity = resp.getEntity();
         try {
@@ -227,26 +251,76 @@ public class XUnitReporter implements IReporter {
         }
         System.out.println(resp.toString());
 
-        CIBusListener bl = new CIBusListener(com.github.redhatqe.polarize.Configurator.loadConfiguration());
-        Optional<Tuple<Connection, Message>> maybeConn = bl.waitForMessage(selector);
-        if (!maybeConn.isPresent()) {
-            bl.logger.error("No Connection object found");
-            return;
-        }
+        Optional<ObjectNode> maybeNode = future.get();
+        Consumer<Optional<ObjectNode>> cons = messageHandler();
+        cons.accept(maybeNode);
+    }
 
-        Tuple<Connection, Message> tuple = maybeConn.get();
-        Message msg = tuple.second;
-        try {
-            ObjectNode root = bl.parseMessage(msg);
-            XUnitReporter.logger.info(root.textValue());
+    /**
+     * Returns a Supplier useable for the CompleteableFuture
+     *
+     * @return ObjectNode that is the parsed message
+     */
+    private static Supplier<Optional<ObjectNode>> getCIMessage(String selector) {
+        return () -> {
+            ObjectNode root = null;
+            CIBusListener bl = new CIBusListener(com.github.redhatqe.polarize.Configurator.loadConfiguration());
+            Optional<Tuple<Connection, Message>> maybeConn = bl.waitForMessage(selector);
+            if (!maybeConn.isPresent()) {
+                bl.logger.error("No Connection object found");
+                return Optional.empty();
+            }
 
-        } catch (ExecutionException e) {
-            e.printStackTrace();
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        } catch (JMSException e) {
-            e.printStackTrace();
-        }
+            Tuple<Connection, Message> tuple = maybeConn.get();
+            Connection conn = tuple.first;
+            Message msg = tuple.second;
+
+            // FIXME:  Should I write an exception handler outside of this function?  Might be easier than trying to
+            // deal with it here (for example a retry)
+            try {
+                conn.close();
+                root = bl.parseMessage(msg);
+            } catch (ExecutionException e) {
+                e.printStackTrace();
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            } catch (JMSException e) {
+                e.printStackTrace();
+            }
+            if (root != null)
+                return Optional.of(root);
+            else
+                return Optional.empty();
+        };
+    }
+
+    public static Consumer<Optional<ObjectNode>> messageHandler() {
+        return (node) -> {
+            if (!node.isPresent()) {
+                logger.warn("No ObjectNode received from the Message");
+            } else {
+                // TODO: figure out if the xunit import was successful.  If it wasn't, what do we do?  Retry?  Perhaps,
+                // depending on the exception type, we might be able to retry.  Finding the log when we get an exception
+                // will be very difficult
+                JsonNode root = node.get().get("root");
+                if (root.get("status").textValue().equals("passed")) {
+                    logger.info("XUnit importer was successful");
+                    logger.info(root.get("testrun-url").textValue());
+                } else {
+                    // Figure out which one failed
+                    JsonNode results = root.get("import-results");
+                    results.elements().forEachRemaining(element -> {
+                        if (element.has("status") && !element.get("status").textValue().equals("passed")) {
+                            if (element.has("suite-name")) {
+                                String suite = element.get("suite-name").textValue();
+                                logger.info(suite + " failed to be updated");
+                                XUnitReporter.failedSuites.add(suite);
+                            }
+                        }
+                    });
+                }
+            }
+        };
     }
 
     /**
@@ -274,8 +348,14 @@ public class XUnitReporter implements IReporter {
         }
     }
 
-    public static List<Testcase> getMethodInfo(XUnitReporter xUnitReporter, ISuite suite, List<Testcase> testcases) {
-        // Get information for each <testcase>
+    /**
+     * Gets information from each invoked method in the test suite
+     *
+     * @param suite suite that was run by TestNG
+     * @param testcases
+     * @return
+     */
+    public static List<Testcase> getMethodInfo(ISuite suite, List<Testcase> testcases) {
         List<IInvokedMethod> invoked = suite.getAllInvokedMethods();
         for(IInvokedMethod meth: invoked) {
             Testcase testcase = new Testcase();
@@ -304,7 +384,6 @@ public class XUnitReporter implements IReporter {
             Property polarionID = XUnitReporter.createProperty("polarion-testcase-id", id);
             tcProps.add(polarionID);
 
-            // Get status
             XUnitReporter.getStatus(result, testcase);
 
             // Get all the iteration data
@@ -477,7 +556,7 @@ public class XUnitReporter implements IReporter {
      * Args are: url, user, pw, path to xml, selector
      * @param args
      */
-    public static void main(String[] args) {
+    public static void main(String[] args) throws InterruptedException, ExecutionException, JMSException {
         if (args.length != 5) {
             XUnitReporter.logger.error("url, user, pw, path to xml");
             return;

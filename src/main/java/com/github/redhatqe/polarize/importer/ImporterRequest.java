@@ -111,7 +111,6 @@ public class ImporterRequest {
             httpClient = builder.build();
             HttpPost postMethod = new HttpPost(url);
 
-            //FileEntity body = new FileEntity(importerFile);
             MultipartEntityBuilder body = MultipartEntityBuilder.create();
             body.addBinaryBody("file", importerFile);
             body.setContentType(ContentType.MULTIPART_FORM_DATA);
