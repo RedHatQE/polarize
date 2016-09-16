@@ -1,15 +1,134 @@
 # Why polarize?
 
-polarize has 3 goals:
+polarize has 2 main goals:
 
 - Make the source code where testcase definitions and requirements live
-- A gherkin style feature file parser suitable for Product Owners
-- create a TestNG reporter suitable for use by the XUnit Reporter
+- A TestNG reporter that generates junit reports compatible with the XUnit importer
 
-Requirements and TestCases in Polarion by hand is very time consuming.  Being able to auto-generate a Polarion TestCase
-or Requirement given metadata that already exists in the source code is more ideal. Furthermore, it is better to have a 
-single source of truth (the source code) and have this reflected in Polarion, rather than try to maintain and keep 
-synchronized two sets of data (annotations in the source code, and TestCase/Requirements in Polarion).
+
+Writing Requirements and TestCases in Polarion by hand is very time consuming.  Being able to auto-generate a Polarion 
+TestCase or Requirement given metadata that already exists in an external format is more ideal. Furthermore, it is 
+better to have a single source of truth (the source code) and have this reflected in Polarion, rather than try to 
+maintain and keep synchronized two sets of data (annotations in the source code, and TestCase/Requirements in Polarion).
+
+Due to performance limitations we are required to submit TestRun results via a batch operation.  This batch operation
+uses a modified xunit style XML file.  Generating this xunit importer compatible file is tricky for teams using TestNG
+as their framework since the junit reports it generates lacks some crucial information, like pass/fail at the testcase 
+level, or parameterized arguments.  And of course, it also does not supply the modifications needed by the XUnit 
+importer.
+
+## How does it work?
+
+Currently, the heart of polarize lies in these concepts:
+
+1. XML description files (generated via the custom processor)
+2. A custom annotation processor
+3. A custom IReporter class for TestNG
+
+In essence, polarize uses a custom annotation processor to supply metadata of your classes and test methods.  Given the
+correct annotation data, when your source is compiled and the polarize jar is in your classpath, the annotation 
+processor will run.  As it runs, it will find the elements which were annotated and generate XML equivalents of that 
+annotation data.  In fact, these XML files are the files that are used by the CI Ops Testcase Importer tool.  These XML
+files serve 2 purposes:
+
+- Create the Polarion TestCase if the ID is empty
+- A way to map the test method to the Polarion Testcase if it is not
+
+One of the requirements for the XUnit importer is that each <testcase> must have a polarion ID or custom ID set.  This 
+is to map the testcase to the Polarion ID.  The XML files that polarize generates will either contain the ID or not.  As
+the annotation processor runs, it will use an algorithm to map the qualified name of the testmethod to where the XML 
+file should be.  If it doesn't exist, the processor will create it from the given annotation data.  If the XML 
+description file already exists, it will read it in to get the ID.  If the ID is an empty string, this means there is 
+no Polarion TestCase for this method.  Therefore polarize will issue a Testcase importer request, and when it gets the 
+response message, it will edit the XML with the proper ID (so that even though the annotation data won't have the 
+Polarion ID, the generated XML will)
+
+Here's an example of an annotation generated XML file:
+
+```xml
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<testcase id="PLATTP-9520" level="component" posneg="negative" importance="high" automation="automated">
+    <title>com.github.redhatqe.rhsm.testpolarize.TestReq.testUpgradeNegative</title>
+    <description>Test for reporter code</description>
+    <nonfunctional subtype1="compliance" subtype2="-"/>
+    <setup>Description of any preconditions that must be established for test case to run</setup>
+    <teardown>The methods to clean up after a test method</teardown>
+</testcase>
+```
+
+From the following annotation:
+
+```java
+    @TestDefinition(author="stoner",               // defaults to CI User
+              projectID=Project.PLATTP,            // required
+              testCaseID="PLATTP-9520",            // if empty or null, make request to WorkItem Importer tool
+              importance=DefTypes.Importance.HIGH, // defaults to high  if not given
+              posneg=DefTypes.PosNeg.NEGATIVE,     // defaults to positive if not given
+              level= DefTypes.Level.COMPONENT,     // defaults to component if not given
+              // If testtype is FUNCTIONAL, subtype1 and 2 must be of type EMPTY.
+              testtype=@TestType(testtype= DefTypes.TestTypes.NONFUNCTIONAL,  // Defaults to FUNCTIONAL
+                                 subtype1= DefTypes.Subtypes.COMPLIANCE,      // Defaults to EMPTY (see note)
+                                 subtype2= DefTypes.Subtypes.EMPTY),          // Defaults to EMPTY (see note)
+              reqs={@Requirement(id="",            // if empty, look for class Requirement.  If no class requirement
+                                                   // look for xmlDesc.  If none, that means request one.
+                                 project=Project.RedHatEnterpriseLinux7,
+                                 description="This description will override class level",
+                                 xmlDesc="/tmp/path/to/xml/description/testUpgradeNegative.xml",
+                                 feature="/tmp/path/to/a/gherkin/file/requirements.feature")},
+              setup="Description of any preconditions that must be established for test case to run",
+              teardown="The methods to clean up after a test method")
+    @Test(groups={"simple"},
+          description="Test for reporter code",
+          dataProvider="simpleProvider")
+    public void testUpgradeNegative(String name, int age) {
+        AssertJUnit.assertEquals(age, 44);
+        Assert.assertTrue(name.equals("Sean"));
+    }
+```
+
+**NOTE** the @Requirement is not used at all, and indeed, I haven't heard of work for a Requirement importer as of yet.
+
+For testrun results, polarize also comes with a class XUnitReporter that implements TestNG's IReporter interface.  By 
+setting your TestNG test to use this Reporter, it will generate the xunit which is compatible with the XUnit Importer.
+In fact, if your tests use Data Providers, it will also generate the parameterized data for you too (note that this 
+feature is still waiting on the ability to add TestStep and Parameters in the TestCase importer).
+
+After you execute your TestNG test, you will see a report generated like this:
+
+```xml
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<testsuites>
+    <properties>
+        <property name="polarion-user-id" value="stoner"/>
+        <property name="polarion-project-id" value="PLATTP"/>
+        <property name="polarion-set-testrun-finished" value="true"/>
+        <property name="polarion-dry-run" value="false"/>
+        <property name="polarion-include-skipped" value="false"/>
+        <property name="polarion-response-rhsm_qe" value="stoner"/>
+        <property name="polarion-custom-notes" value="file:///some/otherpath"/>
+        <property name="polarion-custom-jenkinsjobs" value="http://some/path"/>
+        <property name="polarion-testrun-title" value="Sean Toner Polarize TestRun"/>
+        <property name="polarion-testrun-id" value="Polarize TestRun"/>
+    </properties>
+    <testsuite name="Sanity Test" tests="2" errors="2" time="0.0" skipped="0">
+        <testcase name="testUpgradeNegative" classname="com.github.redhatqe.rhsm.testpolarize.TestReq" status="success">
+            <properties>
+                <property name="polarion-testcase-id" value="PLATTP-9520"/>
+                <property name="polarion-parameter-0" value="Sean"/>
+                <property name="polarion-parameter-1" value="44"/>
+            </properties>
+        </testcase>
+        <testcase name="testUpgradeNegative" classname="com.github.redhatqe.rhsm.testpolarize.TestReq">
+            <failure/>
+            <properties>
+                <property name="polarion-testcase-id" value="PLATTP-9520"/>
+                <property name="polarion-parameter-0" value="Toner"/>
+                <property name="polarion-parameter-1" value="0"/>
+            </properties>
+        </testcase>
+    </testsuite>
+</testsuites>
+```
 
 
 ## Why not just write requirements and testcases directly in polarion?
@@ -51,6 +170,10 @@ files or features files, all the mapping from a requirement/testcase to the test
 
 ## Configuring polarize
 
+**NOTE** Over time, polarize's properties has grown to be more complex and probably needs to move beyond a simple 
+properties file.  Considering writing a configuration format into YAML or JSON which can be marshalled into a real 
+Java Object
+
 polarize is fairly easy to configure.  It really just needs to know where to generate/look for the xml description files
 that are analogous to the annotation data.  polarize will look in 2 places for configuration data:
 
@@ -65,21 +188,39 @@ testcase.xml.path=/home/stoner/Projects/testjong/testcases
 requirements.xml.path is a base path to where to generate or look for xml files to create Requirements in Polarion.
 testcase.xml.path is a base path to where to generate or look for xml files to create TestCases in Polarion.
 
+**TODO:**
+Need to describe everything in polarize.properties and reporter.properties
+
 ## How to use polarize
+
+This section will describe how to make use of polarize
+
+### Annotations for Testcase definitions
 
 The polarize project uses 2 new custom annotation types.  The @Polarion annotation is used to enter all the metadata
 necessary to describe a TestCase in Polarion and is annotated on methods, and the @Requirement annotation contains all
 the metadata necessary to describe a Requirement WorkItem type in Polarion.  The @Requirement annotation can be used
 either on a class or a method (if used on a method, it will override its parent class annotation if there is one).
 
-Here is an example:
+Here is a full example:
 
 ```java
-package com.redhat.qe.rhsm.testjong;
+package com.github.redhatqe.rhsm.testpolarize;
 
-import TestDefinition;
-import Requirement;
+
+import com.github.redhatqe.polarize.metadata.DefTypes;
+import com.github.redhatqe.polarize.metadata.Requirement;
+import com.github.redhatqe.polarize.metadata.TestDefinition;
+import com.github.redhatqe.polarize.metadata.TestType;
+import com.github.redhatqe.polarize.metadata.DefTypes.Project;
+
+import org.testng.Assert;
+import org.testng.AssertJUnit;
+import org.testng.annotations.DataProvider;
 import org.testng.annotations.Test;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * A dummy example showing how to use the annotations.  Since these are repeating annotations, that means that the
@@ -87,34 +228,60 @@ import org.testng.annotations.Test;
  *
  * Created by stoner on 7/12/16.
  */
-@Requirement(project="RHEL6", author="Sean Toner",
+@Requirement(project=Project.RHEL6,
+             author="Sean Toner",
              description="Class level Requirement for RHEL 6.  All test methods will inherit from a class annotated " +
-                     "with @Requirement.  If a test method's @Polarion annotation has a non-empty reqs field, any " +
-                     "@Requirements there will override the class Requirement for that method")
-@Requirement(project="RedHatEnterpriseLinux7", author="CI User",
+                     "with @Requirement.  If a test method's @TestDefinition annotation has a non-empty reqs field, " +
+                     "any @Requirements there will override the class Requirement for that method")
+@Requirement(project=Project.RedHatEnterpriseLinux7,
+             author="CI User",
              description="Class level Requirement for RHEL7")
-public class TestJongReq {
+public class TestReq {
 
-    @TestCase(projectID="RHEL6",
+    @TestDefinition(projectID=Project.RHEL6,
               description="TestCase for a dummy test method",
+              title="A not necessarily unique title",  // defaults to class.methodName
               reqs={})
-    @TestCase(author="Sean Toner",                 // required
-              projectID="RedHatEnterpriseLinux7",  // required
-              testCaseID="RHEL7-56743",            // if empty or null, make request to WorkItem Importer tool
-              caseimportance="medium",             // defaults to high  if not given
-              caseposneg="negative",               // defaults to positive if not given
-              caselevel="component",               // defaults to component if not given
-              testtype="non_functional",           // defaults to functional if not given
-              reqa={@Requirement(id="",            // if empty, look for class Requirement.  If no class requirement
+    @TestDefinition(author="stoner",               // defaults to CI User
+              projectID=Project.PLATTP,            // required
+              testCaseID="PLATTP-9520",            // if empty or null, make request to WorkItem Importer tool
+              importance=DefTypes.Importance.HIGH, // defaults to high  if not given
+              posneg=DefTypes.PosNeg.NEGATIVE,     // defaults to positive if not given
+              level= DefTypes.Level.COMPONENT,     // defaults to component if not given
+              // If testtype is FUNCTIONAL, subtype1 and 2 must be of type EMPTY.
+              testtype=@TestType(testtype= DefTypes.TestTypes.NONFUNCTIONAL,  // Defaults to FUNCTIONAL
+                                 subtype1= DefTypes.Subtypes.COMPLIANCE,      // Defaults to EMPTY (see note)
+                                 subtype2= DefTypes.Subtypes.EMPTY),          // Defaults to EMPTY (see note)
+              reqs={@Requirement(id="",            // if empty, look for class Requirement.  If no class requirement
                                                    // look for xmlDesc.  If none, that means request one.
-                                 xmlDesc="/path/to/xml/description",
-                                 feature="/path/to/a/gherkin/feature/file")},
+                                 project=Project.RedHatEnterpriseLinux7,
+                                 description="This description will override class level",
+                                 xmlDesc="/tmp/path/to/xml/description/testUpgradeNegative.xml",
+                                 feature="/tmp/path/to/a/gherkin/file/requirements.feature")},
               setup="Description of any preconditions that must be established for test case to run",
               teardown="The methods to clean up after a test method")
-    @Test(groups={"testjong_polarize"},
-          description="A simple test for polarize")
-    public void testUpgradeNegative() {
-         System.out.println("Dummy negative test");
+    @Test(groups={"simple"},
+          description="Test for reporter code",
+          dataProvider="simpleProvider")
+    public void testUpgradeNegative(String name, int age) {
+        AssertJUnit.assertEquals(age, 44);
+        Assert.assertTrue(name.equals("Sean"));
+    }
+
+    @DataProvider(name="simpleProvider")
+    public Object[][] dataDriver() {
+        Object[][] table = new Object[2][2];
+        List<Object> row = new ArrayList<>();
+
+        row.add("Sean");
+        row.add(44);
+        table[0] = row.toArray();
+
+        row = new ArrayList<>();
+        row.add("Toner");
+        row.add(0);
+        table[1] = row.toArray();
+        return table;
     }
 }
 ```
@@ -129,6 +296,30 @@ Given the above annotations, and polarize.properties as shown earlier, polarize 
 - Once the xml file is ready, we know the mapping between test method and Polarion Requirement and TestCase ID
 - When the test run is done and the junit report is created, post process the result file
 
+### Making use of XUnitReporter for TestNG
+
+Here's a little snippet of how to setup your test for debugging
+
+```bash
+gradle clean
+gradle shadowJar
+gradle install
+java -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=5006 \
+-cp /path/to/your/polarize-1.0.0-all.jar:/path/to/your/awesome-test-1.0.0.jar \
+org.testng.TestNG -reporter com.github.redhatqe.polarize.junitreporter.XUnitReporter /path/to/your/test-suite.xml
+```
+
+Basically, you just need to put polarize on your classpath, and add the -reporter (or in your XML suite file add the 
+XUnitReporter under <listeners>).  TestNg will take care of everything else and will generate your xunit file usable 
+but the XUnit importer.
+
+### Listening to CI Bus messages
+
+**TODO** explain how to use the CIBusListener class and the JMS selector
+
+### POST to the importers
+
+**TODO** explain how to use the ImporterReqest class to issue the POST calls that will send to the correct endpoint
 
 # Roadmap
 
@@ -175,11 +366,11 @@ Polarize is somewhat opinionated in how it should be used.  The central concept 
 an automated test, there should already be an existing definition of the requirements.  More and more companies are
 moving to BDD style tests and feature files to capture the essence of a feature and what needs to be tested.  Generally
 speaking, the Product Owner, developers, and Quality Engineers should go over what needs to be done, and through this
-discussion they will write a gherkin style feature file.  
+discussion they will write a gherkin style feature file.
 
 Once the initial feature file is hashed out between the PO, devs, and QE the written feature file can be stored in
 source control within the test project.  Any subsequent changes needed can be reviewed in source control whether the
-change comes due to developers gaining a better understanding of the requirement, QE's finding that there is not 
+change comes due to developers gaining a better understanding of the requirement, QE's finding that there is not
 enough information to be able to make assertions, or the PO getting additional feedback from customers.  This reviewal
 process can be done under normal source control abilities (eg, through github PR's or gerrit for example).  Once the
 review has been done the feature file will be merged in including some additional metadata.
@@ -191,27 +382,23 @@ will look for a feature file based on the following path:
 requirements.xml.path/<project>/<class>/<methodName>.feature
 ```
 
-# How does polarize work
-
-Currently, the heart of polarize lies in 2 concepts:
-
-1. XML description files (generated via the custom processor)
-2. A custom annotation processor
-
-The XML description file is what is used to do the mapping from a method name to a unique Polarion ID.
-If no XML description file exists (in the path determined by configuration, work item type, class and method name) then
-the annotation processor will use the information in the annotation to create an XML description file.  If a description
-file needs to be created, the annotation processor will also make a request using the WorkItem importer to generate the
-Requirement and/or TestCase in Polarion.
-
 # Limitations
 
 One limitation of polarize is that it assumes that there are no overloaded testmethods.  This is because polarize maps
 the qualified name of a test method to a file on the system.  If you have an overloaded method (a method with the same
-name but different type signature) then there will no longer be a one-to-one mapping from qualified method name to a 
+name but different type signature) then there will no longer be a one-to-one mapping from qualified method name to a
 file.  Note that this does not apply to data driven tests.  It is perfectly fine to have a test method with data driven
 parameters.
 
 This limitation can be overcome if you specify a custom xmlDesc in the annotations.  If you do have overloaded methods, 
 then you must supply a (unique) file system path.  If no file exists, polarize will generate it there.  When it needs to
 get the Polarion ID, it will read in this file (which is why the path must be unique for each method).
+
+Another limitation is that polarize has to do a lot of work to get the unique ID.  It runs a simple algorithm to map 
+testmethod name to path-to-xml-file.  But then polarize has to read this xml file in, use JAXB to marshall this into a 
+Testcase object, and read in the ID.  That's a lot of IO and marshalling (which can be really slow).  For teams with
+thousands of tests, that might become a performance limitation.
+
+One possible solution to mitigate this would be to write the mapping to a single file.  In essence, it would be a very
+primitive key-value database.  In fact, a sophisticated solution might bundle a small database with polarize.  While
+that might be overkill, it would provide some interesting querying capabilities.
