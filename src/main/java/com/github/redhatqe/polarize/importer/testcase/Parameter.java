@@ -12,6 +12,7 @@ import javax.xml.bind.annotation.XmlAccessType;
 import javax.xml.bind.annotation.XmlAccessorType;
 import javax.xml.bind.annotation.XmlAttribute;
 import javax.xml.bind.annotation.XmlRootElement;
+import javax.xml.bind.annotation.XmlSchemaType;
 import javax.xml.bind.annotation.XmlType;
 import javax.xml.bind.annotation.adapters.CollapsedStringAdapter;
 import javax.xml.bind.annotation.adapters.XmlJavaTypeAdapter;
@@ -26,17 +27,12 @@ import javax.xml.bind.annotation.adapters.XmlJavaTypeAdapter;
  * &lt;complexType>
  *   &lt;complexContent>
  *     &lt;restriction base="{http://www.w3.org/2001/XMLSchema}anyType">
- *       &lt;attribute name="subtype1" default="-">
+ *       &lt;attribute name="name" use="required" type="{http://www.w3.org/2001/XMLSchema}anySimpleType" />
+ *       &lt;attribute name="scope" default="local">
  *         &lt;simpleType>
  *           &lt;restriction base="{http://www.w3.org/2001/XMLSchema}token">
- *             &lt;enumeration value="-"/>
- *           &lt;/restriction>
- *         &lt;/simpleType>
- *       &lt;/attribute>
- *       &lt;attribute name="subtype2" default="-">
- *         &lt;simpleType>
- *           &lt;restriction base="{http://www.w3.org/2001/XMLSchema}token">
- *             &lt;enumeration value="-"/>
+ *             &lt;enumeration value="local"/>
+ *             &lt;enumeration value="library"/>
  *           &lt;/restriction>
  *         &lt;/simpleType>
  *       &lt;/attribute>
@@ -49,70 +45,66 @@ import javax.xml.bind.annotation.adapters.XmlJavaTypeAdapter;
  */
 @XmlAccessorType(XmlAccessType.FIELD)
 @XmlType(name = "")
-@XmlRootElement(name = "functional")
-public class Functional {
+@XmlRootElement(name = "parameter")
+public class Parameter {
 
-    @XmlAttribute(name = "subtype1")
+    @XmlAttribute(name = "name", required = true)
+    @XmlSchemaType(name = "anySimpleType")
+    protected String name;
+    @XmlAttribute(name = "scope")
     @XmlJavaTypeAdapter(CollapsedStringAdapter.class)
-    protected String subtype1;
-    @XmlAttribute(name = "subtype2")
-    @XmlJavaTypeAdapter(CollapsedStringAdapter.class)
-    protected String subtype2;
+    protected String scope;
 
     /**
-     * Gets the value of the subtype1 property.
+     * Gets the value of the name property.
      * 
      * @return
      *     possible object is
      *     {@link String }
      *     
      */
-    public String getSubtype1() {
-        if (subtype1 == null) {
-            return "-";
-        } else {
-            return subtype1;
-        }
+    public String getName() {
+        return name;
     }
 
     /**
-     * Sets the value of the subtype1 property.
+     * Sets the value of the name property.
      * 
      * @param value
      *     allowed object is
      *     {@link String }
      *     
      */
-    public void setSubtype1(String value) {
-        this.subtype1 = value;
+    public void setName(String value) {
+        this.name = value;
     }
 
     /**
-     * Gets the value of the subtype2 property.
+     * Gets the value of the scope property.
      * 
      * @return
      *     possible object is
      *     {@link String }
      *     
      */
-    public String getSubtype2() {
-        if (subtype2 == null) {
-            return "-";
+    public String getScope() {
+        if (scope == null) {
+            return "local";
         } else {
-            return subtype2;
+            return scope;
         }
     }
 
     /**
-     * Sets the value of the subtype2 property.
+     * Sets the value of the scope property.
      * 
      * @param value
      *     allowed object is
      *     {@link String }
      *     
      */
-    public void setSubtype2(String value) {
-        this.subtype2 = value;
+    public void setScope(String value) {
+        this.scope = value;
     }
 
 }

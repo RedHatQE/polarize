@@ -27,7 +27,7 @@ import javax.xml.bind.annotation.XmlType;
  *   &lt;complexContent>
  *     &lt;restriction base="{http://www.w3.org/2001/XMLSchema}anyType">
  *       &lt;sequence>
- *         &lt;element ref="{}property" maxOccurs="unbounded"/>
+ *         &lt;element ref="{}test-step" maxOccurs="unbounded"/>
  *       &lt;/sequence>
  *     &lt;/restriction>
  *   &lt;/complexContent>
@@ -38,41 +38,41 @@ import javax.xml.bind.annotation.XmlType;
  */
 @XmlAccessorType(XmlAccessType.FIELD)
 @XmlType(name = "", propOrder = {
-    "property"
+    "testStep"
 })
-@XmlRootElement(name = "properties")
-public class Properties {
+@XmlRootElement(name = "test-steps")
+public class TestSteps {
 
-    @XmlElement(required = true)
-    protected List<Property> property;
+    @XmlElement(name = "test-step", required = true)
+    protected List<TestStep> testStep;
 
     /**
-     * Gets the value of the property property.
+     * Gets the value of the testStep property.
      * 
      * <p>
      * This accessor method returns a reference to the live list,
      * not a snapshot. Therefore any modification you make to the
      * returned list will be present inside the JAXB object.
-     * This is why there is not a <CODE>set</CODE> method for the property property.
+     * This is why there is not a <CODE>set</CODE> method for the testStep property.
      * 
      * <p>
      * For example, to add a new item, do as follows:
      * <pre>
-     *    getProperty().add(newItem);
+     *    getTestStep().add(newItem);
      * </pre>
      * 
      * 
      * <p>
      * Objects of the following type(s) are allowed in the list
-     * {@link Property }
+     * {@link TestStep }
      * 
      * 
      */
-    public List<Property> getProperty() {
-        if (property == null) {
-            property = new ArrayList<Property>();
+    public List<TestStep> getTestStep() {
+        if (testStep == null) {
+            testStep = new ArrayList<TestStep>();
         }
-        return this.property;
+        return this.testStep;
     }
 
 }
