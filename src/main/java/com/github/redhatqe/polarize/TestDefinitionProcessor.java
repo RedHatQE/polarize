@@ -7,10 +7,14 @@ import com.github.redhatqe.polarize.importer.testcase.*;
 import com.github.redhatqe.polarize.junitreporter.ReporterConfig;
 import com.github.redhatqe.polarize.junitreporter.XUnitReporter;
 import com.github.redhatqe.polarize.metadata.*;
+import com.github.redhatqe.polarize.metadata.TestStep;
+import com.github.redhatqe.polarize.metadata.TestSteps;
 import com.github.redhatqe.polarize.schema.*;
 
 import com.github.redhatqe.polarize.importer.testcase.Testcase;
+import com.github.redhatqe.polarize.utils.Transformer;
 import com.github.redhatqe.polarize.utils.Tuple;
+import com.github.redhatqe.polarize.utils.Tuple3;
 import org.apache.http.StatusLine;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.testng.annotations.Test;
@@ -21,9 +25,7 @@ import javax.jms.Connection;
 import javax.jms.JMSException;
 import javax.jms.Message;
 import javax.lang.model.SourceVersion;
-import javax.lang.model.element.Element;
-import javax.lang.model.element.ElementKind;
-import javax.lang.model.element.TypeElement;
+import javax.lang.model.element.*;
 import javax.lang.model.util.Elements;
 import javax.tools.Diagnostic;
 import java.io.*;
@@ -32,6 +34,7 @@ import java.net.URL;
 import java.nio.file.Path;
 import java.util.*;
 import java.util.concurrent.ExecutionException;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
@@ -144,18 +147,66 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         return metas;
     }
 
-    private <T> List<Meta<T>>
-    makeMetaFromPolarions(List<? extends Element> elements,
-                          Class<? extends Annotation> ann){
-        List<Meta<T>> metas = new ArrayList<>();
+    private List<Parameter> findParameterData(Element e) {
+        List<Parameter> parameters = new ArrayList<>();
+        if (e instanceof ExecutableElement) {
+            ExecutableElement exe = (ExecutableElement) e;
+            List<? extends VariableElement> params = exe.getParameters();
+            params.forEach(
+                    p -> {
+                        this.logger.info(p.getSimpleName().toString());
+                        Parameter param = new Parameter();
+                        param.setName(p.getSimpleName().toString());
+                        param.setScope("local");
+                        parameters.add(param);
+                    }
+            );
+        }
+        return parameters;
+    }
+
+    private List<Meta<TestDefinition>>
+    makeMetaFromTestDefinitions(List<? extends Element> elements){
+        List<Meta<TestDefinition>> metas = new ArrayList<>();
         for(Element e : elements) {
-            TestDefinitions container = (TestDefinitions) e.getAnnotation(ann);
+            TestDefinitions container = e.getAnnotation(TestDefinitions.class);
+            List<Parameter> params = this.findParameterData(e);
             for(TestDefinition r: container.value()) {
-                Meta m = new Meta<T>();
+                for(DefTypes.Project project: r.projectID()) {
+                    Meta<TestDefinition> m = new Meta<>();
+                    String full = this.getTopLevel(e, "", m);
+                    this.logger.info(String.format("Fully qualified name is %s", full));
+                    m.qualifiedName = full;
+                    m.annotation = r;
+                    m.project = project.toString();
+                    if (m.params == null)
+                        m.params = params;
+                    else if (m.params.isEmpty())
+                        m.params.addAll(params);
+                    metas.add(m);
+                }
+            }
+        }
+        return metas;
+    }
+
+    private List<Meta<TestDefinition>>
+    makeMetaFromTestDefinition(List<? extends Element> elements){
+        List<Meta<TestDefinition>> metas = new ArrayList<>();
+        for(Element e : elements) {
+            List<Parameter> params = this.findParameterData(e);
+            TestDefinition def = e.getAnnotation(TestDefinition.class);
+            for(DefTypes.Project project: def.projectID()) {
+                Meta<TestDefinition> m = new Meta<>();
                 String full = this.getTopLevel(e, "", m);
                 this.logger.info(String.format("Fully qualified name is %s", full));
                 m.qualifiedName = full;
-                m.annotation = r;
+                m.annotation = def;
+                m.project = project.toString();
+                if (m.params == null)
+                    m.params = params;
+                else if (m.params.isEmpty())
+                    m.params.addAll(params);
                 metas.add(m);
             }
         }
@@ -208,11 +259,11 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         allowed.add(ElementKind.METHOD);
         err = "Can only annotate methods with @TestDefinition";
         List<? extends Element> polAnns = this.getAnnotations(roundEnvironment, TestDefinition.class, allowed, err);
-        List<Meta<TestDefinition>> metas = this.makeMeta(polAnns, TestDefinition.class);
+        List<Meta<TestDefinition>> metas = this.makeMetaFromTestDefinition(polAnns);
 
         /* Get all the @TestDefinition annotations which have been repeated on a single element. */
         List<? extends Element> pols = this.getAnnotations(roundEnvironment, TestDefinitions.class, allowed, err);
-        metas.addAll(this.makeMetaFromPolarions(pols, TestDefinitions.class));
+        metas.addAll(this.makeMetaFromTestDefinitions(pols));
 
         this.methToProjectDef = this.createMethodToMetaPolarionMap(metas);
 
@@ -220,14 +271,16 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         Map<String, String> methToDescription = this.getTestAnnotations(roundEnvironment);
         this.methNameToTestNGDescription.putAll(methToDescription);
 
-        List<ReqType> reqList = this.processAllRequirements();
-        if (reqList == null)
+        // FIXME: Put this back when the CI Ops team has a Requirement importer
+        /*List<ReqType> reqList = this.processAllRequirements();
+          if (reqList == null)
             return false;
+         */
         List<Testcase> tests = this.processAllTC();
 
         /* testcases holds all the methods that need a new or updated Polarion TestCase */
         this.logger.info("Updating testcases that had <update>...");
-        Map<Testcase, Update> updated = this.testcasesImporterRequest();
+        Optional<Connection> conn = this.testcasesImporterRequest();
         this.tcMap = new HashMap<>();
 
         return true;
@@ -296,49 +349,31 @@ public class TestDefinitionProcessor extends AbstractProcessor {
     }
 
     /**
+     * FIXME: Need to redo this like the XUnitReporter.sendXunitImportRequest
+     *
      * Generates the xml file that will be sent via a REST call to the TestCase Importer
      */
-    private Map<Testcase, Update> testcasesImporterRequest() {
-        Map<Testcase, Update> updatedTests = new HashMap<>();
+    private Optional<Connection> testcasesImporterRequest() {
         if (this.tcMap.isEmpty()) {
             this.logger.info("No more testcases to import ...");
-            return updatedTests;
+            return Optional.empty();
         }
 
         // TODO: Need to listen to the CI message bus.  Spawn this in a new thread since we need to start it first
         // Look at Java 8's CompleteableFuture
 
         if (!this.setTestcaseProjectID().isPresent())
-            return updatedTests;
-
-        /* Find all the testcases that have both <create> and <update>.  Save them in updatedTests
-        this.testcases.getTestcase().forEach(
-                tc -> {
-                    Create create = tc.getCreate();
-                    Update update = tc.getUpdate();
-                    // If both are non-null delete the Update otherwise it's invalid to the schema
-                    if (create != null && update != null) {
-                        Update upd = new Update();
-                        upd.setId(tc.getUpdate().getId());
-                        updatedTests.put(tc, upd);
-                    }
-                }
-        );
-
-
-        // If it has both <create> and <update> we need to delete the update
-        List<Testcase> tests = this.clearTestcaseWithBothCreateAndUpdate();
-        this.testcases.getTestcase().clear();
-        this.testcases.getTestcase().addAll(tests);
-        */
+            return Optional.empty();
 
         if (this.polarizeConfig.get("do.xunit").equals("no"))
-            return updatedTests;
+            return Optional.empty();
+
+
         CloseableHttpResponse resp = this.sendTCImporterRequest();
         StatusLine status = resp.getStatusLine();
         if (status.getStatusCode() != 200) {
             this.logger.error(String.format("Http POST failed with %d", status.getStatusCode()));
-            return updatedTests;
+            return Optional.empty();
         }
 
         // TODO: Listen to the message bus, and get the returned data.  We need to get the returned message back
@@ -346,10 +381,11 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         String selector = bl.polarizeConfig.get("importer.testcase.response.name");
         // Optional<Tuple<Connection, ObjectNode>> maybe;
         // maybe = bl.tapIntoMessageBus(selector);
+        Connection conn = null;
         Optional<Tuple<Connection, Message>> maybe = bl.waitForMessage(selector);
         if (maybe.isPresent()) {
             Tuple<Connection, Message> tuple = maybe.get();
-            Connection conn = tuple.first;
+            conn = tuple.first;
             Message msg = tuple.second;
             try {
                 ObjectNode root = bl.parseMessage(msg);
@@ -362,7 +398,10 @@ public class TestDefinitionProcessor extends AbstractProcessor {
             }
         }
 
-        return updatedTests;
+        if (conn != null)
+            return Optional.of(conn);
+        else
+            return Optional.empty();
     }
 
     private CloseableHttpResponse sendTCImporterRequest() {
@@ -385,7 +424,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         for(Meta<TestDefinition> m: metas) {
             TestDefinition ann = m.annotation;
             String meth = m.qualifiedName;
-            String project = ann.projectID().toString();
+            String project = m.project;
 
             if (!methods.containsKey(meth)) {
                 Map<String, Meta<TestDefinition>> projects = new HashMap<>();
@@ -427,6 +466,15 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         return acc;
     }
 
+    /**
+     * Gets annotations from the type specified by c
+     *
+     * @param env The RoundEnvironment (which was created and given by the compiler in process())
+     * @param c The class of the Annotation we want to get
+     * @param allowed A set of the ElementKind types that we are allowed to annotate c with (eg METHOD or CLASS)
+     * @param errMsg An error message if something fails
+     * @return List of the Elements that had an annotation of type c from the allowed set
+     */
     private List<? extends Element>
     getAnnotations(RoundEnvironment env,
                    Class<? extends Annotation> c,
@@ -501,7 +549,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
     private <T> Optional<T> getTypeFromMeta(Meta<TestDefinition> meta, Class<T> t) {
         //TODO: Check for XML Desc file for TestDefinition
         TestDefinition def = meta.annotation;
-        Path path = FileHelper.makeXmlPath(this.tcPath, meta, def.projectID().toString());
+        Path path = FileHelper.makeXmlPath(this.tcPath, meta, meta.project);
         File xmlDesc = path.toFile();
         if (!xmlDesc.exists())
             return Optional.empty();
@@ -515,7 +563,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
     }
 
     /**
-     * Unmarshalls Testcase from XML pointed at in meta, and checks for Update
+     * Unmarshalls Testcase from XML pointed at in meta, and gets the Polarion ID
      *
      * @param meta
      * @return
@@ -544,10 +592,43 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         return Optional.of(id);
     }
 
+    /**
+     * Creates the TestSteps for the Testcase given values in the meta object
+     *
+     * @param meta
+     * @param tc
+     */
+    private void initTestSteps(Meta<TestDefinition> meta, Testcase tc) {
+        com.github.redhatqe.polarize.importer.testcase.TestSteps isteps = tc.getTestSteps();
+        if (isteps == null) {
+            isteps = new com.github.redhatqe.polarize.importer.testcase.TestSteps();
+        }
+        List<com.github.redhatqe.polarize.importer.testcase.TestStep> tsteps = isteps.getTestStep();
+
+        // Create one TestStepColumn for each Parameter
+        Transformer<List<Parameter>, List<TestStepColumn>> parameterize = params -> params.stream()
+                .map(p -> {
+                    TestStepColumn col = new TestStepColumn();
+                    col.getContent().add(p);
+                    return col;
+                })
+                .collect(Collectors.toList());
+
+        // For automation needs, we will only ever have one TestStep (but perhaps with multiple columns).
+        com.github.redhatqe.polarize.importer.testcase.TestStep ts =
+                new com.github.redhatqe.polarize.importer.testcase.TestStep();
+        List<TestStepColumn> cols = ts.getTestStepColumn();
+        if (meta.params != null && meta.params.size() > 0)
+            cols.addAll(parameterize.transform(meta.params));
+        tsteps.add(ts);
+        tc.setTestSteps(isteps);
+    }
+
     private Testcase
     initImporterTestcase(Meta<TestDefinition> meta) {
         Testcase tc = new Testcase();
         TestDefinition def = meta.annotation;
+        this.initTestSteps(meta, tc);
         tc.setAutomation("true");
         tc.setImportance(def.importance().stringify());
         tc.setLevel(def.level().stringify());
@@ -597,12 +678,14 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         Testcase tc = this.initImporterTestcase(meta);
         this.testCaseToMeta.put(tc, meta);
         TestDefinition def = meta.annotation;
-        this.initRequirementsFromTestDef(meta, tc);
+
+        // FIXME: Put this back in when CI Ops team gets Requirement importer working
+        //this.initRequirementsFromTestDef(meta, tc);
 
         // Check to see if there is an existing XML description file with Polarion ID
-        Optional<File> xml = this.getFileFromMeta(meta, meta.annotation.projectID().toString());
+        Optional<File> xml = this.getFileFromMeta(meta, meta.project);
         if (!xml.isPresent()) {
-            Path path = FileHelper.makeXmlPath(this.tcPath, meta, meta.annotation.projectID().toString());
+            Path path = FileHelper.makeXmlPath(this.tcPath, meta, meta.project);
             File xmlDesc = path.toFile();
             this.createTestCaseXML(tc, xmlDesc);
         }
@@ -632,7 +715,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
                 if (maybeTC.isPresent()) {
                     Testcase tcase = maybeTC.get();
                     tcase.setId(maybePolarionID.get());
-                    Optional<File> path = this.getFileFromMeta(meta, meta.annotation.projectID().toString());
+                    Optional<File> path = this.getFileFromMeta(meta, meta.project);
                     if (path.isPresent()) {
                         IJAXBHelper.marshaller(tcase, path.get(), jaxb.getXSDFromResource(Testcase.class));
                     }
@@ -641,7 +724,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         }
 
         if (importRequest) {
-            String projId = def.projectID().toString();
+            String projId = meta.project;
             if (this.tcMap.containsKey(projId))
                 this.tcMap.get(projId).add(tc);
             else {
@@ -683,6 +766,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
     }
 
     /**
+     * TODO: Need a Requirement importer for this
      * Gets @Requirements from within a @TestDefinition and processes them
      *
      * @param meta a Meta type representing metadata of a method
@@ -694,7 +778,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         // If reqs is empty look at the class annotated requirements contained in methToProjectReq
         if (reqs.length == 0) {
             String pkgClassname = String.format("%s.%s", meta.packName, meta.className);
-            String project = pol.projectID().toString();
+            String project = meta.project;
             if (this.methToProjectReq.containsKey(pkgClassname)) {
                 Meta<Requirement> r = this.methToProjectReq.get(pkgClassname).get(project);
                 reqs = new Requirement[1];
@@ -714,7 +798,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         for(Requirement e: reqs) {
             Meta<Requirement> m = new Meta<>(meta);
             m.annotation = e;
-            String projID = pol.projectID().toString();
+            String projID = meta.project;
             ProjectVals proj = ProjectVals.fromValue(projID);
             ReqType req = this.processRequirement(m, proj);
             //r.add(req);
@@ -723,6 +807,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
     }
 
     /**
+     * TODO: Need a Requirement Importer for this
      * Generates XML description files for Requirements
      * <p/>
      * Given the Requirement annotation data, do the following:
