@@ -222,79 +222,14 @@ public class XUnitReporter implements IReporter {
         System.out.println(resp.toString());
     }
 
-    /**
-     * Makes an XUnit importer REST call to upload testrun results
-     * 
-     * @param url
-     * @param user
-     * @param pw
-     * @param reportPath
-     * @param selector
-     * @throws InterruptedException
-     * @throws ExecutionException
-     * @throws JMSException
-     */
-    public static void sendXunitImportRequest(String url, String user, String pw, File reportPath, String selector)
-            throws InterruptedException, ExecutionException, JMSException {
-        // FIXME: Need to throw this in another thread.  This only works because it takes about 20 seconds for message
-        Supplier<Optional<ObjectNode>> sup = XUnitReporter.getCIMessage(selector);
-        CompletableFuture<Optional<ObjectNode>> future = CompletableFuture.supplyAsync(sup);
-        //future.thenAccept(messageHandler());
 
-        CloseableHttpResponse resp = ImporterRequest.post(url, reportPath, user, pw);
-        HttpEntity entity = resp.getEntity();
-        try {
-            BufferedReader bfr = new BufferedReader(new InputStreamReader(entity.getContent()));
-            System.out.println(bfr.lines().collect(Collectors.joining("\n")));
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-        System.out.println(resp.toString());
-
-        Optional<ObjectNode> maybeNode = future.get();
-        Consumer<Optional<ObjectNode>> cons = messageHandler();
-        cons.accept(maybeNode);
-    }
 
     /**
-     * Returns a Supplier useable for the CompleteableFuture
+     * A function factory that returns a Consumer type function usable to determine success of XUnit import request
      *
-     * @return ObjectNode that is the parsed message
+     * @return a Consumer function
      */
-    private static Supplier<Optional<ObjectNode>> getCIMessage(String selector) {
-        return () -> {
-            ObjectNode root = null;
-            CIBusListener bl = new CIBusListener(com.github.redhatqe.polarize.Configurator.loadConfiguration());
-            Optional<Tuple<Connection, Message>> maybeConn = bl.waitForMessage(selector);
-            if (!maybeConn.isPresent()) {
-                bl.logger.error("No Connection object found");
-                return Optional.empty();
-            }
-
-            Tuple<Connection, Message> tuple = maybeConn.get();
-            Connection conn = tuple.first;
-            Message msg = tuple.second;
-
-            // FIXME:  Should I write an exception handler outside of this function?  Might be easier than trying to
-            // deal with it here (for example a retry)
-            try {
-                conn.close();
-                root = bl.parseMessage(msg);
-            } catch (ExecutionException e) {
-                e.printStackTrace();
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            } catch (JMSException e) {
-                e.printStackTrace();
-            }
-            if (root != null)
-                return Optional.of(root);
-            else
-                return Optional.empty();
-        };
-    }
-
-    public static Consumer<Optional<ObjectNode>> messageHandler() {
+    public static Consumer<Optional<ObjectNode>> xunitMessageHandler() {
         return (node) -> {
             if (!node.isPresent()) {
                 logger.warn("No ObjectNode received from the Message");
@@ -512,6 +447,7 @@ public class XUnitReporter implements IReporter {
 
     /**
      * Given the fully qualified method name, find the xml description file
+     *
      * @param className
      * @param methName
      */
@@ -562,6 +498,6 @@ public class XUnitReporter implements IReporter {
             return;
         }
         File xml = new File(args[3]);
-        XUnitReporter.sendXunitImportRequest(args[0], args[1], args[2], xml, args[4]);
+        ImporterRequest.sendImportRequest(args[0], args[1], args[2], xml, args[4]);
     }
 }

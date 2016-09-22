@@ -1,6 +1,5 @@
 package com.github.redhatqe.polarize;
 
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.github.redhatqe.polarize.exceptions.ConfigurationError;
 import com.github.redhatqe.polarize.utils.Tuple;
@@ -18,10 +17,10 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.util.Enumeration;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ExecutionException;
+import java.util.function.Supplier;
 
 /**
  * Created by stoner on 8/30/16.
@@ -65,12 +64,16 @@ public class CIBusListener {
             e.printStackTrace();
             return Optional.empty();
         }
-        Tuple<Connection, Message> tuple = new Tuple<>();
-        tuple.first = connection;
-        tuple.second = msg;
+        Tuple<Connection, Message> tuple = new Tuple<>(connection, msg);
         return Optional.of(tuple);
     }
 
+    /**
+     * An asynchronous way to get a Message with a MessageListener
+     *
+     * @param selector
+     * @return
+     */
     public Optional<Tuple<Connection, ObjectNode>> tapIntoMessageBus(String selector) {
         String brokerUrl = this.polarizeConfig.get("broker");
         ActiveMQConnectionFactory factory = new ActiveMQConnectionFactory(brokerUrl);
@@ -123,12 +126,19 @@ public class CIBusListener {
             e.printStackTrace();
             return Optional.empty();
         }
-        Tuple<Connection, ObjectNode> tuple = new Tuple<>();
-        tuple.first = connection;
-        tuple.second = root;
+        Tuple<Connection, ObjectNode> tuple = new Tuple<>(connection, root);
         return Optional.of(tuple);
     }
 
+    /**
+     * Parses a Message returning a Jackson ObjectNode
+     *
+     * @param msg Message received from a Message bus
+     * @return
+     * @throws ExecutionException
+     * @throws InterruptedException
+     * @throws JMSException
+     */
     public ObjectNode parseMessage(Message msg) throws ExecutionException, InterruptedException, JMSException  {
         ObjectMapper mapper = new ObjectMapper();
         ObjectNode root = mapper.createObjectNode();
@@ -159,21 +169,53 @@ public class CIBusListener {
     }
 
     /**
+     * Returns a Supplier usable for a CompleteableFuture object
+     *
+     * @return ObjectNode that is the parsed message
+     */
+    public static Supplier<Optional<ObjectNode>> getCIMessage(String selector) {
+        return () -> {
+            ObjectNode root = null;
+            CIBusListener bl = new CIBusListener(com.github.redhatqe.polarize.Configurator.loadConfiguration());
+            Optional<Tuple<Connection, Message>> maybeConn = bl.waitForMessage(selector);
+            if (!maybeConn.isPresent()) {
+                bl.logger.error("No Connection object found");
+                return Optional.empty();
+            }
+
+            Tuple<Connection, Message> tuple = maybeConn.get();
+            Connection conn = tuple.first;
+            Message msg = tuple.second;
+
+            // FIXME:  Should I write an exception handler outside of this function?  Might be easier than trying to
+            // deal with it here (for example a retry)
+            try {
+                conn.close();
+                root = bl.parseMessage(msg);
+            } catch (ExecutionException e) {
+                e.printStackTrace();
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            } catch (JMSException e) {
+                e.printStackTrace();
+            }
+            if (root != null)
+                return Optional.of(root);
+            else
+                return Optional.empty();
+        };
+    }
+
+    /**
      * Does 2 things: launches tapIntoMessageBus from a Fork/Join pool thread and the main thread waits for user to quit
+     *
+     * Takes one argument: a string that will be used as the JMS Selector
      *
      * @param args
      */
     public static void main(String[] args) throws ExecutionException, InterruptedException, JMSException {
         CIBusListener bl = new CIBusListener(Configurator.loadConfiguration());
-        //String responseName = bl.polarizeConfig.get("importer.testcase.response.name");
-        //String responseName = bl.polarizeConfig.get("importer.xunit.response.name");
         String responseName = args[0];
-
-        //CompletableFuture<Optional<Connection>> future;
-        //future = CompletableFuture.supplyAsync(bl::tapIntoMessageBus);
-
-        // Call to get() will block.  However, tapIntoMessageBus() will return immediately.
-        //Optional<Tuple<Connection, ObjectNode>> maybeConn = bl.tapIntoMessageBus(responseName);
 
         // waitForMessage will block here until we get a message or we time out
         Optional<Tuple<Connection, Message>> maybeConn = bl.waitForMessage(responseName);
@@ -185,7 +227,6 @@ public class CIBusListener {
         Tuple<Connection, Message> tuple = maybeConn.get();
         Message msg = tuple.second;
         ObjectNode root = bl.parseMessage(msg);
-
 
         Boolean stop = false;
         while(!stop) {
@@ -202,10 +243,6 @@ public class CIBusListener {
                 e.printStackTrace();
             }
         }
-
-        // For tapIntoMessage()
-        //Tuple<Connection, ObjectNode> tuple = maybeConn.get();
-        //ObjectNode node = tuple.second;
         tuple.first.close();
     }
 }

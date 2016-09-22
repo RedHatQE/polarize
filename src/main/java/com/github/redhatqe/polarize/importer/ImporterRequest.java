@@ -1,9 +1,12 @@
 package com.github.redhatqe.polarize.importer;
 
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.github.redhatqe.polarize.CIBusListener;
 import com.github.redhatqe.polarize.IFileHelper;
 import com.github.redhatqe.polarize.IJAXBHelper;
 import com.github.redhatqe.polarize.JAXBHelper;
 import com.github.redhatqe.polarize.importer.testcase.Testcases;
+import com.github.redhatqe.polarize.junitreporter.XUnitReporter;
 import org.apache.http.HttpEntity;
 import org.apache.http.HttpResponse;
 import org.apache.http.auth.AuthScope;
@@ -24,6 +27,7 @@ import org.apache.http.ssl.TrustStrategy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.jms.JMSException;
 import javax.net.ssl.SSLContext;
 import java.io.*;
 import java.net.URI;
@@ -33,6 +37,10 @@ import java.security.KeyManagementException;
 import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
 import java.util.HashMap;
+import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 /**
@@ -62,7 +70,20 @@ public class ImporterRequest {
     }
 
 
-    public static CloseableHttpResponse post(String url, File importerFile ,String user, String pw) {
+    /**
+     * Uploads a file to a server through a POST call in multipart_form_data style
+     *
+     * This style of post is used by the XUnit and Testcase importer, the only difference is the endpoint in the URL.
+     * Note that the http response does not hold the data from the request.  Instead, the response of the request is
+     * actually sent through the CI Message Bus.  See CIBusListener class
+     *
+     * @param url
+     * @param importerFile
+     * @param user
+     * @param pw
+     * @return
+     */
+    public static CloseableHttpResponse post(String url, File importerFile , String user, String pw) {
         try {
             String text = Files.lines(importerFile.toPath()).reduce("", (acc, c) -> acc + c + "\n");
             ImporterRequest.logger.info(String.format("Sending this file to importer:\n%s", text));
@@ -126,7 +147,7 @@ public class ImporterRequest {
         return response;
     }
 
-    public static void printBody(HttpResponse response) {
+    private static void printBody(HttpResponse response) {
         HttpEntity entity = response.getEntity();
         try {
             BufferedReader bfr = new BufferedReader(new InputStreamReader(entity.getContent()));
@@ -135,5 +156,41 @@ public class ImporterRequest {
             e.printStackTrace();
         }
         System.out.println(response.toString());
+    }
+
+    /**
+     * Makes an importer REST call to upload testrun results
+     *
+     * @param url url including the server and endpoint
+     * @param user user to authenticate as
+     * @param pw password for user (note, not encrypted!!)
+     * @param reportPath path the XML file that will be uploaded
+     * @param selector a JMS Selector string
+     * @throws InterruptedException
+     * @throws ExecutionException
+     * @throws JMSException
+     */
+    public static void sendImportRequest(String url, String user, String pw, File reportPath, String selector)
+            throws InterruptedException, ExecutionException, JMSException {
+        Supplier<Optional<ObjectNode>> sup = CIBusListener.getCIMessage(selector);
+        CompletableFuture<Optional<ObjectNode>> future = CompletableFuture.supplyAsync(sup);
+        // FIXME: While this async code works, it's possible for the calling thread to finish before the handler is
+        // called.  Perhaps I can return the future, and the calling thread just joins()?
+        //future.thenAccept(messageHandler());
+
+        CloseableHttpResponse resp = ImporterRequest.post(url, reportPath, user, pw);
+        HttpEntity entity = resp.getEntity();
+        try {
+            BufferedReader bfr = new BufferedReader(new InputStreamReader(entity.getContent()));
+            System.out.println(bfr.lines().collect(Collectors.joining("\n")));
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        System.out.println(resp.toString());
+
+        // FIXME:  Should I synchronize here?  If I leave this out and return future, it is the caller's responsibility
+        // to check by either calling get() or join()
+        Optional<ObjectNode> maybeNode = future.get();
+        XUnitReporter.xunitMessageHandler().accept(maybeNode);
     }
 }
