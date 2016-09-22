@@ -37,12 +37,12 @@ import java.lang.annotation.*;
 @Target(ElementType.METHOD)
 @Retention(RetentionPolicy.RUNTIME)
 public @interface TestDefinition {
-    DefTypes.Project projectID();
+    DefTypes.Project[] projectID();     // An array (actually set) of projects this definition applies to
 
     String testCaseID() default "";
     String author() default "CI User";
     String title() default "";
-    String description() default "";           // Must have description but may come from @Test
+    String description() default "";    // Must have description but may come from @Test
     String setup() default "";
     String teardown() default "";
 
@@ -55,10 +55,11 @@ public @interface TestDefinition {
 
     // FIXME: In the TestCase importer, teststeps is actually just a string which seems wrong
     TestStep[] teststeps() default {};
+    int params() default 0;  // Optional: number of parameters the testmethod takes (used for DataProvider tests)
 
     // TODO: Currently, there is no Requirements importer, so this is actually not used.  In fact, there is not even
-    // a way currently to link to other existing WorkItems
-    Requirement[] reqs();
+    // a way currently to link to other existing WorkItems.  When a Requirement importer is created, get rid of default
+    Requirement[] reqs() default {};
 
     // Rarely used
     String assignee() default "";
