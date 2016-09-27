@@ -60,6 +60,23 @@ public enum DefTypes {
         }
     }
 
+    public enum Custom implements ToString {
+        CASEAUTOMATION,
+        CASEIMPORTANCE,
+        CASELEVEL,
+        CASEPOSNEG,
+        UPSTREAM,
+        TAGS,
+        SETUP,
+        TEARDOWN,
+        COMPONENT,
+        SUBCOMPONENT,
+        AUTOMATION_SCRIPT,
+        TESTTYPE,
+        SUBTYPE1,
+        SUBTYPE2
+    }
+
     public enum Severity implements ToString {
         MUSTHAVE, SHOULDHAVE, NICETOHAVE, WILLNOTHAVE
     }

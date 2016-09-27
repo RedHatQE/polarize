@@ -1,18 +1,16 @@
 package com.github.redhatqe.polarize.junitreporter;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.github.redhatqe.polarize.CIBusListener;
+
 import com.github.redhatqe.polarize.IJAXBHelper;
+import com.github.redhatqe.polarize.exceptions.RequirementAnnotationException;
 import com.github.redhatqe.polarize.exceptions.XMLDescriptionError;
 import com.github.redhatqe.polarize.exceptions.XMLUnmarshallError;
 import com.github.redhatqe.polarize.importer.ImporterRequest;
 import com.github.redhatqe.polarize.importer.xunit.*;
 import com.github.redhatqe.polarize.metadata.Requirement;
 import com.github.redhatqe.polarize.metadata.TestDefinition;
-import com.github.redhatqe.polarize.schema.WorkItem;
-import com.github.redhatqe.polarize.utils.Tuple;
 import org.apache.http.HttpEntity;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.slf4j.Logger;
@@ -21,19 +19,16 @@ import org.testng.*;
 import org.testng.xml.XmlSuite;
 import org.testng.xml.XmlTest;
 
-import javax.jms.Connection;
 import javax.jms.JMSException;
-import javax.jms.Message;
+
 import java.io.*;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.security.KeyException;
 import java.util.*;
 import java.util.Properties;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Consumer;
-import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 /**
@@ -142,15 +137,6 @@ public class XUnitReporter implements IReporter {
      *
      * Example of a modified junit file:
      *
-     * <testsuites>
-     *
-     *     <testsuite>
-     *         <testcase>
-     *
-     *         </testcase>
-     *     </testsuite>
-     * </testsuites>
-     *
      * @param xmlSuites passed by TestNG
      * @param suites passed by TestNG
      * @param outputDirectory passed by TestNG.  configurable?
@@ -221,8 +207,6 @@ public class XUnitReporter implements IReporter {
         }
         System.out.println(resp.toString());
     }
-
-
 
     /**
      * A function factory that returns a Consumer type function usable to determine success of XUnit import request
@@ -477,12 +461,8 @@ public class XUnitReporter implements IReporter {
             return tcase.getId();
         }
         else if (t == Requirement.class) {
-            Optional<WorkItem> wi;
-            wi = IJAXBHelper.unmarshaller(WorkItem.class, xmldesc, jaxb.getXSDFromResource(WorkItem.class));
-            if (wi.isPresent())
-                return wi.get().getRequirement().getId();
-            else
-                return "";
+            XUnitReporter.logger.error("Not using @Requirement until requirement importer is done");
+            throw new RequirementAnnotationException();
         }
         else
             throw new XMLDescriptionError();

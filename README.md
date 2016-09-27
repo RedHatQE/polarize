@@ -75,12 +75,6 @@ From the following annotation:
               testtype=@TestType(testtype= DefTypes.TestTypes.NONFUNCTIONAL,  // Defaults to FUNCTIONAL
                                  subtype1= DefTypes.Subtypes.COMPLIANCE,      // Defaults to EMPTY (see note)
                                  subtype2= DefTypes.Subtypes.EMPTY),          // Defaults to EMPTY (see note)
-              reqs={@Requirement(id="",            // if empty, look for class Requirement.  If no class requirement
-                                                   // look for xmlDesc.  If none, that means request one.
-                                 project=Project.RedHatEnterpriseLinux7,
-                                 description="This description will override class level",
-                                 xmlDesc="/tmp/path/to/xml/description/testUpgradeNegative.xml",
-                                 feature="/tmp/path/to/a/gherkin/file/requirements.feature")},
               setup="Description of any preconditions that must be established for test case to run",
               teardown="The methods to clean up after a test method")
     @Test(groups={"simple"},
@@ -92,7 +86,6 @@ From the following annotation:
     }
 ```
 
-**NOTE** the @Requirement is not used at all, and indeed, I haven't heard of work for a Requirement importer as of yet.
 
 For testrun results, polarize also comes with a class XUnitReporter that implements TestNG's IReporter interface.  By 
 setting your TestNG test to use this Reporter, it will generate the xunit which is compatible with the XUnit Importer.
@@ -234,14 +227,6 @@ import java.util.List;
  *
  * Created by stoner on 7/12/16.
  */
-@Requirement(project=Project.RHEL6,
-             author="Sean Toner",
-             description="Class level Requirement for RHEL 6.  All test methods will inherit from a class annotated " +
-                     "with @Requirement.  If a test method's @TestDefinition annotation has a non-empty reqs field, " +
-                     "any @Requirements there will override the class Requirement for that method")
-@Requirement(project=Project.RedHatEnterpriseLinux7,
-             author="CI User",
-             description="Class level Requirement for RHEL7")
 public class TestReq {
 
     @TestDefinition(projectID=Project.RHEL6,
@@ -301,6 +286,51 @@ Given the above annotations, and polarize.properties as shown earlier, polarize 
       - Take the return response and look for the Polarion ID.  Edit this value into the xml description file
 - Once the xml file is ready, we know the mapping between test method and Polarion Requirement and TestCase ID
 - When the test run is done and the junit report is created, post process the result file
+
+Here are some more examples.
+
+**Simplified (using defaults)**
+
+```java
+    /**
+     * Shows an example of TestSteps with default named Params.
+     *
+     * This is a test that uses a DataProvider.  The annotation processor will determine the names of the arguments
+     * and use this as the names for the TestStep Parameters.  In the example below, the processor will determine that
+     * this method has 2 arguments called "name" and "age".  It will create the XML necessary to include those params.
+     * 
+     * Notice that this also has projectID set to an array.  If the TestDefinition is identical except for the project
+     * then you can set the projectID like this.  If there is any difference, then you must use a repeating annotation.
+     * Note also that if the projectID is an array, that the testCaseID must 
+     *
+     * @param name
+     * @param age
+     */
+    @TestDefinition(author="stoner", projectID={Project.RHEL6, Project.RedHatEnterpriseLinux7})
+    @Test(groups={"simple"},
+          description="Shows how to add parameters named '0', '1', '2', etc through @TestSteps",
+          dataProvider="simpleProvider")
+    public void testUpgrade(String name, int age) {
+        Assert.assertTrue(name.equals("Sean") || name.equals("Toner"));
+        Assert.assertTrue(age < 100);
+    }
+
+    @DataProvider(name="simpleProvider")
+    public Object[][] dataDriver() {
+        Object[][] table = new Object[2][2];
+        List<Object> row = new ArrayList<>();
+
+        row.add("Sean");
+        row.add(44);
+        table[0] = row.toArray();
+
+        row = new ArrayList<>();
+        row.add("Toner");
+        row.add(0);
+        table[1] = row.toArray();
+        return table;
+    }
+```
 
 ### Making use of XUnitReporter for TestNG
 

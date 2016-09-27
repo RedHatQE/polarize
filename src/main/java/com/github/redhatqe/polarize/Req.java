@@ -1,7 +1,7 @@
 package com.github.redhatqe.polarize;
 
 /**
- * Created by stoner on 9/27/16.
+ * Placeholder for Requirements importer
  */
-public class Requirements {
+public class Req {
 }

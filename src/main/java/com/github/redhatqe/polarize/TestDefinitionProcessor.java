@@ -1,20 +1,16 @@
 package com.github.redhatqe.polarize;
 
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.github.redhatqe.polarize.exceptions.*;
 import com.github.redhatqe.polarize.importer.ImporterRequest;
 import com.github.redhatqe.polarize.importer.testcase.*;
 import com.github.redhatqe.polarize.junitreporter.ReporterConfig;
 import com.github.redhatqe.polarize.junitreporter.XUnitReporter;
 import com.github.redhatqe.polarize.metadata.*;
-import com.github.redhatqe.polarize.metadata.TestStep;
-import com.github.redhatqe.polarize.metadata.TestSteps;
-import com.github.redhatqe.polarize.schema.*;
 
 import com.github.redhatqe.polarize.importer.testcase.Testcase;
+import com.github.redhatqe.polarize.utils.Consumer2;
 import com.github.redhatqe.polarize.utils.Transformer;
 import com.github.redhatqe.polarize.utils.Tuple;
-import com.github.redhatqe.polarize.utils.Tuple3;
 import org.apache.http.StatusLine;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.testng.annotations.Test;
@@ -30,7 +26,6 @@ import javax.lang.model.util.Elements;
 import javax.tools.Diagnostic;
 import java.io.*;
 import java.lang.annotation.Annotation;
-import java.net.URL;
 import java.nio.file.Path;
 import java.util.*;
 import java.util.concurrent.ExecutionException;
@@ -39,6 +34,9 @@ import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import static com.github.redhatqe.polarize.metadata.DefTypes.*;
+import static com.github.redhatqe.polarize.metadata.DefTypes.Custom.*;
 
 
 /**
@@ -126,26 +124,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         return metas;
     }
 
-    /**
-     * Creates a List of Meta types from a Requirements annotation
-     *
-     * @param elements a list of Elements
-     * @return a list of Metas of type Requirement
-     */
-    private List<Meta<Requirement>>
-    makeMetaFromRequirements(List<? extends Element> elements){
-        List<Meta<Requirement>> metas = new ArrayList<>();
-        for(Element e : elements) {
-            Requirements container = e.getAnnotation(Requirements.class);
-            for(Requirement r: container.value()) {
-                Meta<Requirement> m = new Meta<>();
-                m.qualifiedName = this.getTopLevel(e, "", m);
-                m.annotation = r;
-                metas.add(m);
-            }
-        }
-        return metas;
-    }
+
 
     private List<Parameter> findParameterData(Element e) {
         List<Parameter> parameters = new ArrayList<>();
@@ -172,8 +151,14 @@ public class TestDefinitionProcessor extends AbstractProcessor {
             TestDefinitions container = e.getAnnotation(TestDefinitions.class);
             List<Parameter> params = this.findParameterData(e);
             for(TestDefinition r: container.value()) {
-                for(DefTypes.Project project: r.projectID()) {
+                int i = 0;
+                for(Project project: r.projectID()) {
+                    String testID = "";
+                    if (i < r.testCaseID().length)
+                        testID = r.testCaseID()[i];
+
                     Meta<TestDefinition> m = new Meta<>();
+                    m.testCaseID = testID;
                     String full = this.getTopLevel(e, "", m);
                     this.logger.info(String.format("Fully qualified name is %s", full));
                     m.qualifiedName = full;
@@ -196,7 +181,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         for(Element e : elements) {
             List<Parameter> params = this.findParameterData(e);
             TestDefinition def = e.getAnnotation(TestDefinition.class);
-            for(DefTypes.Project project: def.projectID()) {
+            for(Project project: def.projectID()) {
                 Meta<TestDefinition> m = new Meta<>();
                 String full = this.getTopLevel(e, "", m);
                 this.logger.info(String.format("Fully qualified name is %s", full));
@@ -230,34 +215,15 @@ public class TestDefinitionProcessor extends AbstractProcessor {
     public boolean process(Set<? extends TypeElement> set, RoundEnvironment roundEnvironment) {
         System.out.println("In process() method");
 
-        this.logger.info("Getting all the @Requirement annotations which have been repeated");
-        TreeSet<ElementKind> allowed = new TreeSet<>();
-        allowed.add(ElementKind.CLASS);
-        String err = "Can only annotate classes with @Requirements";
-        List<? extends Element> repeatedAnns = this.getAnnotations(roundEnvironment, Requirements.class, allowed, err);
-        List<Meta<Requirement>> requirements = this.makeMetaFromRequirements(repeatedAnns);
-
-        /* ************************************************************************************
-         * Get all the @Requirement annotated on a class that are not repeated. We will use the information here to
-         * generate the XML for requirements.  If a @TestDefinition annotated test method has an empty reqs, we will
-         * look in methToRequirements for the associated Requirement.
-         **************************************************************************************/
-        allowed = new TreeSet<>();
-        allowed.add(ElementKind.CLASS);
-        allowed.add(ElementKind.METHOD);
-        err = "Can only annotate classes or methods with @Requirement";
-        List<? extends Element> reqAnns = this.getAnnotations(roundEnvironment, Requirement.class, allowed, err);
-        requirements.addAll(this.makeMeta(reqAnns, Requirement.class));
-        this.methToProjectReq.putAll(this.createMethodToMetaRequirementMap(requirements));
 
         /* ************************************************************************************
          * Get all the @TestDefinition annotations which were annotated on an element only once.
          * Make a list of Meta types that store the fully qualified name of every @TestDefinition annotated
          * method.  We will use this to create a map of qualified_name => TestDefinition Annotation
          **************************************************************************************/
-        allowed = new TreeSet<>();
+        TreeSet<ElementKind> allowed = new TreeSet<>();
         allowed.add(ElementKind.METHOD);
-        err = "Can only annotate methods with @TestDefinition";
+        String err = "Can only annotate methods with @TestDefinition";
         List<? extends Element> polAnns = this.getAnnotations(roundEnvironment, TestDefinition.class, allowed, err);
         List<Meta<TestDefinition>> metas = this.makeMetaFromTestDefinition(polAnns);
 
@@ -281,6 +247,12 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         /* testcases holds all the methods that need a new or updated Polarion TestCase */
         this.logger.info("Updating testcases that had <update>...");
         Optional<Connection> conn = this.testcasesImporterRequest();
+        if (conn.isPresent())
+            try {
+                conn.get().close();
+            } catch (JMSException e) {
+                e.printStackTrace();
+            }
         this.tcMap = new HashMap<>();
 
         return true;
@@ -300,28 +272,6 @@ public class TestDefinitionProcessor extends AbstractProcessor {
                         })
                         .collect(Collectors.toList()).stream())
                 .collect(Collectors.toList());
-    }
-
-    /**
-     * Run processRequirement on Requirements annotated at the class level.
-     *
-     * Since these are annotated at the class level they must have the projectID
-     *
-     * @return List of ReqType or null
-     */
-    private List<ReqType> processAllRequirements() {
-        List<ReqType> reqList = this.methToProjectReq.entrySet().stream()
-                .flatMap(es -> es.getValue().entrySet().stream()
-                        .map(val -> {
-                            Meta<Requirement> meta = val.getValue();
-                            ReqType req = this.createReqTypeFromRequirement(meta.annotation);
-                            return this.processRequirement(meta, req);
-                        })
-                        .collect(Collectors.toList()).stream())
-                .collect(Collectors.toList());
-        if(reqList.stream().anyMatch(rt -> rt == null))
-            return null;
-        return reqList;
     }
 
     private void createTestCaseXML(Testcase tc,
@@ -368,6 +318,22 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         if (this.polarizeConfig.get("do.xunit").equals("no"))
             return Optional.empty();
 
+        // TODO: Listen to the message bus, and get the returned data.  We need to get the returned message back
+        CIBusListener bl = new CIBusListener(Configurator.loadConfiguration());
+        String selector = bl.polarizeConfig.get("importer.testcase.response.name");
+        ResponseProperties respProp = this.testcases.getResponseProperties();
+        if (respProp == null)
+            respProp = new ResponseProperties();
+        this.testcases.setResponseProperties(respProp);
+        List<ResponseProperty> props = respProp.getResponseProperty();
+        ResponseProperty rprop = new ResponseProperty();
+        String[] custom = selector.split("=");
+        if (custom.length == 0)
+            custom = bl.polarizeConfig.get("importer.testcase.response.custom").split("=");
+
+        rprop.setName(custom[0]);
+        rprop.setValue(custom[1]);
+        props.add(rprop);
 
         CloseableHttpResponse resp = this.sendTCImporterRequest();
         StatusLine status = resp.getStatusLine();
@@ -376,11 +342,6 @@ public class TestDefinitionProcessor extends AbstractProcessor {
             return Optional.empty();
         }
 
-        // TODO: Listen to the message bus, and get the returned data.  We need to get the returned message back
-        CIBusListener bl = new CIBusListener(Configurator.loadConfiguration());
-        String selector = bl.polarizeConfig.get("importer.testcase.response.name");
-        // Optional<Tuple<Connection, ObjectNode>> maybe;
-        // maybe = bl.tapIntoMessageBus(selector);
         Connection conn = null;
         Optional<Tuple<Connection, Message>> maybe = bl.waitForMessage(selector);
         if (maybe.isPresent()) {
@@ -388,12 +349,14 @@ public class TestDefinitionProcessor extends AbstractProcessor {
             conn = tuple.first;
             Message msg = tuple.second;
             try {
-                ObjectNode root = bl.parseMessage(msg);
+                bl.parseMessage(msg);
             } catch (ExecutionException e) {
                 e.printStackTrace();
             } catch (InterruptedException e) {
+                this.logger.error("Retry....got interrupted exception");
                 e.printStackTrace();
             } catch (JMSException e) {
+                this.logger.error("JMS exception, make sure the broker is running and the selector is valid");
                 e.printStackTrace();
             }
         }
@@ -422,7 +385,6 @@ public class TestDefinitionProcessor extends AbstractProcessor {
     createMethodToMetaPolarionMap(List<Meta<TestDefinition>> metas) {
         Map<String, Map<String, Meta<TestDefinition>>> methods = new HashMap<>();
         for(Meta<TestDefinition> m: metas) {
-            TestDefinition ann = m.annotation;
             String meth = m.qualifiedName;
             String project = m.project;
 
@@ -522,13 +484,12 @@ public class TestDefinitionProcessor extends AbstractProcessor {
      *
      * Uses the information from the meta type and project to know where to find XML description file
      *
-     * @param meta
-     * @param project
-     * @param <T>
-     * @return
+     * @param meta a Meta of type T
+     * @param <T> The class type for the Meta
+     * @return An Optional<File> if the xml exists
      */
-    private <T> Optional<File> getFileFromMeta(Meta<T> meta, String project) {
-        Path path = FileHelper.makeXmlPath(this.tcPath, meta, project);
+    private <T> Optional<File> getFileFromMeta(Meta<T> meta) {
+        Path path = FileHelper.makeXmlPath(this.tcPath, meta, meta.project);
         File xmlDesc = path.toFile();
         if (!xmlDesc.exists())
             return Optional.empty();
@@ -536,15 +497,15 @@ public class TestDefinitionProcessor extends AbstractProcessor {
     }
 
     /**
-     *  Unmarshalls an Optional of type T from the given Meta object
+     * Unmarshalls an Optional of type T from the given Meta object
      *
      * From the data contained in the Meta object, function looks for the XML description file and unmarshalls it to
      * the class given by class t.
      *
-     * @param meta
+     * @param meta a Meta of type TestDefinition used to get information for type T
      * @param t class type
      * @param <T> class to unmarshall to
-     * @return
+     * @return Optionally a type of T if possible
      */
     private <T> Optional<T> getTypeFromMeta(Meta<TestDefinition> meta, Class<T> t) {
         //TODO: Check for XML Desc file for TestDefinition
@@ -565,8 +526,8 @@ public class TestDefinitionProcessor extends AbstractProcessor {
     /**
      * Unmarshalls Testcase from XML pointed at in meta, and gets the Polarion ID
      *
-     * @param meta
-     * @return
+     * @param meta the meta object that will be unmarshalled
+     * @return Optionally the String of the Polarion ID
      */
     private Optional<String> getPolarionIDFromXML(Meta<TestDefinition> meta) {
         Optional<Testcase> tc = this.getTypeFromMeta(meta, Testcase.class);
@@ -586,7 +547,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
 
     private Optional<String> getPolarionIDFromTestcase(Meta<TestDefinition> meta) {
         TestDefinition def = meta.annotation;
-        String id = def.testCaseID();
+        String id = meta.testCaseID;
         if (id.equals(""))
             return Optional.empty();
         return Optional.of(id);
@@ -610,6 +571,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
                 .map(p -> {
                     TestStepColumn col = new TestStepColumn();
                     col.getContent().add(p);
+                    col.setId("description");
                     return col;
                 })
                 .collect(Collectors.toList());
@@ -618,53 +580,130 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         com.github.redhatqe.polarize.importer.testcase.TestStep ts =
                 new com.github.redhatqe.polarize.importer.testcase.TestStep();
         List<TestStepColumn> cols = ts.getTestStepColumn();
-        if (meta.params != null && meta.params.size() > 0)
-            cols.addAll(parameterize.transform(meta.params));
+        if (meta.params != null && meta.params.size() > 0) {
+            List<TestStepColumn> tcolumns = parameterize.transform(meta.params);
+            cols.addAll(tcolumns);
+        }
+        else {
+            TestStepColumn tsc = new TestStepColumn();
+            tsc.setId("description");
+            cols.add(tsc);
+        }
         tsteps.add(ts);
         tc.setTestSteps(isteps);
     }
 
+    private String getPolarionIDFromDef(TestDefinition def, String project) {
+        int index = -1;
+        Project[] projects = def.projectID();
+        String[] ids = def.testCaseID();
+        if (ids.length == 0)
+            return "";
+
+        for(int i = 0; i < projects.length; i++) {
+            if (projects[i].toString().equals(project)) {
+                index = i;
+                break;
+            }
+        }
+        if (index < 0) {
+            this.logger.error("The meta.project value not found in TestDefintion.projectID()");
+            throw new PolarionMappingError();
+        }
+        return ids[index];
+    }
+
+    /**
+     *
+     * @param meta
+     * @return
+     */
     private Testcase
     initImporterTestcase(Meta<TestDefinition> meta) {
         Testcase tc = new Testcase();
         TestDefinition def = meta.annotation;
         this.initTestSteps(meta, tc);
-        tc.setAutomation("true");
-        tc.setImportance(def.importance().stringify());
-        tc.setLevel(def.level().stringify());
-        tc.setPosneg(def.posneg().stringify());
+        CustomFields custom = tc.getCustomFields();
+        if (custom == null)
+            custom = new CustomFields();
+        List<CustomField> fields = custom.getCustomField();
+        DefTypes.Custom[] fieldKeys = {CASEAUTOMATION, CASEIMPORTANCE, CASELEVEL, CASEPOSNEG, UPSTREAM, TAGS, SETUP,
+                                       TEARDOWN, AUTOMATION_SCRIPT, COMPONENT, SUBCOMPONENT, TESTTYPE, SUBTYPE1,
+                                       SUBTYPE2};
 
-        if (!def.automation().stringify().equals(""))
-            tc.setAutomation(def.automation().stringify());
-        if (!def.script().equals(""))
-            tc.setAutomationScript(def.script());
-        if (!def.component().equals(""))
-            tc.setComponent(def.component());
-        if (!def.assignee().equals(""))
-            tc.setAssignee(def.assignee());
-        if (!def.initialEstimate().equals(""))
-            tc.setInitialEstimate(def.initialEstimate());
-        if (!def.setup().equals(""))
-            tc.setSetup(def.setup());
-        if (!def.teardown().equals(""))
-            tc.setTeardown(def.teardown());
-        if (!def.subcomponent().equals(""))
-            tc.setSubcomponent(def.subcomponent());
-        if (!def.tags().equals(""))
-            tc.setTags(def.tags());
+        Consumer2<String, String> supp = (id, content) -> {
+            CustomField field = new CustomField();
+            if (!content.equals("")) {
+                field.setId(id);
+                field.setContent(content);
+                fields.add(field);
+            }
+        };
 
-        if (def.title().equals(""))
-            tc.setTitle(meta.qualifiedName);
-        else
-            tc.setTitle(def.title());
+        Consumer<DefTypes.Custom> transformer = key -> {
+            switch (key) {
+                case CASEAUTOMATION:
+                    supp.accept(CASEAUTOMATION.stringify(), def.automation().stringify());
+                    break;
+                case CASEIMPORTANCE:
+                    supp.accept(CASEIMPORTANCE.stringify(), def.importance().stringify());
+                    break;
+                case CASELEVEL:
+                    supp.accept(CASELEVEL.stringify(), def.level().stringify());
+                    break;
+                case CASEPOSNEG:
+                    supp.accept(CASEPOSNEG.stringify(), def.posneg().stringify());
+                    break;
+                case UPSTREAM:
+                    supp.accept(UPSTREAM.stringify(), def.upstream());
+                    break;
+                case TAGS:
+                    supp.accept(TAGS.stringify(), def.tags());
+                    break;
+                case SETUP:
+                    supp.accept(SETUP.stringify(), def.setup());
+                    break;
+                case TEARDOWN:
+                    supp.accept(TEARDOWN.stringify(), def.teardown());
+                    break;
+                case COMPONENT:
+                    supp.accept(COMPONENT.stringify(), def.component());
+                    break;
+                case SUBCOMPONENT:
+                    supp.accept(SUBCOMPONENT.stringify(), def.subcomponent());
+                    break;
+                case AUTOMATION_SCRIPT:
+                    supp.accept(AUTOMATION_SCRIPT.stringify(), def.script());
+                    break;
+                case TESTTYPE:
+                    supp.accept(TESTTYPE.stringify(), def.testtype().testtype().stringify());
+                    break;
+                case SUBTYPE1:
+                    supp.accept(SUBTYPE1.stringify(), def.testtype().subtype1().toString());
+                    break;
+                case SUBTYPE2:
+                    supp.accept(SUBTYPE2.stringify(), def.testtype().subtype2().toString());
+                default:
+                    this.logger.warn("Unknown enum value");
+            }
+        };
+
+        for(DefTypes.Custom cust: fieldKeys) {
+            transformer.accept(cust);
+        }
 
         if (def.description().equals(""))
             tc.setDescription(this.methNameToTestNGDescription.get(meta.qualifiedName));
         else
             tc.setDescription(def.description());
 
-        TestType tType = def.testtype();
-        this.setTestType(tType, tc);
+        if (def.title().equals(""))
+            tc.setTitle(meta.qualifiedName);
+        else
+            tc.setTitle(def.title());
+
+        tc.setId(this.getPolarionIDFromDef(def, meta.project));
+        tc.setCustomFields(custom);
         return tc;
     }
 
@@ -683,7 +722,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         //this.initRequirementsFromTestDef(meta, tc);
 
         // Check to see if there is an existing XML description file with Polarion ID
-        Optional<File> xml = this.getFileFromMeta(meta, meta.project);
+        Optional<File> xml = this.getFileFromMeta(meta);
         if (!xml.isPresent()) {
             Path path = FileHelper.makeXmlPath(this.tcPath, meta, meta.project);
             File xmlDesc = path.toFile();
@@ -715,7 +754,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
                 if (maybeTC.isPresent()) {
                     Testcase tcase = maybeTC.get();
                     tcase.setId(maybePolarionID.get());
-                    Optional<File> path = this.getFileFromMeta(meta, meta.project);
+                    Optional<File> path = this.getFileFromMeta(meta);
                     if (path.isPresent()) {
                         IJAXBHelper.marshaller(tcase, path.get(), jaxb.getXSDFromResource(Testcase.class));
                     }
@@ -735,234 +774,6 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         }
         return tc;
     }
-
-    private void setTestType(TestType tType, Testcase tc) {
-        String sub1 = tType.subtype1().toString();
-        String sub2 = tType.subtype2().toString();
-        // FIXME: Ughhh I wish Java had something like clojure's extend protocol.  Great example of expression problem
-        // here.  Functional, Nonfunctional, and Structural should have implemented a common interface.
-        switch(tType.testtype()) {
-            case FUNCTIONAL:
-                Functional func = new Functional();
-                func.setSubtype1(sub1);
-                func.setSubtype2(sub2);
-                tc.setFunctional(func);
-                break;
-            case NONFUNCTIONAL:
-                Nonfunctional nf = new Nonfunctional();
-                nf.setSubtype1(sub1);
-                nf.setSubtype2(sub2);
-                tc.setNonfunctional(nf);
-                break;
-            case STRUCTURAL:
-                Structural struc = new Structural();
-                struc.setSubtype1(sub1);
-                struc.setSubtype2(sub2);
-                tc.setStructural(struc);
-                break;
-            default:
-                throw new TestDefinitionAnnotationError();
-        }
-    }
-
-    /**
-     * TODO: Need a Requirement importer for this
-     * Gets @Requirements from within a @TestDefinition and processes them
-     *
-     * @param meta a Meta type representing metadata of a method
-     * @param tc
-     */
-    private void initRequirementsFromTestDef(Meta<TestDefinition> meta, Testcase tc) {
-        TestDefinition pol = meta.annotation;
-        Requirement[] reqs = pol.reqs();
-        // If reqs is empty look at the class annotated requirements contained in methToProjectReq
-        if (reqs.length == 0) {
-            String pkgClassname = String.format("%s.%s", meta.packName, meta.className);
-            String project = meta.project;
-            if (this.methToProjectReq.containsKey(pkgClassname)) {
-                Meta<Requirement> r = this.methToProjectReq.get(pkgClassname).get(project);
-                reqs = new Requirement[1];
-                reqs[0] = r.annotation;
-            }
-            else {
-                String err = String.format("\nThere is no requirement for %s.", tc.getTitle());
-                String err2 = "\nEither the class must be annotated with @Requirement, or the " +
-                        "@TestDefinition(reqs={@Requirement(...)}) must be filled in";
-                this.logger.error(err + err2);
-                throw new RequirementAnnotationException();
-            }
-        }
-        // FIXME: The TestCase importer does not yet have a linked work item section.  So we can't add Requirements
-        //Testcase.Requirements treq = new Testcase.Requirements();
-        //List<ReqType> r = treq.getRequirement();
-        for(Requirement e: reqs) {
-            Meta<Requirement> m = new Meta<>(meta);
-            m.annotation = e;
-            String projID = meta.project;
-            ProjectVals proj = ProjectVals.fromValue(projID);
-            ReqType req = this.processRequirement(m, proj);
-            //r.add(req);
-        }
-        //tc.setRequirements(treq);
-    }
-
-    /**
-     * TODO: Need a Requirement Importer for this
-     * Generates XML description files for Requirements
-     * <p/>
-     * Given the Requirement annotation data, do the following:
-     * <p/>
-     * <ul>
-     *   <li>Check if requirements.xml.path/class/methodName.xml exists</li>
-     *   <ul>
-     *     <li>Verify the XML has TestDefinition ID</li>
-     *     <ul>
-     *       <li>If the ID doesn't exist, look in the annotation.</li>
-     *       <li>If the annotation doesn't have it, issue a WorkItem importer request</li>
-     *     </ul>
-     *   </ul>
-     *   <ul>
-     *     <li>Verify that the TestDefinition ID matches the method</li>
-     *   </ul>
-     *   <li>If xml description file does not exist:</li>
-     *   <ul>
-     *     <li>Generate XML description and request for WorkItem importer</li>
-     *     <li>Wait for return value to get the Requirement ID</li>
-     *   </ul>
-     * </ul>
-     *
-     * @param meta Meta of type Requirement that holds data to fully initialize req
-     * @param req (possibly) partially initialized ReqType
-     * @return fully initialized ReqType object
-     */
-    private ReqType processRequirement(Meta<Requirement> meta, ReqType req) {
-        Requirement r = meta.annotation;
-        if (req.getProject().value().equals(""))
-            throw new RequirementAnnotationException();
-
-        String projID = req.getProject().value();
-        Path path = FileHelper.makeXmlPath(this.reqPath, meta, projID);
-        File xmlDesc = path.toFile();
-        Optional<WorkItem> wi;
-
-        if (path.toFile().exists()) {
-            // If we override, regenerate the XML description file
-            if (r.update()) {
-                this.createRequirementXML(req, xmlDesc);
-            }
-            wi = IJAXBHelper.unmarshaller(WorkItem.class, xmlDesc, this.jaxb.getXSDFromResource(WorkItem.class));
-            if (!wi.isPresent())
-                throw new XMLDescriptonCreationError();
-
-            // Check if the ID is in the xml description file
-            WorkItem item = wi.get();
-            String id = item.getRequirement().getId();
-            if (id.equals("")) {
-                //this.testCaseImporterRequest(xmlDesc);
-            }
-            return wi.get().getRequirement();
-        }
-        else {
-            IFileHelper.makeDirs(path);
-            if(r.id().equals("")) {
-                this.logger.info("No polarionID...");
-                // Check for xmlDesc.  If both the id and xmlDesc are empty strings, then we need to generate XML file
-                // based on the Requirement metadata.  If xmlDesc is not an empty string, validate it and unmarshall
-                // it to a WorkItem
-                if (r.xmlDesc().equals("")) {
-                    ReqType generated = this.createRequirementXML(req, xmlDesc);  // generate the desc file
-                    //this.testCaseImporterRequest(xmlDesc);
-                    return generated;
-                }
-                else {
-                    String finalPath = r.xmlDesc();
-                    Path xmlpath = IFileHelper.makeRequirementXmlPath(finalPath, "");
-                    File desc = xmlpath.toFile();
-                    // FIXME: If the desc doesn't exist, should this be an error?
-                    if (!desc.exists()) {
-                        this.logger.info("xmlDesc was given but doesn't exist.  Generating one...");
-                        IFileHelper.makeDirs(xmlpath);
-                        ReqType generated = this.createRequirementXML(req, desc);
-                        //this.testCaseImporterRequest(desc);
-                        return generated;
-                    }
-                    else {
-                        this.logger.info(String.format("%s exists. Validating...", xmlpath.toString()));
-                        URL xsdv = this.jaxb.getXSDFromResource(WorkItem.class);
-                        wi = IJAXBHelper.unmarshaller(WorkItem.class, desc, xsdv);
-                        if (wi.isPresent())
-                            return wi.get().getRequirement();
-                        else
-                            throw new XMLDescriptionError();
-                    }
-                }
-            }
-            else {
-                this.logger.info("TODO: TestDefinition ID was given. Chech if xmldesc has the same");
-                wi = IJAXBHelper.unmarshaller(WorkItem.class, xmlDesc, this.jaxb.getXSDFromResource(WorkItem.class));
-                if (wi.isPresent())
-                    return wi.get().getRequirement();
-                else
-                    throw new XMLDescriptionError();
-            }
-        }
-    }
-
-    /**
-     * Creates an xml file based on information from a ReqType
-     *
-     * @param req the ReqType that will be marshalled into XML
-     * @param xmlpath path to marshall the xml to
-     * @return fully initialized ReqType
-     */
-    private ReqType createRequirementXML(ReqType req, File xmlpath) {
-        this.logger.info(String.format("Generating XML requirement descriptor in %s", xmlpath.toString()));
-        WorkItem wi = new WorkItem();
-        wi.setRequirement(req);
-        wi.setProjectId(req.getProject());
-        wi.setType(WiTypes.REQUIREMENT);
-
-        // TODO: Validate that the xmlpath is a valid XML file conforming to the schema
-        IJAXBHelper.marshaller(wi, xmlpath, this.jaxb.getXSDFromResource(wi.getClass()));
-        return wi.getRequirement();
-    }
-
-
-    /**
-     * Examines a Requirement object to obtain its values and generates an XML file
-     * <p/>
-     * First, it will check to see if id is an empty string.  Next, it will check if the xmlDesc value is also an
-     * empty string.  If both are empty, then given the rest of the information from the annotation, it will generate
-     * an XML file and place it in:
-     * <p/>
-     * resources/requirements/{package}/{class}/{methodName}.xml
-     *
-     * @param m Meta of type Requirement that will be processed
-     * @param project eg RHEL_6
-     */
-    private ReqType processRequirement(Meta<Requirement> m, ProjectVals project) {
-        ReqType init = this.createReqTypeFromRequirement(m.annotation);
-        init.setProject(project);
-        return this.processRequirement(m, init);
-    }
-
-    private ReqType createReqTypeFromRequirement(Requirement r) {
-        ReqType req = new ReqType();
-        req.setAuthor(r.author());
-        req.setDescription(r.description());
-        req.setId(r.id());
-        req.setPriority(r.priority().stringify());
-        try {
-            req.setProject(ProjectVals.fromValue(r.project().toString()));
-        } catch (Exception ex) {
-            this.logger.warn("No projectID...will try from @TestDefinition");
-        }
-        req.setReqtype(r.reqtype().stringify());
-        req.setSeverity(r.severity().stringify());
-        return req;
-    }
-
-
 
     @Override
     public synchronized void init(ProcessingEnvironment env) {

@@ -163,7 +163,8 @@ public class CIBusListener {
             }
         }
         else {
-            this.logger.error(String.format("Unknown Message:  Could not read message %s", msg.toString()));
+            String err = msg == null ? " was null" : msg.toString();
+            this.logger.error(String.format("Unknown Message:  Could not read message %s", err));
         }
         return root;
     }
