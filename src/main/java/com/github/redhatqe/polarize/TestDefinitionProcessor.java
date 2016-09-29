@@ -1,5 +1,8 @@
 package com.github.redhatqe.polarize;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.github.redhatqe.polarize.exceptions.*;
 import com.github.redhatqe.polarize.importer.ImporterRequest;
 import com.github.redhatqe.polarize.importer.testcase.*;
@@ -10,16 +13,12 @@ import com.github.redhatqe.polarize.metadata.*;
 import com.github.redhatqe.polarize.importer.testcase.Testcase;
 import com.github.redhatqe.polarize.utils.Consumer2;
 import com.github.redhatqe.polarize.utils.Transformer;
-import com.github.redhatqe.polarize.utils.Tuple;
-import org.apache.http.StatusLine;
-import org.apache.http.client.methods.CloseableHttpResponse;
 import org.testng.annotations.Test;
 
 
 import javax.annotation.processing.*;
 import javax.jms.Connection;
 import javax.jms.JMSException;
-import javax.jms.Message;
 import javax.lang.model.SourceVersion;
 import javax.lang.model.element.*;
 import javax.lang.model.util.Elements;
@@ -246,13 +245,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
 
         /* testcases holds all the methods that need a new or updated Polarion TestCase */
         this.logger.info("Updating testcases that had <update>...");
-        Optional<Connection> conn = this.testcasesImporterRequest();
-        if (conn.isPresent())
-            try {
-                conn.get().close();
-            } catch (JMSException e) {
-                e.printStackTrace();
-            }
+        this.testcasesImporterRequest();
         this.tcMap = new HashMap<>();
 
         return true;
@@ -282,7 +275,16 @@ public class TestDefinitionProcessor extends AbstractProcessor {
                 this.jaxb.getXSDFromResource(Testcase.class));
     }
 
-    private Optional<String> setTestcaseProjectID() {
+    /**
+     * Sets all the information necessary for the testcases object, and marshalls it to an XML file
+     *
+     * The XML that is created by this call can be used for the sendImportRequest method
+     *
+     * @param selectorName the response name (part of selector string)
+     * @param selectorValue value for the response name (part of selector string)
+     * @return
+     */
+    private Optional<String> initTestcases(String selectorName, String selectorValue) {
         String projectID = this.config.getProjectID();
         if (!this.tcMap.containsKey(projectID)) {
             this.logger.error("Project ID does not exist within Testcase Map");
@@ -295,84 +297,137 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         this.testcases.setProjectId(projectID);
         this.testcases.setUserId(this.config.getAuthor());
         this.testcases.getTestcase().addAll(this.tcMap.get(projectID));
-        return Optional.of(projectID);
-    }
 
-    /**
-     * FIXME: Need to redo this like the XUnitReporter.sendXunitImportRequest
-     *
-     * Generates the xml file that will be sent via a REST call to the TestCase Importer
-     */
-    private Optional<Connection> testcasesImporterRequest() {
-        if (this.tcMap.isEmpty()) {
-            this.logger.info("No more testcases to import ...");
-            return Optional.empty();
-        }
-
-        // TODO: Need to listen to the CI message bus.  Spawn this in a new thread since we need to start it first
-        // Look at Java 8's CompleteableFuture
-
-        if (!this.setTestcaseProjectID().isPresent())
-            return Optional.empty();
-
-        if (this.polarizeConfig.get("do.xunit").equals("no"))
-            return Optional.empty();
-
-        // TODO: Listen to the message bus, and get the returned data.  We need to get the returned message back
-        CIBusListener bl = new CIBusListener(Configurator.loadConfiguration());
-        String selector = bl.polarizeConfig.get("importer.testcase.response.name");
         ResponseProperties respProp = this.testcases.getResponseProperties();
         if (respProp == null)
             respProp = new ResponseProperties();
         this.testcases.setResponseProperties(respProp);
         List<ResponseProperty> props = respProp.getResponseProperty();
         ResponseProperty rprop = new ResponseProperty();
-        String[] custom = selector.split("=");
-        if (custom.length == 0)
-            custom = bl.polarizeConfig.get("importer.testcase.response.custom").split("=");
-
-        rprop.setName(custom[0]);
-        rprop.setValue(custom[1]);
+        rprop.setName(selectorName);
+        rprop.setValue(selectorValue);
         props.add(rprop);
 
-        CloseableHttpResponse resp = this.sendTCImporterRequest();
-        StatusLine status = resp.getStatusLine();
-        if (status.getStatusCode() != 200) {
-            this.logger.error(String.format("Http POST failed with %d", status.getStatusCode()));
-            return Optional.empty();
-        }
-
-        Connection conn = null;
-        Optional<Tuple<Connection, Message>> maybe = bl.waitForMessage(selector);
-        if (maybe.isPresent()) {
-            Tuple<Connection, Message> tuple = maybe.get();
-            conn = tuple.first;
-            Message msg = tuple.second;
-            try {
-                bl.parseMessage(msg);
-            } catch (ExecutionException e) {
-                e.printStackTrace();
-            } catch (InterruptedException e) {
-                this.logger.error("Retry....got interrupted exception");
-                e.printStackTrace();
-            } catch (JMSException e) {
-                this.logger.error("JMS exception, make sure the broker is running and the selector is valid");
-                e.printStackTrace();
-            }
-        }
-
-        if (conn != null)
-            return Optional.of(conn);
-        else
-            return Optional.empty();
+        File testcaseXml = new File(this.polarizeConfig.get("importer.testcases.file"));
+        IJAXBHelper.marshaller(this.testcases, testcaseXml, this.jaxb.getXSDFromResource(Testcases.class));
+        return Optional.of(projectID);
     }
 
-    private CloseableHttpResponse sendTCImporterRequest() {
+    /**
+     * FIXME: Need to redo this like the XUnitReporter.sendXunitImportRequest
+     * FIXME: Look into guice to inject dependency args (ie, don't look up polarize.properties)
+     *
+     * Generates the xml file that will be sent via a REST call to the TestCase Importer
+     */
+    private Optional<ObjectNode> testcasesImporterRequest() {
+        Optional<ObjectNode> maybeNode = Optional.empty();
+        if (this.tcMap.isEmpty()) {
+            this.logger.info("No more testcases to import ...");
+            return maybeNode;
+        }
+        if (this.polarizeConfig.get("do.xunit").equals("no"))
+            return maybeNode;
+
+        String selectorName = this.polarizeConfig.get("importer.testcase.response.name");
+        String selectorValue = this.polarizeConfig.get("importer.testcase.response.value");
+        String selector = String.format("%s='%s'", selectorName, selectorValue);
+        if (!this.initTestcases(selectorName, selectorValue).isPresent())
+            return maybeNode;
+
+        try {
+            maybeNode = this.sendTCImporterRequest(selector);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        } catch (ExecutionException e) {
+            e.printStackTrace();
+        } catch (JMSException e) {
+            e.printStackTrace();
+        }
+        return maybeNode;
+    }
+
+    /**
+     * Returns a lambda usable as a handler for ImporterRequest.sendImportRequest
+     *
+     * This handler will take the ObjectNode (for example, decoded from a message on the message bus) gets the
+     * @return
+     */
+    public Consumer<Optional<ObjectNode>> testcaseImportHandler() {
+        return node -> {
+            if (!node.isPresent()) {
+                this.logger.warn("No message was received");
+                return;
+            }
+            JsonNode root = node.get().get("root");
+            JsonNode testcases = root.get("import-testcases");
+            testcases.forEach(n -> {
+                String name = n.get("name").textValue();
+                if (!n.get("status").textValue().equals("failed")) {
+                    String id = n.get("id").toString();
+                    if (id.startsWith("\""))
+                        id = id.substring(1);
+                    if (id.endsWith("\""))
+                        id = id.substring(0, id.length() -1);
+                    this.logger.info("New Testcase id = " + id);
+                    Optional<Path> maybeXML = FileHelper.getXmlPath(this.tcPath, name, this.config.getProjectID());
+                    if (!maybeXML.isPresent()) {
+                        // In this case, we couldn't get the XML path due to a bad name or tcPath
+                        String err = String.format("Couldn't generate XML path for %s and %s", this.tcPath, name);
+                        this.logger.error(err);
+                        throw new InvalidArgument();
+                    }
+                    else {
+                        Path xmlDefinition = maybeXML.get();
+                        File xmlFile = xmlDefinition.toFile();
+                        if (!xmlFile.exists()) {
+                            this.logger.info("No XML file exists...generating one");
+                            Testcase matched = this.findTestcaseByName(name);
+                            IJAXBHelper.marshaller(matched, xmlFile, this.jaxb.getXSDFromResource(Testcase.class));
+                        }
+                        this.logger.debug(String.format("Found %s for method %s", xmlDefinition.toString(), name));
+                        this.logger.debug("Unmarshalling to edit the XML file");
+                        Testcase tc = XUnitReporter.setPolarionIDFromXML(xmlDefinition.toFile(), id);
+                        if (!tc.getId().equals(id)) {
+                            this.logger.error("Setting the id for the XML on the Testcase failed");
+                            throw new XMLEditError();
+                        }
+                        IJAXBHelper.marshaller(tc, xmlFile, this.jaxb.getXSDFromResource(Testcase.class));
+                    }
+                }
+                else {
+                    this.logger.error(String.format("Unable to create testcase for %s", name));
+                }
+            });
+        };
+    }
+
+    /**
+     * Finds a Testcase in testcases by matching name to the titles of the testcase
+     *
+     * @param name
+     * @return
+     */
+    private Testcase findTestcaseByName(String name) {
+        List<Testcase> tcs = this.testcases.getTestcase().stream()
+                .filter(tc -> {
+                    String title = tc.getTitle();
+                    return title.equals(name);
+                })
+                .collect(Collectors.toList());
+        if (tcs.size() != 1) {
+            this.logger.error("Found more than one matching qualified name in testcases");
+            throw new SizeError();
+        }
+        return tcs.get(0);
+    }
+
+    private Optional<ObjectNode> sendTCImporterRequest(String selector)
+            throws InterruptedException, ExecutionException, JMSException {
         String url = this.polarizeConfig.get("polarion.url") + this.polarizeConfig.get("importer.testcase.endpoint");
-        String testcaseXml = this.polarizeConfig.get("importer.testcases.file");
-        String user = this.polarizeConfig.get("kerb.user");
-        String pw = this.polarizeConfig.get("kerb.pass");
-        return ImporterRequest.post(this.testcases, Testcases.class, url, testcaseXml, user, pw);
+        File testcaseXml = new File(this.polarizeConfig.get("importer.testcases.file"));
+        String user = this.polarizeConfig.get("polarion.user");
+        String pw = this.polarizeConfig.get("polarion.pass");
+        return ImporterRequest.sendImportRequest(url, user, pw, testcaseXml, selector, this.testcaseImportHandler());
     }
 
     /**
@@ -438,10 +493,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
      * @return List of the Elements that had an annotation of type c from the allowed set
      */
     private List<? extends Element>
-    getAnnotations(RoundEnvironment env,
-                   Class<? extends Annotation> c,
-                   Set<ElementKind> allowed,
-                   String errMsg) {
+    getAnnotations(RoundEnvironment env, Class<? extends Annotation> c, Set<ElementKind> allowed, String errMsg) {
         String iface = c.getSimpleName();
         return env.getElementsAnnotatedWith(c)
                 .stream()
@@ -480,80 +532,6 @@ public class TestDefinitionProcessor extends AbstractProcessor {
     }
 
     /**
-     * Returns possible file location to the XML description file based on a Meta type and a project
-     *
-     * Uses the information from the meta type and project to know where to find XML description file
-     *
-     * @param meta a Meta of type T
-     * @param <T> The class type for the Meta
-     * @return An Optional<File> if the xml exists
-     */
-    private <T> Optional<File> getFileFromMeta(Meta<T> meta) {
-        Path path = FileHelper.makeXmlPath(this.tcPath, meta, meta.project);
-        File xmlDesc = path.toFile();
-        if (!xmlDesc.exists())
-            return Optional.empty();
-        return Optional.of(xmlDesc);
-    }
-
-    /**
-     * Unmarshalls an Optional of type T from the given Meta object
-     *
-     * From the data contained in the Meta object, function looks for the XML description file and unmarshalls it to
-     * the class given by class t.
-     *
-     * @param meta a Meta of type TestDefinition used to get information for type T
-     * @param t class type
-     * @param <T> class to unmarshall to
-     * @return Optionally a type of T if possible
-     */
-    private <T> Optional<T> getTypeFromMeta(Meta<TestDefinition> meta, Class<T> t) {
-        //TODO: Check for XML Desc file for TestDefinition
-        TestDefinition def = meta.annotation;
-        Path path = FileHelper.makeXmlPath(this.tcPath, meta, meta.project);
-        File xmlDesc = path.toFile();
-        if (!xmlDesc.exists())
-            return Optional.empty();
-
-        this.logger.info("Description file exists: " + xmlDesc.toString());
-        Optional<T> witem;
-        witem = IJAXBHelper.unmarshaller(t, xmlDesc, this.jaxb.getXSDFromResource(t));
-        if (!witem.isPresent())
-            return Optional.empty();
-        return witem;
-    }
-
-    /**
-     * Unmarshalls Testcase from XML pointed at in meta, and gets the Polarion ID
-     *
-     * @param meta the meta object that will be unmarshalled
-     * @return Optionally the String of the Polarion ID
-     */
-    private Optional<String> getPolarionIDFromXML(Meta<TestDefinition> meta) {
-        Optional<Testcase> tc = this.getTypeFromMeta(meta, Testcase.class);
-
-        if (!tc.isPresent()) {
-            this.logger.info("Unmarshalling failed.  No Testcase present...");
-            return Optional.empty();
-        }
-        else if (tc.get().getId() == null || tc.get().getId().equals("")) {
-            this.logger.info("No id attribute for <testcase>");
-            return Optional.empty();
-        }
-        Testcase tcase = tc.get();
-        this.logger.info("Polarion ID for testcase " + tcase.getTitle() + " is " + tcase.getId());
-        return Optional.of(tcase.getId());
-    }
-
-    private Optional<String> getPolarionIDFromTestcase(Meta<TestDefinition> meta) {
-        TestDefinition def = meta.annotation;
-        String id = meta.testCaseID;
-        if (id.equals(""))
-            return Optional.empty();
-        return Optional.of(id);
-    }
-
-    /**
      * Creates the TestSteps for the Testcase given values in the meta object
      *
      * @param meta
@@ -566,27 +544,25 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         }
         List<com.github.redhatqe.polarize.importer.testcase.TestStep> tsteps = isteps.getTestStep();
 
-        // Create one TestStepColumn for each Parameter
-        Transformer<List<Parameter>, List<TestStepColumn>> parameterize = params -> params.stream()
-                .map(p -> {
-                    TestStepColumn col = new TestStepColumn();
-                    col.getContent().add(p);
-                    col.setId("description");
-                    return col;
-                })
-                .collect(Collectors.toList());
+        // Takes a List<Parameter> and returns a TestStepColumn
+        Transformer<List<Parameter>, TestStepColumn> parameterize = args -> {
+            TestStepColumn col = new TestStepColumn();
+            col.setId("step");
+            args.forEach(a -> col.getContent().add(a));
+            return col;
+        };
 
         // For automation needs, we will only ever have one TestStep (but perhaps with multiple columns).
         com.github.redhatqe.polarize.importer.testcase.TestStep ts =
                 new com.github.redhatqe.polarize.importer.testcase.TestStep();
         List<TestStepColumn> cols = ts.getTestStepColumn();
         if (meta.params != null && meta.params.size() > 0) {
-            List<TestStepColumn> tcolumns = parameterize.transform(meta.params);
-            cols.addAll(tcolumns);
+            TestStepColumn tcolumns = parameterize.transform(meta.params);
+            cols.add(tcolumns);
         }
         else {
             TestStepColumn tsc = new TestStepColumn();
-            tsc.setId("description");
+            tsc.setId("step");
             cols.add(tsc);
         }
         tsteps.add(ts);
@@ -722,15 +698,15 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         //this.initRequirementsFromTestDef(meta, tc);
 
         // Check to see if there is an existing XML description file with Polarion ID
-        Optional<File> xml = this.getFileFromMeta(meta);
+        Optional<File> xml = meta.getFileFromMeta(this.tcPath);
         if (!xml.isPresent()) {
             Path path = FileHelper.makeXmlPath(this.tcPath, meta, meta.project);
             File xmlDesc = path.toFile();
             this.createTestCaseXML(tc, xmlDesc);
         }
 
-        Optional<String> maybePolarionID = this.getPolarionIDFromTestcase(meta);
-        Optional<String> maybeIDXml = this.getPolarionIDFromXML(meta);
+        Optional<String> maybePolarionID = meta.getPolarionIDFromTestcase();
+        Optional<String> maybeIDXml = meta.getPolarionIDFromXML(this.tcPath);
         Boolean idExists = maybePolarionID.isPresent();
         Boolean xmlIdExists = maybeIDXml.isPresent();
 
@@ -750,11 +726,11 @@ public class TestDefinitionProcessor extends AbstractProcessor {
                 importRequest = true;
             else {
                 importRequest = false;
-                Optional<Testcase> maybeTC = this.getTypeFromMeta(meta, Testcase.class);
+                Optional<Testcase> maybeTC = meta.getTypeFromMeta(Testcase.class, this.tcPath);
                 if (maybeTC.isPresent()) {
                     Testcase tcase = maybeTC.get();
                     tcase.setId(maybePolarionID.get());
-                    Optional<File> path = this.getFileFromMeta(meta);
+                    Optional<File> path = meta.getFileFromMeta(this.tcPath);
                     if (path.isPresent()) {
                         IJAXBHelper.marshaller(tcase, path.get(), jaxb.getXSDFromResource(Testcase.class));
                     }

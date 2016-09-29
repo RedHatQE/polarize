@@ -1,7 +1,7 @@
 package com.github.redhatqe.polarize.exceptions;
 
 /**
- * Created by stoner on 9/29/16.
+ * Used when trying to edit an XML file
  */
-public class XMLEditError {
+public class XMLEditError extends Error {
 }

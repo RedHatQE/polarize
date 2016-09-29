@@ -20,6 +20,7 @@ import org.testng.xml.XmlSuite;
 import org.testng.xml.XmlTest;
 
 import javax.jms.JMSException;
+import javax.xml.bind.JAXB;
 
 import java.io.*;
 import java.nio.file.Path;
@@ -195,7 +196,6 @@ public class XUnitReporter implements IReporter {
      */
     public static void sendXunitImportRequest(String url, String user, String pw, File reportPath, Testsuites tsuites) {
         // Now that we've gone through the suites, let's marshall this into an XML file for the XUnit Importer
-        // File reportPath = new File(outputDirectory + "/testng-polarion.xml");
         CloseableHttpResponse resp =
                 ImporterRequest.post(tsuites, Testsuites.class, url, reportPath.toString(), user, pw);
         HttpEntity entity = resp.getEntity();
@@ -376,8 +376,7 @@ public class XUnitReporter implements IReporter {
         void set();
     }
 
-    private static Configurator
-    createConditionalProperty(String name, String value, List<Property> properties) {
+    private static Configurator createConditionalProperty(String name, String value, List<Property> properties) {
         Configurator cfg;
         Property prop = new Property();
         prop.setName(name);
@@ -468,6 +467,30 @@ public class XUnitReporter implements IReporter {
             throw new XMLDescriptionError();
     }
 
+    public static com.github.redhatqe.polarize.importer.testcase.Testcase
+    setPolarionIDFromXML(File xmlDesc, String id) {
+        Optional<com.github.redhatqe.polarize.importer.testcase.Testcase> tc;
+        tc = XUnitReporter.getTestcaseFromXML(xmlDesc);
+        if (!tc.isPresent())
+            throw new XMLUnmarshallError();
+        com.github.redhatqe.polarize.importer.testcase.Testcase tcase = tc.get();
+        if (tcase.getId() != null && !tcase.getId().equals(""))
+            XUnitReporter.logger.warn("ID already exists...overwriting");
+        tcase.setId(id);
+        return tcase;
+    }
+
+    public static Optional<com.github.redhatqe.polarize.importer.testcase.Testcase> getTestcaseFromXML(File xmlDesc) {
+        JAXBReporter jaxb = new JAXBReporter();
+        Optional<com.github.redhatqe.polarize.importer.testcase.Testcase> tc;
+        tc = IJAXBHelper.unmarshaller(com.github.redhatqe.polarize.importer.testcase.Testcase.class, xmlDesc,
+                jaxb.getXSDFromResource(com.github.redhatqe.polarize.importer.testcase.Testcase.class));
+        if (!tc.isPresent())
+            return Optional.empty();
+        com.github.redhatqe.polarize.importer.testcase.Testcase tcase = tc.get();
+        return Optional.of(tcase);
+    }
+
     /**
      * Args are: url, user, pw, path to xml, selector
      * @param args
@@ -478,6 +501,6 @@ public class XUnitReporter implements IReporter {
             return;
         }
         File xml = new File(args[3]);
-        ImporterRequest.sendImportRequest(args[0], args[1], args[2], xml, args[4]);
+        ImporterRequest.sendImportRequest(args[0], args[1], args[2], xml, args[4], XUnitReporter.xunitMessageHandler());
     }
 }

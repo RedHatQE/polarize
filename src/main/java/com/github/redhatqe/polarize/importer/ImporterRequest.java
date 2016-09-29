@@ -5,8 +5,6 @@ import com.github.redhatqe.polarize.CIBusListener;
 import com.github.redhatqe.polarize.IFileHelper;
 import com.github.redhatqe.polarize.IJAXBHelper;
 import com.github.redhatqe.polarize.JAXBHelper;
-import com.github.redhatqe.polarize.importer.testcase.Testcases;
-import com.github.redhatqe.polarize.junitreporter.XUnitReporter;
 import org.apache.http.HttpEntity;
 import org.apache.http.HttpResponse;
 import org.apache.http.auth.AuthScope;
@@ -14,16 +12,11 @@ import org.apache.http.auth.UsernamePasswordCredentials;
 import org.apache.http.client.CredentialsProvider;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpPost;
-import org.apache.http.client.methods.RequestBuilder;
 import org.apache.http.conn.ssl.NoopHostnameVerifier;
 import org.apache.http.entity.ContentType;
-import org.apache.http.entity.FileEntity;
-import org.apache.http.entity.InputStreamEntity;
 import org.apache.http.entity.mime.MultipartEntityBuilder;
-import org.apache.http.entity.mime.content.FileBody;
 import org.apache.http.impl.client.*;
 import org.apache.http.ssl.SSLContextBuilder;
-import org.apache.http.ssl.TrustStrategy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -36,10 +29,10 @@ import java.nio.file.Files;
 import java.security.KeyManagementException;
 import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
-import java.util.HashMap;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
@@ -59,8 +52,7 @@ public class ImporterRequest {
      * @param <T> type of t
      * @return response from sending request
      */
-    public static <T> CloseableHttpResponse post(T t, Class<T> tclass, String url, String xml,
-                                                    String user, String pw) {
+    public static <T> CloseableHttpResponse post(T t, Class<T> tclass, String url, String xml, String user, String pw) {
         JAXBHelper jaxb = new JAXBHelper();
         File importerFile = new File(xml);
         IFileHelper.makeDirs(importerFile.toPath());
@@ -170,7 +162,9 @@ public class ImporterRequest {
      * @throws ExecutionException
      * @throws JMSException
      */
-    public static void sendImportRequest(String url, String user, String pw, File reportPath, String selector)
+    public static Optional<ObjectNode>
+    sendImportRequest(String url, String user, String pw, File reportPath, String selector,
+                      Consumer<Optional<ObjectNode>> handler)
             throws InterruptedException, ExecutionException, JMSException {
         Supplier<Optional<ObjectNode>> sup = CIBusListener.getCIMessage(selector);
         CompletableFuture<Optional<ObjectNode>> future = CompletableFuture.supplyAsync(sup);
@@ -191,6 +185,9 @@ public class ImporterRequest {
         // FIXME:  Should I synchronize here?  If I leave this out and return future, it is the caller's responsibility
         // to check by either calling get() or join()
         Optional<ObjectNode> maybeNode = future.get();
-        XUnitReporter.xunitMessageHandler().accept(maybeNode);
+
+        // FIXME: Should I add a message handler here?  or just do it externally?
+        handler.accept(maybeNode);
+        return maybeNode;
     }
 }

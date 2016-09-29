@@ -23,11 +23,11 @@ import java.util.concurrent.ExecutionException;
 import java.util.function.Supplier;
 
 /**
- * Created by stoner on 8/30/16.
+ * A Class that provides functionality to listen to the CI Message Bus
  */
 public class CIBusListener {
-    public Map<String, String> polarizeConfig;
-    public Logger logger;
+    Map<String, String> polarizeConfig;
+    private Logger logger;
 
     public CIBusListener(Map<String, String> config) {
         this.polarizeConfig = config;
@@ -42,8 +42,10 @@ public class CIBusListener {
         Message msg;
 
         try {
-            factory.setUserName(this.polarizeConfig.get("kerb.user"));
-            factory.setPassword(this.polarizeConfig.get("kerb.pass"));
+            String user = this.polarizeConfig.get("kerb.user");
+            String pw = this.polarizeConfig.get("kerb.pass");
+            factory.setUserName(user);
+            factory.setPassword(pw);
             connection = factory.createConnection();
             connection.setClientID("polarize");
             connection.setExceptionListener(exc -> this.logger.error(exc.getMessage()));
@@ -55,6 +57,7 @@ public class CIBusListener {
                 this.logger.error("Must supply a value for the selector");
                 throw new ConfigurationError();
             }
+            this.logger.debug(String.format("Using selector of:\n%s", selector));
             connection.start();
             consumer = session.createConsumer(dest, selector);
             String timeout = this.polarizeConfig.getOrDefault("importer.timeout", "600000");
