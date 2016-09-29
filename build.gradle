@@ -4,10 +4,12 @@ plugins {
 }
 
 group 'com.github.redhatqe.polarize'
-version '0.5.0-SNAPSHOT'
+version '0.5.0'
 String archivesBaseName = "polarize"
 String projectURL = 'https://github.com/RedHatQE/polarize'
 String devURL = 'git@github.com:RedHatQE/polarize.git'
+// Change this to where your polarize.properties file is stored
+String polarizePropertyFile = '/home/stoner/.polarize/polarize.properties'
 sourceCompatibility = 1.8
 targetCompatibility = 1.8
 
@@ -67,31 +69,29 @@ task writeNewPom << {
     pom {
         project {
             inceptionYear '2016'
-            licenses {
-                license {
-                    name 'The Apache Software License, Version 2.0'
-                    url 'http://www.apache.org/licenses/LICENSE-2.0.txt'
-                    distribution 'repo'
-                }
-            }
         }
     }.writeTo(project.ext.pomFile)
 }
 
+// TODO: What does this do?
 configurations {
     pom
 }
 
+// Had to add the -quiet option when creating the javadocs for Java 8, or creation will fail
+// Generates javadocs
 task myJavadocs(type: Javadoc) {
     source = sourceSets.main.allJava
     options.addStringOption('Xdoclint:none', '-quiet')
 }
 
+// Generates the javadoc jar
 task javadocJar (type: Jar, dependsOn: myJavadocs) {
     classifier = 'javadoc'
     from javadoc.destinationDir
 }
 
+// Generates the polarize jar
 task sourceJar(type: Jar) {
     from sourceSets.main.allJava
     classifier "sources"
@@ -108,17 +108,13 @@ artifacts {
 }
 
 // We need to sign the POM
-task signPom(type: Sign) {
+task signPom(type: Sign, dependsOn: writeNewPom) {
     sign configurations.pom
 }
 
 task signJars (type : Sign, dependsOn: [jar, javadocJar, sourceJar]) {
     sign configurations.archives
     println configurations.archives
-}
-
-def getPomSignature = {
-    return project.tasks.signPom.signatureFiles.collect{it}[0]
 }
 
 if (project.ext.pomFile.exists()) {
@@ -136,14 +132,22 @@ signing {
 // extract signature file and give them proper name
 def getSignatureFiles = {
     def allFiles = project.tasks.signJars.signatureFiles.collect { it }
-    def signedJar = allFiles[0]
-    return [[archive: signedJar,     classifier: null,      extension: 'jar.asc']]
+    def signedSources = allFiles.find { it.name.contains('-sources') }
+    def signedJavadoc = allFiles.find { it.name.contains('-javadoc') }
+    def signedJar = (allFiles - [signedSources, signedJavadoc])[0]
+    return [[archive: signedSources, classifier: 'sources', extension: 'jar.asc']
+           ,[archive: signedJavadoc, classifier: 'javadoc', extension: 'jar.asc']
+           ,[archive: signedJar,     classifier: null,      extension: 'jar.asc']
+           ]
 }
 
+def getPomSignature = {
+    return project.tasks.signPom.signatureFiles.collect{it}[0]
+}
 
 publishing {
     publications {
-        gpgJars(MavenPublication) {
+        signatures(MavenPublication) {
             getSignatureFiles().each {signature ->
                 artifact (signature.archive) {
                     classifier = signature.classifier
@@ -199,18 +203,21 @@ publishing {
 
     repositories {
         maven {
-            //if (project.ext.pomFile.exists()) {
-            if (false) {
+            if (project.ext.pomFile.exists()) {
                 if (project.version.contains("SNAPSHOT")) {
                     url 'https://oss.sonatype.org/content/repositories/snapshots'
                 }
                 else {
                     url 'https://oss.sonatype.org/service/local/staging/deploy/maven2'
                 }
-                File polarize = new File()
+                File f = new File(polarizePropertyFile)
+                Properties props = new Properties()
+                props.load(f.newDataInputStream())
+                String user = props.getProperty("ossrhUsername")
+                String pw = props.getProperty("ossrhPassword")
                 credentials {
-                    username = ossrhUsername
-                    password = ossrhPassword
+                    username = user
+                    password = pw
                 }
             } else {
                 url "file:/${project.projectDir}/artifacts"
@@ -223,96 +230,3 @@ publishing {
 task displayProject {
     println project.projectDir
 }
-
-/**
- * Most of the below comes from
- * http://mike-neck.github.io/blog/2013/06/21/how-to-publish-artifacts-with-gradle-maven-publish-plugin-version-1-dot-6/
- *
-task publishing_test {
-    publications {
-        signatures (MavenPublication) {
-            // give signature files to artifact method
-            getSignatureFiles().each { signature ->
-                artifact (signature.archive) {
-                    classifier = signature.classifier
-                    extension  = signature.extension
-                }
-            }
-        }
-
-        polarize_jar(MavenPublication) {
-            // telling gradle to publish project's jar archive
-            from components.java
-
-            artifact javadocJar {
-                classifier 'javadoc'
-            }
-
-            artifact sourceJar {
-                classifier "sources"
-            }
-
-            // Add what we need to the auto generated pom.xml to make it compliant to OSSRH
-            pom.withXml {
-                if (!project.ext.pomFile.exists()) {
-                    writeTo (project.ext.pomFile)
-                }
-                asNode().children().last() + {
-                    resolveStrategy = Closure.DELEGATE_FIRST
-                    name archivesBaseName
-                    description 'Annotations to supply metadata for testcase management'
-                    url projectURL
-                    scm {
-                        url 'scm:git:' + projectURL
-                        connection 'scm:git:' + projectURL + '.git'
-                        developerConnection 'scm:git:' + devURL
-                    }
-                    licenses {
-                        license {
-                            name 'The Apache Software License, Version 2.0'
-                            url 'http://www.apache.org/license/LICENSE-2.0.txt'
-                            distribution 'repo'
-                        }
-                    }
-                    developers {
-                        developer {
-                            id 'stoner'
-                            name 'Sean Toner'
-                            email 'stoner@redhat.com'
-                        }
-                    }
-                }
-            }
-        }
-
-        gpgJars(MavenPublication) {
-            // publishing signature of jars
-        }
-
-        // dynamic publication definition
-        // pom file does exist signature of pom file is published
-        if (project.ext.pomFile.exists()) {
-            gpgPom(MavenPublication) {
-                artifact (getPomSignature()) {
-                    classifier = null
-                    extension  = 'pom.asc'
-                }
-            }
-        }
-    }
-    // telling gradle to publish artifact to local directory (3)
-    repositories {
-        maven {
-            if (project.ext.pomFile.exists()) {
-                url sonatypeUrl
-                credentials {
-                    username = ossrhUsername
-                    password = ossrhPassword
-                }
-            } else {
-                url "file:/${project.projectDir}/artifacts"
-            }
-        }
-    }
-}
-*/
