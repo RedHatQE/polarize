@@ -27,7 +27,7 @@ import javax.xml.bind.annotation.XmlType;
  *   &lt;complexContent>
  *     &lt;restriction base="{http://www.w3.org/2001/XMLSchema}anyType">
  *       &lt;sequence>
- *         &lt;element ref="{}response-property" maxOccurs="unbounded"/>
+ *         &lt;element ref="{}custom-field" maxOccurs="unbounded"/>
  *       &lt;/sequence>
  *     &lt;/restriction>
  *   &lt;/complexContent>
@@ -38,41 +38,41 @@ import javax.xml.bind.annotation.XmlType;
  */
 @XmlAccessorType(XmlAccessType.FIELD)
 @XmlType(name = "", propOrder = {
-    "responseProperty"
+    "customField"
 })
-@XmlRootElement(name = "response-properties")
-public class ResponseProperties {
+@XmlRootElement(name = "custom-fields")
+public class CustomFields {
 
-    @XmlElement(name = "response-property", required = true)
-    protected List<ResponseProperty> responseProperty;
+    @XmlElement(name = "custom-field", required = true)
+    protected List<CustomField> customField;
 
     /**
-     * Gets the value of the responseProperty property.
+     * Gets the value of the customField property.
      * 
      * <p>
      * This accessor method returns a reference to the live list,
      * not a snapshot. Therefore any modification you make to the
      * returned list will be present inside the JAXB object.
-     * This is why there is not a <CODE>set</CODE> method for the responseProperty property.
+     * This is why there is not a <CODE>set</CODE> method for the customField property.
      * 
      * <p>
      * For example, to add a new item, do as follows:
      * <pre>
-     *    getResponseProperty().add(newItem);
+     *    getCustomField().add(newItem);
      * </pre>
      * 
      * 
      * <p>
      * Objects of the following type(s) are allowed in the list
-     * {@link ResponseProperty }
+     * {@link CustomField }
      * 
      * 
      */
-    public List<ResponseProperty> getResponseProperty() {
-        if (responseProperty == null) {
-            responseProperty = new ArrayList<ResponseProperty>();
+    public List<CustomField> getCustomField() {
+        if (customField == null) {
+            customField = new ArrayList<CustomField>();
         }
-        return this.responseProperty;
+        return this.customField;
     }
 
 }

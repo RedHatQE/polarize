@@ -10,7 +10,7 @@ public enum DefTypes {
     }
 
     public enum Project {
-        RHEL6, RedHatEnterpriseLinux7, PLATTP
+        RHEL6, RedHatEnterpriseLinux7, PLATTP, My_Test_Project
     }
 
     public enum TestTypes implements ToString {
@@ -58,6 +58,23 @@ public enum DefTypes {
                 return "-";
             return thisName.toLowerCase();
         }
+    }
+
+    public enum Custom implements ToString {
+        CASEAUTOMATION,
+        CASEIMPORTANCE,
+        CASELEVEL,
+        CASEPOSNEG,
+        UPSTREAM,
+        TAGS,
+        SETUP,
+        TEARDOWN,
+        COMPONENT,
+        SUBCOMPONENT,
+        AUTOMATION_SCRIPT,
+        TESTTYPE,
+        SUBTYPE1,
+        SUBTYPE2
     }
 
     public enum Severity implements ToString {

@@ -1,26 +1,35 @@
 package com.github.redhatqe.polarize.junitreporter;
 
-import com.github.redhatqe.polarize.Configurator;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+
 import com.github.redhatqe.polarize.IJAXBHelper;
+import com.github.redhatqe.polarize.exceptions.RequirementAnnotationException;
 import com.github.redhatqe.polarize.exceptions.XMLDescriptionError;
 import com.github.redhatqe.polarize.exceptions.XMLUnmarshallError;
 import com.github.redhatqe.polarize.importer.ImporterRequest;
-import com.github.redhatqe.polarize.importer.xunit.Property;
-import com.github.redhatqe.polarize.importer.xunit.Testcase;
-import com.github.redhatqe.polarize.importer.xunit.Testsuite;
-import com.github.redhatqe.polarize.importer.xunit.Testsuites;
+import com.github.redhatqe.polarize.importer.xunit.*;
 import com.github.redhatqe.polarize.metadata.Requirement;
 import com.github.redhatqe.polarize.metadata.TestDefinition;
-import com.github.redhatqe.polarize.schema.WorkItem;
+import org.apache.http.HttpEntity;
+import org.apache.http.client.methods.CloseableHttpResponse;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.testng.*;
 import org.testng.xml.XmlSuite;
 import org.testng.xml.XmlTest;
+
+import javax.jms.JMSException;
+import javax.xml.bind.JAXB;
 
 import java.io.*;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.security.KeyException;
 import java.util.*;
+import java.util.Properties;
+import java.util.concurrent.ExecutionException;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 /**
@@ -32,14 +41,12 @@ import java.util.stream.Collectors;
  * file, this file will be loaded instead.
  */
 public class XUnitReporter implements IReporter {
-    private final ReporterConfig config;
-    private Map<String, String> polarizeConfig = com.github.redhatqe.polarize.Configurator.loadConfiguration();
+    private final static Logger logger = LoggerFactory.getLogger(XUnitReporter.class);
+    private static Map<String, String> polarizeConfig = com.github.redhatqe.polarize.Configurator.loadConfiguration();
     private final static File defaultPropertyFile =
             new File(System.getProperty("user.home") + "/.polarize/reporter.properties");
-
-    public XUnitReporter() {
-        this.config = XUnitReporter.configure();
-    }
+    private final static ReporterConfig config = XUnitReporter.configure();
+    private static List<String> failedSuites = new ArrayList<>();
 
     public static ReporterConfig configure() {
         Properties props = XUnitReporter.getProperties();
@@ -60,6 +67,7 @@ public class XUnitReporter implements IReporter {
         config.setTestrunTitle(props.getProperty("testrun-title"));
         config.setTestcasesXMLPath(props.getProperty("testcases-xml-path"));
         config.setRequirementsXMLPath(props.getProperty("requirements-xml-path"));
+        config.setResponseTag(props.getProperty("response-tag"));
 
         String fields = props.getProperty("custom-fields");
         config.setCustomFields(new HashMap<>());
@@ -130,22 +138,13 @@ public class XUnitReporter implements IReporter {
      *
      * Example of a modified junit file:
      *
-     * <testsuites>
-     *
-     *     <testsuite>
-     *         <testcase>
-     *
-     *         </testcase>
-     *     </testsuite>
-     * </testsuites>
-     *
      * @param xmlSuites passed by TestNG
      * @param suites passed by TestNG
      * @param outputDirectory passed by TestNG.  configurable?
      */
     @Override
     public void generateReport(List<XmlSuite> xmlSuites, List<ISuite> suites, String outputDirectory) {
-        Testsuites tsuites = XUnitReporter.getTestSuiteInfo(this);
+        Testsuites tsuites = XUnitReporter.getTestSuiteInfo(config.getResponseTag());
         List<Testsuite> tsuite = tsuites.getTestsuite();
 
         // Get information for each <testsuite>
@@ -160,7 +159,7 @@ public class XUnitReporter implements IReporter {
                         ITestContext ctx = result.getTestContext();
 
                         ts.setName(key);
-                        ts.setErrors(Integer.toString(ctx.getFailedTests().size()));
+                        ts.setFailures(Integer.toString(ctx.getFailedTests().size()));
                         ts.setSkipped(Integer.toString(ctx.getSkippedTests().size()));
                         ts.setTests(Integer.toString(ctx.getAllTestMethods().length));
                         Date start = ctx.getStartDate();
@@ -169,7 +168,7 @@ public class XUnitReporter implements IReporter {
                         ts.setTime(Float.toString(duration));
 
                         List<Testcase> tests = ts.getTestcase();
-                        List<Testcase> after = XUnitReporter.getMethodInfo(this, suite, tests);
+                        List<Testcase> after = XUnitReporter.getMethodInfo(suite, tests);
                         return ts;
                     })
                     .collect(Collectors.toList());
@@ -178,12 +177,104 @@ public class XUnitReporter implements IReporter {
 
         // Now that we've gone through the suites, let's marshall this into an XML file for the XUnit Importer
         File reportPath = new File(outputDirectory + "/testng-polarion.xml");
-        String url = this.polarizeConfig.get("polarion.url") + this.polarizeConfig.get("importer.xunit.endpoint");
-        ImporterRequest.request(tsuites, Testsuites.class, url, reportPath.toString());
+        String url = polarizeConfig.get("polarion.url") + polarizeConfig.get("importer.xunit.endpoint");
+        String user = polarizeConfig.get("kerb.user");
+        String pw = polarizeConfig.get("kerb.pass");
     }
 
-    public static List<Testcase> getMethodInfo(XUnitReporter xUnitReporter, ISuite suite, List<Testcase> testcases) {
-        // Get information for each <testcase>
+    /**
+     * Makes an Xunit importer REST call
+     * </p>
+     * The actual response will come over the CI Message bus, not in the body of the http response.  Note that the
+     * pw is sent over basic auth and is therefore not encrypted.
+     *
+     * @param url The URL endpoint for the REST call
+     * @param user User name to authenticate as
+     * @param pw The password for the user
+     * @param reportPath path to where the xml file for uploading will be marshalled to
+     * @param tsuites the object that will be marshalled into XML
+     */
+    public static void sendXunitImportRequest(String url, String user, String pw, File reportPath, Testsuites tsuites) {
+        // Now that we've gone through the suites, let's marshall this into an XML file for the XUnit Importer
+        CloseableHttpResponse resp =
+                ImporterRequest.post(tsuites, Testsuites.class, url, reportPath.toString(), user, pw);
+        HttpEntity entity = resp.getEntity();
+        try {
+            BufferedReader bfr = new BufferedReader(new InputStreamReader(entity.getContent()));
+            System.out.println(bfr.lines().collect(Collectors.joining("\n")));
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        System.out.println(resp.toString());
+    }
+
+    /**
+     * A function factory that returns a Consumer type function usable to determine success of XUnit import request
+     *
+     * @return a Consumer function
+     */
+    public static Consumer<Optional<ObjectNode>> xunitMessageHandler() {
+        return (node) -> {
+            if (!node.isPresent()) {
+                logger.warn("No ObjectNode received from the Message");
+            } else {
+                // TODO: figure out if the xunit import was successful.  If it wasn't, what do we do?  Retry?  Perhaps,
+                // depending on the exception type, we might be able to retry.  Finding the log when we get an exception
+                // will be very difficult
+                JsonNode root = node.get().get("root");
+                if (root.get("status").textValue().equals("passed")) {
+                    logger.info("XUnit importer was successful");
+                    logger.info(root.get("testrun-url").textValue());
+                } else {
+                    // Figure out which one failed
+                    JsonNode results = root.get("import-results");
+                    results.elements().forEachRemaining(element -> {
+                        if (element.has("status") && !element.get("status").textValue().equals("passed")) {
+                            if (element.has("suite-name")) {
+                                String suite = element.get("suite-name").textValue();
+                                logger.info(suite + " failed to be updated");
+                                XUnitReporter.failedSuites.add(suite);
+                            }
+                        }
+                    });
+                }
+            }
+        };
+    }
+
+    /**
+     * Sets the status for a Testcase object given values from ITestResult
+     * 
+     * @param result
+     * @param tc
+     */
+    public static void getStatus(ITestResult result, Testcase tc) {
+        int status = result.getStatus();
+        switch(status) {
+            case ITestResult.FAILURE:
+                Failure fail = new Failure();
+                tc.getFailure().add(fail);
+                break;
+            case ITestResult.SKIP:
+                tc.setSkipped("true");
+                break;
+            case ITestResult.SUCCESS:
+                tc.setStatus("success");
+                break;
+            default:
+                XUnitReporter.logger.warn("Unused status for testcase");
+                break;
+        }
+    }
+
+    /**
+     * Gets information from each invoked method in the test suite
+     *
+     * @param suite suite that was run by TestNG
+     * @param testcases
+     * @return
+     */
+    public static List<Testcase> getMethodInfo(ISuite suite, List<Testcase> testcases) {
         List<IInvokedMethod> invoked = suite.getAllInvokedMethods();
         for(IInvokedMethod meth: invoked) {
             Testcase testcase = new Testcase();
@@ -207,10 +298,12 @@ public class XUnitReporter implements IReporter {
             List<Property> tcProps = props.getProperty();
 
             // Look up in the XML description file the qualifiedName to get the Polarion ID
-            File xmlDesc = XUnitReporter.getXMLDescFile(xUnitReporter, classname, methname);
+            File xmlDesc = XUnitReporter.getXMLDescFile(classname, methname);
             String id = XUnitReporter.getPolarionIDFromXML(TestDefinition.class, xmlDesc);
             Property polarionID = XUnitReporter.createProperty("polarion-testcase-id", id);
             tcProps.add(polarionID);
+
+            XUnitReporter.getStatus(result, testcase);
 
             // Get all the iteration data
             Object[] params = result.getParameters();
@@ -225,37 +318,38 @@ public class XUnitReporter implements IReporter {
         return testcases;
     }
 
-    public static Testsuites getTestSuiteInfo(XUnitReporter xUnitReporter) {
+    public static Testsuites getTestSuiteInfo(String responseName) {
         Testsuites tsuites = new Testsuites();
         com.github.redhatqe.polarize.importer.xunit.Properties props =
                 new com.github.redhatqe.polarize.importer.xunit.Properties();
         List<Property> properties = props.getProperty();
 
-        Property author = XUnitReporter.createProperty("polarion-user-id", xUnitReporter.config.getAuthor());
+        Property author = XUnitReporter.createProperty("polarion-user-id", config.getAuthor());
         properties.add(author);
 
-        Property projectID = XUnitReporter.createProperty("polarion-project-id", xUnitReporter.config.getProjectID());
+        Property projectID = XUnitReporter.createProperty("polarion-project-id", config.getProjectID());
         properties.add(projectID);
 
         Property testRunFinished = XUnitReporter.createProperty("polarion-set-testrun-finished",
-                xUnitReporter.config.getSetTestRunFinished().toString());
+                config.getSetTestRunFinished().toString());
         properties.add(testRunFinished);
 
-        Property dryRun = XUnitReporter.createProperty("polarion-dry-run", xUnitReporter.config.getDryRun().toString());
+        Property dryRun = XUnitReporter.createProperty("polarion-dry-run", config.getDryRun().toString());
         properties.add(dryRun);
 
         Property includeSkipped = XUnitReporter.createProperty("polarion-include-skipped",
-                xUnitReporter.config.getIncludeSkipped().toString());
+                config.getIncludeSkipped().toString());
         properties.add(includeSkipped);
 
-        Configurator cfg = XUnitReporter.createConditionalProperty(xUnitReporter, "polarion-response", "rhsm-qe", properties);
-        cfg.setter();
-        cfg = XUnitReporter.createConditionalProperty(xUnitReporter, "polarion-custom", null, properties);
-        cfg.setter();
-        cfg = XUnitReporter.createConditionalProperty(xUnitReporter, "polarion-testrun-title", null, properties);
-        cfg.setter();
-        cfg = XUnitReporter.createConditionalProperty(xUnitReporter, "polarion-testrun-id", null, properties);
-        cfg.setter();
+        Configurator cfg =
+                XUnitReporter.createConditionalProperty("polarion-response", responseName, properties);
+        cfg.set();
+        cfg = XUnitReporter.createConditionalProperty("polarion-custom", null, properties);
+        cfg.set();
+        cfg = XUnitReporter.createConditionalProperty("polarion-testrun-title", null, properties);
+        cfg.set();
+        cfg = XUnitReporter.createConditionalProperty("polarion-testrun-id", null, properties);
+        cfg.set();
 
         tsuites.setProperties(props);
         return tsuites;
@@ -279,11 +373,10 @@ public class XUnitReporter implements IReporter {
 
     @FunctionalInterface
     interface Configurator {
-        void setter();
+        void set();
     }
 
-    private static Configurator
-    createConditionalProperty(XUnitReporter xUnitReporter, String name, String value, List<Property> properties) {
+    private static Configurator createConditionalProperty(String name, String value, List<Property> properties) {
         Configurator cfg;
         Property prop = new Property();
         prop.setName(name);
@@ -291,32 +384,32 @@ public class XUnitReporter implements IReporter {
         switch(name) {
             case "polarion-testrun-title":
                 cfg = () -> {
-                    if (xUnitReporter.config.getTestrunTitle().equals(""))
+                    if (config.getTestrunTitle().equals(""))
                         return;
-                    prop.setValue(xUnitReporter.config.getTestrunTitle());
+                    prop.setValue(config.getTestrunTitle());
                     properties.add(prop);
                 };
                 break;
             case "polarion-testrun-id":
                 cfg = () -> {
-                    if (xUnitReporter.config.getTestrunID().equals(""))
+                    if (config.getTestrunID().equals(""))
                         return;
-                    prop.setValue(xUnitReporter.config.getTestrunID());
+                    prop.setValue(config.getTestrunID());
                     properties.add(prop);
                 };
                 break;
             case "polarion-response":
                 cfg = () -> {
-                    if (xUnitReporter.config.getResponseName().equals(""))
+                    if (config.getResponseName().equals(""))
                         return;
                     prop.setName("polarion-response-" + value);
-                    prop.setValue(xUnitReporter.config.getResponseName());
+                    prop.setValue(config.getResponseName());
                     properties.add(prop);
                 };
                 break;
             case "polarion-custom":
                 cfg = () -> {
-                    Map<String, String> customFields = xUnitReporter.config.getCustomFields();
+                    Map<String, String> customFields = config.getCustomFields();
                     if (customFields.isEmpty())
                         return;
                     customFields.entrySet().forEach(entry -> {
@@ -337,13 +430,13 @@ public class XUnitReporter implements IReporter {
 
     /**
      * Given the fully qualified method name, find the xml description file
-     * @param xUnitReporter
+     *
      * @param className
      * @param methName
      */
-    private static File getXMLDescFile(XUnitReporter xUnitReporter, String className, String methName) {
-        String tcXMLPath = xUnitReporter.config.getTestcasesXMLPath();
-        String projID = xUnitReporter.config.getProjectID();
+    private static File getXMLDescFile(String className, String methName) {
+        String tcXMLPath = config.getTestcasesXMLPath();
+        String projID = config.getProjectID();
 
         Path path = Paths.get(tcXMLPath, projID, className, methName + ".xml");
         File xmlDesc = path.toFile();
@@ -362,19 +455,52 @@ public class XUnitReporter implements IReporter {
             if (!tc.isPresent())
                 throw new XMLUnmarshallError();
             com.github.redhatqe.polarize.importer.testcase.Testcase tcase = tc.get();
-            if (tcase.getUpdate() == null)
+            if (tcase.getId() == null)
                 return "";
-            return tcase.getUpdate().getId();
+            return tcase.getId();
         }
         else if (t == Requirement.class) {
-            Optional<WorkItem> wi;
-            wi = IJAXBHelper.unmarshaller(WorkItem.class, xmldesc, jaxb.getXSDFromResource(WorkItem.class));
-            if (wi.isPresent())
-                return wi.get().getRequirement().getId();
-            else
-                return "";
+            XUnitReporter.logger.error("Not using @Requirement until requirement importer is done");
+            throw new RequirementAnnotationException();
         }
         else
             throw new XMLDescriptionError();
+    }
+
+    public static com.github.redhatqe.polarize.importer.testcase.Testcase
+    setPolarionIDFromXML(File xmlDesc, String id) {
+        Optional<com.github.redhatqe.polarize.importer.testcase.Testcase> tc;
+        tc = XUnitReporter.getTestcaseFromXML(xmlDesc);
+        if (!tc.isPresent())
+            throw new XMLUnmarshallError();
+        com.github.redhatqe.polarize.importer.testcase.Testcase tcase = tc.get();
+        if (tcase.getId() != null && !tcase.getId().equals(""))
+            XUnitReporter.logger.warn("ID already exists...overwriting");
+        tcase.setId(id);
+        return tcase;
+    }
+
+    public static Optional<com.github.redhatqe.polarize.importer.testcase.Testcase> getTestcaseFromXML(File xmlDesc) {
+        JAXBReporter jaxb = new JAXBReporter();
+        Optional<com.github.redhatqe.polarize.importer.testcase.Testcase> tc;
+        tc = IJAXBHelper.unmarshaller(com.github.redhatqe.polarize.importer.testcase.Testcase.class, xmlDesc,
+                jaxb.getXSDFromResource(com.github.redhatqe.polarize.importer.testcase.Testcase.class));
+        if (!tc.isPresent())
+            return Optional.empty();
+        com.github.redhatqe.polarize.importer.testcase.Testcase tcase = tc.get();
+        return Optional.of(tcase);
+    }
+
+    /**
+     * Args are: url, user, pw, path to xml, selector
+     * @param args
+     */
+    public static void main(String[] args) throws InterruptedException, ExecutionException, JMSException {
+        if (args.length != 5) {
+            XUnitReporter.logger.error("url, user, pw, path to xml");
+            return;
+        }
+        File xml = new File(args[3]);
+        ImporterRequest.sendImportRequest(args[0], args[1], args[2], xml, args[4], XUnitReporter.xunitMessageHandler());
     }
 }

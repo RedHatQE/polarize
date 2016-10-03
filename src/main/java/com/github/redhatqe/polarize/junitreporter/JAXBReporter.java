@@ -6,9 +6,7 @@ import com.github.redhatqe.polarize.exceptions.XSDValidationError;
 import com.github.redhatqe.polarize.importer.xunit.Testcase;
 import com.github.redhatqe.polarize.importer.xunit.Testsuite;
 import com.github.redhatqe.polarize.importer.xunit.Testsuites;
-import com.github.redhatqe.polarize.schema.WorkItem;
 
-import javax.xml.bind.JAXB;
 import java.net.URL;
 
 /**
@@ -20,9 +18,6 @@ public class JAXBReporter implements IJAXBHelper {
         URL xsd;
         if (t == Testcase.class || t == Testsuite.class || t == Testsuites.class) {
             xsd = JAXBReporter.class.getClassLoader().getResource("importers/xunit.xsd");
-        }
-        else if (t == WorkItem.class) {
-            xsd = JAXBReporter.class.getClassLoader().getResource("schema/workitem.xsd");
         }
         else if (t == com.github.redhatqe.polarize.importer.testcase.Testcase.class) {
             xsd = JAXBReporter.class.getClassLoader().getResource("testcase_importer/testcase-importer.xsd");

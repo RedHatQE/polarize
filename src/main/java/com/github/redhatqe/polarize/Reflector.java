@@ -63,9 +63,7 @@ public class Reflector {
     }
 
     public void showMap() {
-        this.testsToClasses.entrySet()
-                .stream()
-                .forEach((es) -> System.out.println(es.getKey() + "=" + es.getValue()));
+        this.testsToClasses.entrySet().forEach((es) -> System.out.println(es.getKey() + "=" + es.getValue()));
     }
 
     public <T> List<MetaData> getMetaData(Class<T> c) {

@@ -27,7 +27,7 @@ import javax.xml.bind.annotation.XmlType;
  *   &lt;complexContent>
  *     &lt;restriction base="{http://www.w3.org/2001/XMLSchema}anyType">
  *       &lt;sequence>
- *         &lt;element ref="{}response-property" maxOccurs="unbounded"/>
+ *         &lt;element ref="{}test-step-column" maxOccurs="unbounded"/>
  *       &lt;/sequence>
  *     &lt;/restriction>
  *   &lt;/complexContent>
@@ -38,41 +38,41 @@ import javax.xml.bind.annotation.XmlType;
  */
 @XmlAccessorType(XmlAccessType.FIELD)
 @XmlType(name = "", propOrder = {
-    "responseProperty"
+    "testStepColumn"
 })
-@XmlRootElement(name = "response-properties")
-public class ResponseProperties {
+@XmlRootElement(name = "test-step")
+public class TestStep {
 
-    @XmlElement(name = "response-property", required = true)
-    protected List<ResponseProperty> responseProperty;
+    @XmlElement(name = "test-step-column", required = true)
+    protected List<TestStepColumn> testStepColumn;
 
     /**
-     * Gets the value of the responseProperty property.
+     * Gets the value of the testStepColumn property.
      * 
      * <p>
      * This accessor method returns a reference to the live list,
      * not a snapshot. Therefore any modification you make to the
      * returned list will be present inside the JAXB object.
-     * This is why there is not a <CODE>set</CODE> method for the responseProperty property.
+     * This is why there is not a <CODE>set</CODE> method for the testStepColumn property.
      * 
      * <p>
      * For example, to add a new item, do as follows:
      * <pre>
-     *    getResponseProperty().add(newItem);
+     *    getTestStepColumn().add(newItem);
      * </pre>
      * 
      * 
      * <p>
      * Objects of the following type(s) are allowed in the list
-     * {@link ResponseProperty }
+     * {@link TestStepColumn }
      * 
      * 
      */
-    public List<ResponseProperty> getResponseProperty() {
-        if (responseProperty == null) {
-            responseProperty = new ArrayList<ResponseProperty>();
+    public List<TestStepColumn> getTestStepColumn() {
+        if (testStepColumn == null) {
+            testStepColumn = new ArrayList<TestStepColumn>();
         }
-        return this.responseProperty;
+        return this.testStepColumn;
     }
 
 }

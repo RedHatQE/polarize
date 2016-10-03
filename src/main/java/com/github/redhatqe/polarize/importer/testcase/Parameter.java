@@ -14,6 +14,8 @@ import javax.xml.bind.annotation.XmlAttribute;
 import javax.xml.bind.annotation.XmlRootElement;
 import javax.xml.bind.annotation.XmlSchemaType;
 import javax.xml.bind.annotation.XmlType;
+import javax.xml.bind.annotation.adapters.CollapsedStringAdapter;
+import javax.xml.bind.annotation.adapters.XmlJavaTypeAdapter;
 
 
 /**
@@ -26,7 +28,14 @@ import javax.xml.bind.annotation.XmlType;
  *   &lt;complexContent>
  *     &lt;restriction base="{http://www.w3.org/2001/XMLSchema}anyType">
  *       &lt;attribute name="name" use="required" type="{http://www.w3.org/2001/XMLSchema}anySimpleType" />
- *       &lt;attribute name="value" use="required" type="{http://www.w3.org/2001/XMLSchema}anySimpleType" />
+ *       &lt;attribute name="scope" default="local">
+ *         &lt;simpleType>
+ *           &lt;restriction base="{http://www.w3.org/2001/XMLSchema}token">
+ *             &lt;enumeration value="local"/>
+ *             &lt;enumeration value="library"/>
+ *           &lt;/restriction>
+ *         &lt;/simpleType>
+ *       &lt;/attribute>
  *     &lt;/restriction>
  *   &lt;/complexContent>
  * &lt;/complexType>
@@ -36,15 +45,15 @@ import javax.xml.bind.annotation.XmlType;
  */
 @XmlAccessorType(XmlAccessType.FIELD)
 @XmlType(name = "")
-@XmlRootElement(name = "property")
-public class Property {
+@XmlRootElement(name = "parameter")
+public class Parameter {
 
     @XmlAttribute(name = "name", required = true)
     @XmlSchemaType(name = "anySimpleType")
     protected String name;
-    @XmlAttribute(name = "value", required = true)
-    @XmlSchemaType(name = "anySimpleType")
-    protected String value;
+    @XmlAttribute(name = "scope")
+    @XmlJavaTypeAdapter(CollapsedStringAdapter.class)
+    protected String scope;
 
     /**
      * Gets the value of the name property.
@@ -71,27 +80,31 @@ public class Property {
     }
 
     /**
-     * Gets the value of the value property.
+     * Gets the value of the scope property.
      * 
      * @return
      *     possible object is
      *     {@link String }
      *     
      */
-    public String getValue() {
-        return value;
+    public String getScope() {
+        if (scope == null) {
+            return "local";
+        } else {
+            return scope;
+        }
     }
 
     /**
-     * Sets the value of the value property.
+     * Sets the value of the scope property.
      * 
      * @param value
      *     allowed object is
      *     {@link String }
      *     
      */
-    public void setValue(String value) {
-        this.value = value;
+    public void setScope(String value) {
+        this.scope = value;
     }
 
 }
