@@ -404,8 +404,8 @@ public class TestDefinitionProcessor extends AbstractProcessor {
     /**
      * Finds a Testcase in testcases by matching name to the titles of the testcase
      *
-     * @param name
-     * @return
+     * @param name qualified name of method
+     * @return the matching Testcase for the name
      */
     private Testcase findTestcaseByName(String name) {
         List<Testcase> tcs = this.testcases.getTestcase().stream()
@@ -590,33 +590,16 @@ public class TestDefinitionProcessor extends AbstractProcessor {
     }
 
     /**
+     * FIXME: I think this would have been better implemented as a composition
      *
-     * @param meta
+     * Returns a lambda of a Consumer<DefType.Custom> that can be used to set custom fields
+     *
+     * @param supp
+     * @param def
      * @return
      */
-    private Testcase
-    initImporterTestcase(Meta<TestDefinition> meta) {
-        Testcase tc = new Testcase();
-        TestDefinition def = meta.annotation;
-        this.initTestSteps(meta, tc);
-        CustomFields custom = tc.getCustomFields();
-        if (custom == null)
-            custom = new CustomFields();
-        List<CustomField> fields = custom.getCustomField();
-        DefTypes.Custom[] fieldKeys = {CASEAUTOMATION, CASEIMPORTANCE, CASELEVEL, CASEPOSNEG, UPSTREAM, TAGS, SETUP,
-                                       TEARDOWN, AUTOMATION_SCRIPT, COMPONENT, SUBCOMPONENT, TESTTYPE, SUBTYPE1,
-                                       SUBTYPE2};
-
-        Consumer2<String, String> supp = (id, content) -> {
-            CustomField field = new CustomField();
-            if (!content.equals("")) {
-                field.setId(id);
-                field.setContent(content);
-                fields.add(field);
-            }
-        };
-
-        Consumer<DefTypes.Custom> transformer = key -> {
+    private Consumer<DefTypes.Custom> customFieldsSetter(Consumer2<String, String> supp, TestDefinition def) {
+        return key -> {
             switch (key) {
                 case CASEAUTOMATION:
                     supp.accept(CASEAUTOMATION.stringify(), def.automation().stringify());
@@ -663,7 +646,36 @@ public class TestDefinitionProcessor extends AbstractProcessor {
                     this.logger.warn("Unknown enum value");
             }
         };
+    }
 
+    /**
+     *
+     * @param meta
+     * @return
+     */
+    private Testcase
+    initImporterTestcase(Meta<TestDefinition> meta) {
+        Testcase tc = new Testcase();
+        TestDefinition def = meta.annotation;
+        this.initTestSteps(meta, tc);
+        CustomFields custom = tc.getCustomFields();
+        if (custom == null)
+            custom = new CustomFields();
+        List<CustomField> fields = custom.getCustomField();
+        DefTypes.Custom[] fieldKeys = {CASEAUTOMATION, CASEIMPORTANCE, CASELEVEL, CASEPOSNEG, UPSTREAM, TAGS, SETUP,
+                                       TEARDOWN, AUTOMATION_SCRIPT, COMPONENT, SUBCOMPONENT, TESTTYPE, SUBTYPE1,
+                                       SUBTYPE2};
+
+        Consumer2<String, String> supp = (id, content) -> {
+            CustomField field = new CustomField();
+            if (!content.equals("")) {
+                field.setId(id);
+                field.setContent(content);
+                fields.add(field);
+            }
+        };
+
+        Consumer<DefTypes.Custom> transformer = this.customFieldsSetter(supp, def);
         for(DefTypes.Custom cust: fieldKeys) {
             transformer.accept(cust);
         }

@@ -10,6 +10,7 @@ String projectURL = 'https://github.com/RedHatQE/polarize'
 String devURL = 'git@github.com:RedHatQE/polarize.git'
 // Change this to where your polarize.properties file is stored
 String polarizePropertyFile = '/home/stoner/.polarize/polarize.properties'
+String pomPath = "${project.projectDir}/build/tmp/pom.xml"
 sourceCompatibility = 1.8
 targetCompatibility = 1.8
 
@@ -60,20 +61,11 @@ shadowJar {
 }
 
 ext {
-    pomFilePath = "${project.projectDir}/tmp/pom.xml"
+    pomFilePath = pomPath
     pomFile = file(pomFilePath)
 }
 
-
-task writeNewPom << {
-    pom {
-        project {
-            inceptionYear '2016'
-        }
-    }.writeTo(project.ext.pomFile)
-}
-
-// TODO: What does this do?
+// Creates a configuration container called pom
 configurations {
     pom
 }
@@ -108,13 +100,16 @@ artifacts {
 }
 
 // We need to sign the POM
-task signPom(type: Sign, dependsOn: writeNewPom) {
+task signPom(type: Sign) {
+    println "In signPom task"
     sign configurations.pom
+    println "configurations.pom: ${configurations.pom}"
 }
 
 task signJars (type : Sign, dependsOn: [jar, javadocJar, sourceJar]) {
+    println "In signJars task"
     sign configurations.archives
-    println configurations.archives
+    println "configurations.archives: ${configurations.archives}"
 }
 
 if (project.ext.pomFile.exists()) {
@@ -131,7 +126,11 @@ signing {
 
 // extract signature file and give them proper name
 def getSignatureFiles = {
+    println "############################################"
+    println "In getSignatureFiles"
+    println "############################################"
     def allFiles = project.tasks.signJars.signatureFiles.collect { it }
+    println "Signed Files: ${allFiles}"
     def signedSources = allFiles.find { it.name.contains('-sources') }
     def signedJavadoc = allFiles.find { it.name.contains('-javadoc') }
     def signedJar = (allFiles - [signedSources, signedJavadoc])[0]
@@ -142,60 +141,81 @@ def getSignatureFiles = {
 }
 
 def getPomSignature = {
-    return project.tasks.signPom.signatureFiles.collect{it}[0]
+    println "======================================="
+    println "In getPomSignature function"
+    println "======================================="
+    def spom = project.tasks.signPom.signatureFiles.collect {it}
+    println spom
+    return spom[0]
 }
 
 publishing {
     publications {
+        polarizeJar(MavenPublication) {
+            println "============================================"
+            println "In polarizeJar"
+            println "============================================"
+            // telling gradle to publish project's jar archive and generate a pom.xml
+            from components.java
+        }
         signatures(MavenPublication) {
+            println "============================================"
+            println "In signatures function"
+            println "============================================"
             getSignatureFiles().each {signature ->
                 artifact (signature.archive) {
                     classifier = signature.classifier
                     extension  = signature.extension
                 }
             }
+
+            pom.withXml {
+                println "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+                println "Configuring the pom"
+                println "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+
+                asNode().appendNode('name', archivesBaseName)
+                asNode().appendNode('description', 'Annotations to supply metadata for testcase management')
+                asNode().appendNode('url', projectURL)
+
+                Node scmNode = new Node(asNode(), 'scm')
+                scmNode.appendNode('url', 'scm:git:' + projectURL)
+                scmNode.appendNode('connection', "scm:git:${projectURL}.git")
+                scmNode.appendNode('developerConnection', "scm:git:${devURL}")
+
+                Node devsNode = new Node(asNode(), 'developers')
+                Node devNode = new Node(devsNode, 'developer')
+                devNode.appendNode('id', 'stoner')
+                devNode.appendNode('name', 'Sean Toner')
+                devNode.appendNode('email', 'stoner@redhat.com')
+
+                Node licensesNode = new Node(asNode(), 'licenses')
+                Node licenseNode = new Node(licensesNode, 'license')
+                licenseNode.appendNode('name', 'The Apache Software License, Version 2.0')
+                licenseNode.appendNode('url', 'http://www.apache.org/license/LICENSE-2.0.txt')
+                licenseNode.appendNode('distribution', 'repo')
+
+                //println asString().toString()
+                writeTo (project.ext.pomFile)
+                File pomFile = new File(pomPath)
+                println "======================================="
+                println "After writing to pom"
+                println "======================================="
+                println pomFile.text
+            }
         }
-        if (project.ext.pomFile.exists()) {
-            gpgPom(MavenPublication) {
+        gpgPom(MavenPublication) {
+            println "in gpgPom task"
+            File pomFile = new File(pomPath)
+            def pFileExists = pomFile.exists()
+            println "Does ${pomPath} exist?: ${pFileExists}"
+            if (project.ext.pomFile.exists()) {
+                println "********************************************"
+                println "In gpgPom function"
+                println "********************************************"
                 artifact (getPomSignature()) {
                     classifier = null
                     extension  = 'pom.asc'
-                }
-            }
-        }
-        
-        polarizeJar(MavenPublication) {
-            // telling gradle to publish project's jar archive and generate a pom.xml
-            from components.java
-
-            pom.withXml {
-                if (!project.ext.pomFile.exists()) {
-                    writeTo (project.ext.pomFile)
-                }
-                asNode().children().last() + {
-                    resolveStrategy = Closure.DELEGATE_FIRST
-                    name archivesBaseName
-                    description 'Annotations to supply metadata for testcase management'
-                    url projectURL
-                    scm {
-                        url 'scm:git:' + projectURL
-                        connection 'scm:git:' + projectURL + '.git'
-                        developerConnection 'scm:git:' + devURL
-                    }
-                    licenses {
-                        license {
-                            name 'The Apache Software License, Version 2.0'
-                            url 'http://www.apache.org/license/LICENSE-2.0.txt'
-                            distribution 'repo'
-                        }
-                    }
-                    developers {
-                        developer {
-                            id 'stoner'
-                            name 'Sean Toner'
-                            email 'stoner@redhat.com'
-                        }
-                    }
                 }
             }
         }
