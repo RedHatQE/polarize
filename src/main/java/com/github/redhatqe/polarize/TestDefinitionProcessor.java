@@ -1,7 +1,7 @@
 package com.github.redhatqe.polarize;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.github.redhatqe.polarize.exceptions.*;
 import com.github.redhatqe.polarize.importer.ImporterRequest;
@@ -17,7 +17,6 @@ import org.testng.annotations.Test;
 
 
 import javax.annotation.processing.*;
-import javax.jms.Connection;
 import javax.jms.JMSException;
 import javax.lang.model.SourceVersion;
 import javax.lang.model.element.*;
@@ -25,7 +24,9 @@ import javax.lang.model.util.Elements;
 import javax.tools.Diagnostic;
 import java.io.*;
 import java.lang.annotation.Annotation;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.*;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Consumer;
@@ -59,6 +60,8 @@ public class TestDefinitionProcessor extends AbstractProcessor {
                             Meta<TestDefinition>>> methToProjectDef;
     private Map<String, String> methNameToTestNGDescription;
     private Map<Testcase, Meta<TestDefinition>> testCaseToMeta;
+    // Map of qualified name -> { projectID: testcaseID }
+    private Map<String, Map<String, IdParams>> mappingFile = new LinkedHashMap<>();
     public JAXBHelper jaxb = new JAXBHelper();
     private Testcases testcases = new Testcases();
     private ReporterConfig config = XUnitReporter.configure();
@@ -124,7 +127,6 @@ public class TestDefinitionProcessor extends AbstractProcessor {
     }
 
 
-
     private List<Parameter> findParameterData(Element e) {
         List<Parameter> parameters = new ArrayList<>();
         if (e instanceof ExecutableElement) {
@@ -157,7 +159,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
                         testID = r.testCaseID()[i];
 
                     Meta<TestDefinition> m = new Meta<>();
-                    m.testCaseID = testID;
+                    m.polarionID = testID;
                     String full = this.getTopLevel(e, "", m);
                     this.logger.info(String.format("Fully qualified name is %s", full));
                     m.qualifiedName = full;
@@ -180,10 +182,15 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         for(Element e : elements) {
             List<Parameter> params = this.findParameterData(e);
             TestDefinition def = e.getAnnotation(TestDefinition.class);
+            int i = 0;
             for(Project project: def.projectID()) {
+                String testID = "";
+                if (i < def.testCaseID().length)
+                    testID = def.testCaseID()[i];
                 Meta<TestDefinition> m = new Meta<>();
                 String full = this.getTopLevel(e, "", m);
                 this.logger.info(String.format("Fully qualified name is %s", full));
+                m.polarionID = testID;
                 m.qualifiedName = full;
                 m.annotation = def;
                 m.project = project.toString();
@@ -214,6 +221,14 @@ public class TestDefinitionProcessor extends AbstractProcessor {
     public boolean process(Set<? extends TypeElement> set, RoundEnvironment roundEnvironment) {
         System.out.println("In process() method");
 
+        // load the mapping file
+        File mapPath = new File(this.polarizeConfig.get("mapping.path"));
+        System.out.println(mapPath.toString());
+        if (mapPath.exists()) {
+            System.out.println("Loading the map");
+            this.mappingFile = FileHelper.loadMapping(mapPath);
+            System.out.println(this.mappingFile.toString());
+        }
 
         /* ************************************************************************************
          * Get all the @TestDefinition annotations which were annotated on an element only once.
@@ -243,11 +258,26 @@ public class TestDefinitionProcessor extends AbstractProcessor {
          */
         List<Testcase> tests = this.processAllTC();
 
-        /* testcases holds all the methods that need a new or updated Polarion TestCase */
-        this.logger.info("Updating testcases that had <update>...");
-        this.testcasesImporterRequest();
-        this.tcMap = new HashMap<>();
+        // Update the mapping file
+        if (this.methToProjectDef.size() > 0) {
+            System.out.println("Creating mapping file");
+            this.createMappingFile(mapPath);
+            try {
+                Files.lines(Paths.get(mapPath.toString())).forEach(System.out::println);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+        else {
+            System.out.println("Could not create mapping file");
+        }
 
+        /* testcases holds all the methods that need a new or updated Polarion TestCase */
+        this.logger.info("Updating testcases that had no testcaseId...");
+        this.testcasesImporterRequest();
+
+        this.tcMap = new HashMap<>();
+        this.mappingFile = new HashMap<>();
         return true;
     }
 
@@ -349,7 +379,8 @@ public class TestDefinitionProcessor extends AbstractProcessor {
     /**
      * Returns a lambda usable as a handler for ImporterRequest.sendImportRequest
      *
-     * This handler will take the ObjectNode (for example, decoded from a message on the message bus) gets the
+     * This handler will take the ObjectNode (for example, decoded from a message on the message bus) gets the Polarion
+     * ID from the ObjectNode, and edits the XML file with the Id.  It will also store
      * @return
      */
     public Consumer<Optional<ObjectNode>> testcaseImportHandler() {
@@ -589,6 +620,40 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         return ids[index];
     }
 
+    public Optional<String> getPolarionIDFromMapFile(String name, String project) {
+        Map<String, IdParams> pToID = this.mappingFile.getOrDefault(name, null);
+        if (pToID == null)
+            return Optional.empty();
+        IdParams ip = pToID.getOrDefault(project, null);
+        if (ip == null)
+            return Optional.empty();
+        String id = ip.id;
+        if (id.equals(""))
+            return Optional.empty();
+        else
+            return Optional.of(id);
+    }
+
+    public void setPolarionIDInMapFile(String name, String project, String id) {
+        Map<String, IdParams> pToI;
+        if (this.mappingFile.containsKey(name)) {
+            pToI = this.mappingFile.get(name);
+        }
+        else {
+            pToI =new LinkedHashMap<>();
+        }
+
+        IdParams ip = pToI.getOrDefault(project, null);
+        if (ip != null) {
+            ip.id = id;
+        }
+        else {
+            ip = new IdParams(id, new LinkedList<>());
+        }
+        pToI.put(project, ip);
+        this.mappingFile.put(name, pToI);
+    }
+
     /**
      *
      * @param meta
@@ -659,8 +724,9 @@ public class TestDefinitionProcessor extends AbstractProcessor {
                     break;
                 case SUBTYPE2:
                     supp.accept(SUBTYPE2.stringify(), def.testtype().subtype2().toString());
+                    break;
                 default:
-                    this.logger.warn("Unknown enum value");
+                    this.logger.warn(String.format("Unknown enum value: %s", key.toString()));
             }
         };
 
@@ -694,8 +760,12 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         this.testCaseToMeta.put(tc, meta);
         TestDefinition def = meta.annotation;
 
-        // FIXME: Put this back in when CI Ops team gets Requirement importer working
-        //this.initRequirementsFromTestDef(meta, tc);
+        // If this method is in the mapping File for the project, and it's not an empty string, we are done
+        Optional<String> maybeMapFileID = this.getPolarionIDFromMapFile(meta.qualifiedName, meta.project);
+        if (maybeMapFileID.isPresent() && !maybeMapFileID.get().equals("")) {
+            this.logger.info(String.format("%s id is %s", meta.qualifiedName, maybeMapFileID.get()));
+            return tc;
+        }
 
         // Check to see if there is an existing XML description file with Polarion ID
         Optional<File> xml = meta.getFileFromMeta(this.tcPath);
@@ -709,14 +779,13 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         Optional<String> maybeIDXml = meta.getPolarionIDFromXML(this.tcPath);
         Boolean idExists = maybePolarionID.isPresent();
         Boolean xmlIdExists = maybeIDXml.isPresent();
-
         Boolean importRequest = false;
-        // xmlIdExists  | idExists       | action            | How does this happen?
-        // =============|================|===================|=============================================
-        // false        | false          | request and edit  | id="" in xml and in annotation
-        // false        | true           | edit XML          | id="" in xml, but id is in annotation
-        // true         | false          | nothing           | non-empty id in xml, but not in annotation
-        // true         | true           | validate          | non-empty id in xml and in annotation
+        // i  | xmlIdExists  | idExists       | action            | How does this happen?
+        // ===|==============|================|===================|=============================================
+        //  0 | false        | false          | request and edit  | id="" in xml and in annotation
+        //  1 | false        | true           | edit XML          | id="" in xml, but id is in annotation
+        //  2 | true         | false          | edit mapfile      | non-empty id in xml, but not in annotation
+        //  3 | true         | true           | validate          | non-empty id in xml and in annotation
         if (!xmlIdExists) {
             importRequest = true;
         }
@@ -737,6 +806,23 @@ public class TestDefinitionProcessor extends AbstractProcessor {
                 }
             }
         }
+        if (xmlIdExists && !idExists) {
+            // TODO: The ID exists in the XML file, but not in the annotation.  Set the mapping file with this info
+            Map<String, IdParams> projToId = this.mappingFile.getOrDefault(meta.qualifiedName, null);
+            if (projToId != null) {
+                if (projToId.containsKey(meta.project)) {
+                    IdParams ip = projToId.get(meta.project);
+                    ip.id = maybeIDXml.get();
+                }
+            }
+            else {
+                // In this case, although the XML file existed and we have (some) annotation data, we don't have all
+                // of it.  So let's put it into this.mappingFile
+                String msg = "XML data exists, but does not exist in mapping file.  Editing map: %s -> {%s: %s}";
+                this.logger.debug(String.format(msg, meta.qualifiedName, meta.project, maybeIDXml.get()));
+                this.setPolarionIDInMapFile(meta.qualifiedName, meta.project, maybeIDXml.get());
+            }
+        }
 
         if (importRequest) {
             String projId = meta.project;
@@ -749,6 +835,66 @@ public class TestDefinitionProcessor extends AbstractProcessor {
             }
         }
         return tc;
+    }
+
+
+    /**
+     * Creates a simple JSON file which maps a file system location to the Polarion ID
+     *
+     * Here's a rather complex example of a reduction.  Notice this uses the 3 arg version of reduce.
+     * @return
+     */
+    public void createMappingFile(File mapPath) {
+        HashMap<String, Map<String, IdParams>> collected = new HashMap<>();
+        Map<String, Map<String, IdParams>> mpid = this.methToProjectDef.entrySet().stream()
+                .reduce(collected,
+                        (accum, entry) -> {
+                            String methName = entry.getKey();
+                            Map<String, Meta<TestDefinition>> methToDef = entry.getValue();
+                            HashMap<String, IdParams> accumulator = new HashMap<>();
+                            Map<String, IdParams> methToProject = methToDef.entrySet().stream()
+                                    .reduce(accumulator,
+                                            (acc, n) -> {
+                                                String project = n.getKey();
+                                                Meta<TestDefinition> m = n.getValue();
+                                                if (this.mappingFile.containsKey(methName)) {
+                                                    Map<String, IdParams> pToI = this.mappingFile.get(methName);
+                                                    Boolean projectInMapping = pToI.containsKey(project);
+                                                    if (projectInMapping) {
+                                                        String idForProject = pToI.get(project).id;
+                                                        Boolean idIsEmpty = idForProject.equals("");
+                                                        if (!idIsEmpty) {
+                                                            this.logger.debug("Id for %s is in mapping file");
+                                                            m.polarionID = idForProject;
+                                                        }
+                                                    }
+                                                }
+                                                String id = m.polarionID;
+                                                List<String> params = m.params.stream()
+                                                        .map(Parameter::getName).collect(Collectors.toList());
+                                                IdParams ip = new IdParams(id, params);
+
+                                                acc.put(project, ip);
+                                                return acc;
+                                            },
+                                            (a, next) -> {
+                                                a.putAll(next);
+                                                return a;
+                                            });
+                            accum.put(methName, methToProject);
+                            return accum;
+                        },
+                        (partial, next) -> {
+                            partial.putAll(next);
+                            return partial;
+                        });
+        ObjectMapper mapper = new ObjectMapper();
+        try {
+            mapper.writer().withDefaultPrettyPrinter().writeValue(mapPath, mpid);
+            System.out.println(mapper.writer().withDefaultPrettyPrinter().writeValueAsString(mpid));
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 
     @Override
