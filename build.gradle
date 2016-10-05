@@ -10,6 +10,7 @@ String projectURL = 'https://github.com/RedHatQE/polarize'
 String devURL = 'git@github.com:RedHatQE/polarize.git'
 // Change this to where your polarize.properties file is stored
 String polarizePropertyFile = '/home/stoner/.polarize/polarize.properties'
+String pomPath = "${project.projectDir}/build/tmp/pom.xml"
 sourceCompatibility = 1.8
 targetCompatibility = 1.8
 
@@ -60,17 +61,8 @@ shadowJar {
 }
 
 ext {
-    pomFilePath = "${project.projectDir}/tmp/pom.xml"
+    pomFilePath = "${project.projectDir}/build/tmp/pom.xml"
     pomFile = file(pomFilePath)
-}
-
-
-task writeNewPom << {
-    pom {
-        project {
-            inceptionYear '2016'
-        }
-    }.writeTo(project.ext.pomFile)
 }
 
 // TODO: What does this do?
@@ -104,12 +96,16 @@ artifacts {
     archives javadocJar
     if (project.ext.pomFile.exists()) {
         pom pomFile
+        println "================================================="
+        println "In artifacts: storing pom ${pomFile}"
+        println "================================================="
     }
 }
 
 // We need to sign the POM
-task signPom(type: Sign, dependsOn: writeNewPom) {
+task signPom(type: Sign) {
     sign configurations.pom
+    println "configurations.pom: ${configurations.pom}"
 }
 
 task signJars (type : Sign, dependsOn: [jar, javadocJar, sourceJar]) {
@@ -142,7 +138,9 @@ def getSignatureFiles = {
 }
 
 def getPomSignature = {
-    return project.tasks.signPom.signatureFiles.collect{it}[0]
+    def sPom = project.tasks.signPom.signatureFiles.collect{it}
+    println "pom signature files: $sPom"
+    return sPom[0]
 }
 
 publishing {
@@ -169,34 +167,38 @@ publishing {
             from components.java
 
             pom.withXml {
-                if (!project.ext.pomFile.exists()) {
-                    writeTo (project.ext.pomFile)
-                }
-                asNode().children().last() + {
-                    resolveStrategy = Closure.DELEGATE_FIRST
-                    name archivesBaseName
-                    description 'Annotations to supply metadata for testcase management'
-                    url projectURL
-                    scm {
-                        url 'scm:git:' + projectURL
-                        connection 'scm:git:' + projectURL + '.git'
-                        developerConnection 'scm:git:' + devURL
-                    }
-                    licenses {
-                        license {
-                            name 'The Apache Software License, Version 2.0'
-                            url 'http://www.apache.org/license/LICENSE-2.0.txt'
-                            distribution 'repo'
-                        }
-                    }
-                    developers {
-                        developer {
-                            id 'stoner'
-                            name 'Sean Toner'
-                            email 'stoner@redhat.com'
-                        }
-                    }
-                }
+                println "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+                println "Configuring the pom"
+                println "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+
+                asNode().appendNode('name', archivesBaseName)
+                asNode().appendNode('description', 'Annotations to supply metadata for testcase management')
+                asNode().appendNode('url', projectURL)
+
+                Node scmNode = new Node(asNode(), 'scm')
+                scmNode.appendNode('url', 'scm:git:' + projectURL)
+                scmNode.appendNode('connection', "scm:git:${projectURL}.git")
+                scmNode.appendNode('developerConnection', "scm:git:${devURL}")
+
+                Node devsNode = new Node(asNode(), 'developers')
+                Node devNode = new Node(devsNode, 'developer')
+                devNode.appendNode('id', 'stoner')
+                devNode.appendNode('name', 'Sean Toner')
+                devNode.appendNode('email', 'stoner@redhat.com')
+
+                Node licensesNode = new Node(asNode(), 'licenses')
+                Node licenseNode = new Node(licensesNode, 'license')
+                licenseNode.appendNode('name', 'The Apache Software License, Version 2.0')
+                licenseNode.appendNode('url', 'http://www.apache.org/license/LICENSE-2.0.txt')
+                licenseNode.appendNode('distribution', 'repo')
+
+                //println asString().toString()
+                writeTo (project.ext.pomFile)
+                File pomFile = new File(pomPath)
+                println "======================================="
+                println "After writing to pom"
+                println "======================================="
+                println pomFile.text
             }
         }
     }
