@@ -403,6 +403,13 @@ public class XUnitReporter implements IReporter {
         void set();
     }
 
+    /**
+     *
+     * @param name
+     * @param value
+     * @param properties
+     * @return
+     */
     private static Configurator createConditionalProperty(String name, String value, List<Property> properties) {
         Configurator cfg;
         Property prop = new Property();

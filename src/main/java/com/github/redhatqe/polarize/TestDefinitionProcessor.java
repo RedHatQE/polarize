@@ -3,6 +3,7 @@ package com.github.redhatqe.polarize;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.github.redhatqe.polarize.configuration.YAMLConfig;
 import com.github.redhatqe.polarize.exceptions.*;
 import com.github.redhatqe.polarize.importer.ImporterRequest;
 import com.github.redhatqe.polarize.importer.testcase.*;
@@ -64,9 +65,12 @@ public class TestDefinitionProcessor extends AbstractProcessor {
     private Map<String, Map<String, IdParams>> mappingFile = new LinkedHashMap<>();
     public JAXBHelper jaxb = new JAXBHelper();
     private Testcases testcases = new Testcases();
+    // Deprecated
     private ReporterConfig config = XUnitReporter.configure();
+    // Deprecated
     private Map<String, String> polarizeConfig = Configurator.loadConfiguration();
     private Map<String, List<Testcase>> tcMap = new HashMap<>();
+    private YAMLConfig yconfig;
 
     /**
      * Recursive function that will get the fully qualified name of a method.
@@ -915,6 +919,11 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         this.methToRequirement = new HashMap<>();
         this.methToProjectReq = new HashMap<>();
         this.testCaseToMeta = new HashMap<>();
+        try {
+            this.yconfig = YAMLConfig.load(null);
+        } catch (IOException e) {
+            throw new Error("No yaml config file found");
+        }
     }
 
     @Override

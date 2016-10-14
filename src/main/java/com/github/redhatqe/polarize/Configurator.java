@@ -1,12 +1,9 @@
 package com.github.redhatqe.polarize;
-
-import com.github.redhatqe.polarize.exceptions.ConfigurationError;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStream;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.util.*;
@@ -52,9 +49,6 @@ public class Configurator {
             props.load(rdr);
             Set<String> keyset = props.stringPropertyNames();
             config = keyset.stream().collect(Collectors.toMap(k -> k, props::getProperty));
-            //config.put("testcases.xml.path", props.getProperty("testcases.xml.path", "/tmp/tcs"));
-            //config.put("polarion.url", props.getProperty("polarion.url"));
-            //config.put("importer.testcases.file", props.getProperty("importer.testcases.file", "/tmp/testcases.xml"));
         } catch (IOException e) {
             logger.info("Could not load polarize.properties.  Looking for defines...");
         }
@@ -64,7 +58,6 @@ public class Configurator {
         }
 
         // FIXME: There are a lot of properties now.  Require a config file, but allow env vars to override
-        Boolean tryDefault = false;
         String xmlReqPath = System.getProperty("requirements.xml.path");
         if (xmlReqPath != null)
             config.put("requirements.xml.path", xmlReqPath);
