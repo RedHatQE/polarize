@@ -1,6 +1,7 @@
-package com.github.redhatqe.polarize;
+package com.github.redhatqe.polarize.messagebus;
 
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.github.redhatqe.polarize.Configurator;
 import com.github.redhatqe.polarize.exceptions.ConfigurationError;
 import com.github.redhatqe.polarize.utils.Tuple;
 import org.apache.activemq.*;
