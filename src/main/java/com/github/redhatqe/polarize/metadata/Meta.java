@@ -24,7 +24,7 @@ public class Meta<T> {
     public String project;
     public T annotation;
     public List<Parameter> params = null;
-    public String testCaseID = "";
+    public String polarionID = "";
     public static final Logger logger = LoggerFactory.getLogger(Meta.class);
 
     public Meta() {
@@ -37,7 +37,7 @@ public class Meta<T> {
         this.className = orig.className;
         this.packName = orig.packName;
         this.project = orig.project;
-        this.testCaseID = orig.testCaseID;
+        this.polarionID = orig.polarionID;
         this.annotation = orig.annotation;
     }
 
@@ -49,7 +49,7 @@ public class Meta<T> {
         meta.className = orig.className;
         meta.packName = orig.packName;
         meta.project = orig.project;
-        meta.testCaseID = orig.testCaseID;
+        meta.polarionID = orig.polarionID;
         return meta;
     }
 
@@ -58,7 +58,7 @@ public class Meta<T> {
      * @return
      */
     public Optional<String> getPolarionIDFromTestcase() {
-        String id = this.testCaseID;
+        String id = this.polarionID;
         if (id.equals(""))
             return Optional.empty();
         return Optional.of(id);

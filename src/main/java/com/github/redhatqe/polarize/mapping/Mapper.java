@@ -3,7 +3,7 @@ package com.github.redhatqe.polarize.mapping;
 import java.util.Map;
 
 /**
- * A POJO that represents a mapping of qualified method names to
+ * A POJO that represents a mapping of qualified method names -> { projectID: polarionID }
  */
 public class Mapper {
 

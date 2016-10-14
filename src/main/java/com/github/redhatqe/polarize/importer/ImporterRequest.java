@@ -1,7 +1,7 @@
 package com.github.redhatqe.polarize.importer;
 
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.github.redhatqe.polarize.CIBusListener;
+import com.github.redhatqe.polarize.messagebus.CIBusListener;
 import com.github.redhatqe.polarize.IFileHelper;
 import com.github.redhatqe.polarize.IJAXBHelper;
 import com.github.redhatqe.polarize.JAXBHelper;

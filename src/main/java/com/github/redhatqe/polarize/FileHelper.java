@@ -1,14 +1,19 @@
 package com.github.redhatqe.polarize;
 
+import java.io.File;
+import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.Arrays;
-import java.util.Optional;
+import java.util.*;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.github.redhatqe.polarize.metadata.Meta;
 import com.github.redhatqe.polarize.exceptions.InvalidArgumentType;
 import com.github.redhatqe.polarize.metadata.QualifiedName;
 import com.github.redhatqe.polarize.metadata.TestDefinition;
+import com.github.redhatqe.polarize.utils.StringHelper;
 
 /**
  * Created by stoner on 7/7/16.
@@ -109,5 +114,45 @@ public class FileHelper implements IFileHelper {
             Path path = p.get();
             System.out.println(path.toString());
         }
+    }
+
+    public static Map<String, Map<String, IdParams>> loadMapping(File fpath) {
+        ObjectMapper mapper = new ObjectMapper();
+
+        Map<String, Map<String, IdParams>> mapped = new HashMap<>();
+        try {
+            if (fpath.exists()) {
+                // First key is name, second is project, third is "id" or "parameters"
+                JsonNode node = mapper.readTree(fpath);
+                node.fields().forEachRemaining(entry -> {
+                    String name = entry.getKey();
+                    JsonNode projectToInner = entry.getValue();
+                    Map<String, IdParams> innerMap = new HashMap<>();
+                    projectToInner.fields().forEachRemaining(e -> {
+                        String project = e.getKey();
+                        JsonNode inner = e.getValue();
+                        String id = inner.get("id").toString();
+
+                        IdParams idp = new IdParams();
+                        idp.id = StringHelper.removeQuotes(id);
+                        JsonNode paramNode = inner.get("parameters");
+                        if (paramNode instanceof ArrayNode) {
+                            ArrayNode params = (ArrayNode) paramNode;
+                            idp.parameters = params.findValuesAsText("parameters");
+                            List<String> p = new ArrayList<>();
+                            for(int i = 0; i < params.size(); i++) {
+                                p.add(StringHelper.removeQuotes(params.get(i).toString()));
+                            }
+                            idp.parameters = p;
+                        }
+                        innerMap.put(project, idp);
+                    });
+                    mapped.put(name, innerMap);
+                });
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        return mapped;
     }
 }

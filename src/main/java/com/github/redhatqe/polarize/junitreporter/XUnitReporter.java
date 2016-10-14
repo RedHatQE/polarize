@@ -3,7 +3,11 @@ package com.github.redhatqe.polarize.junitreporter;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
+import com.github.redhatqe.polarize.FileHelper;
 import com.github.redhatqe.polarize.IJAXBHelper;
+import com.github.redhatqe.polarize.IdParams;
+import com.github.redhatqe.polarize.JAXBHelper;
+import com.github.redhatqe.polarize.exceptions.MappingError;
 import com.github.redhatqe.polarize.exceptions.RequirementAnnotationException;
 import com.github.redhatqe.polarize.exceptions.XMLDescriptionError;
 import com.github.redhatqe.polarize.exceptions.XMLUnmarshallError;
@@ -20,7 +24,6 @@ import org.testng.xml.XmlSuite;
 import org.testng.xml.XmlTest;
 
 import javax.jms.JMSException;
-import javax.xml.bind.JAXB;
 
 import java.io.*;
 import java.nio.file.Path;
@@ -180,6 +183,8 @@ public class XUnitReporter implements IReporter {
         String url = polarizeConfig.get("polarion.url") + polarizeConfig.get("importer.xunit.endpoint");
         String user = polarizeConfig.get("kerb.user");
         String pw = polarizeConfig.get("kerb.pass");
+        JAXBHelper jaxb = new JAXBHelper();
+        IJAXBHelper.marshaller(tsuites, reportPath, jaxb.getXSDFromResource(Testsuites.class));
     }
 
     /**
@@ -277,10 +282,16 @@ public class XUnitReporter implements IReporter {
     public static List<Testcase> getMethodInfo(ISuite suite, List<Testcase> testcases) {
         List<IInvokedMethod> invoked = suite.getAllInvokedMethods();
         for(IInvokedMethod meth: invoked) {
+            // FIXME: Need to figure out if this was a non @Test method
+            ITestNGMethod fn = meth.getTestMethod();
+            if (!fn.isTest()) {
+                XUnitReporter.logger.info(String.format("Skipping non-test method %s", fn.getMethodName()));
+                continue;
+            }
+
             Testcase testcase = new Testcase();
             testcases.add(testcase);
 
-            ITestNGMethod fn = meth.getTestMethod();
             XmlTest test = fn.getXmlTest();
             ITestResult result = meth.getTestResult();
             result.getStartMillis();
@@ -305,11 +316,27 @@ public class XUnitReporter implements IReporter {
 
             XUnitReporter.getStatus(result, testcase);
 
+            // Load the mapping file
+            String project = XUnitReporter.config.getProjectID();
+            String path = XUnitReporter.polarizeConfig.get("mapping.path");
+            File fpath = new File(path);
+            if (!fpath.exists()) {
+                XUnitReporter.logger.error(String.format("Could not find mapping file %s", path));
+                throw new MappingError();
+            }
+            String qual = String.format("%s.%s", classname, methname);
+            Map<String, Map<String, IdParams>> mapping = FileHelper.loadMapping(fpath);
+            List<String> args = mapping.get(qual).get(project).getParameters();
+
             // Get all the iteration data
             Object[] params = result.getParameters();
+            if (args.size() != params.length) {
+                XUnitReporter.logger.error("Length of parameters from IResult not the same as from mapping file");
+                throw new MappingError();
+            }
             for(int x = 0; x < params.length; x++) {
                 Property param = new Property();
-                param.setName("polarion-parameter-" + Integer.toString(x));
+                param.setName("polarion-parameter-" + args.get(x));
                 param.setValue(params[x].toString());
                 tcProps.add(param);
             }
@@ -376,6 +403,13 @@ public class XUnitReporter implements IReporter {
         void set();
     }
 
+    /**
+     *
+     * @param name
+     * @param value
+     * @param properties
+     * @return
+     */
     private static Configurator createConditionalProperty(String name, String value, List<Property> properties) {
         Configurator cfg;
         Property prop = new Property();
@@ -440,8 +474,10 @@ public class XUnitReporter implements IReporter {
 
         Path path = Paths.get(tcXMLPath, projID, className, methName + ".xml");
         File xmlDesc = path.toFile();
-        if(!xmlDesc.exists())
+        if(!xmlDesc.exists()) {
+            XUnitReporter.logger.error("Could not find xml description file for " + path.toString());
             throw new XMLDescriptionError();
+        }
 
         return xmlDesc;
     }

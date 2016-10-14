@@ -11,6 +11,10 @@ String devURL = 'git@github.com:RedHatQE/polarize.git'
 // Change this to where your polarize.properties file is stored
 String polarizePropertyFile = '/home/stoner/.polarize/polarize.properties'
 String pomPath = "${project.projectDir}/build/tmp/pom.xml"
+String mvnPom = "${project.projectDir}/build/tmp/${project.name}-${project.version}.pom"
+String arcDir = "${project.projectDir}/artifacts/com/github/redhatqe/polarize/polarize/${project.version}"
+String arcPom = "${arcDir}/${project.name}-${project.version}.pom"
+File arcPomFile = file(arcPom)
 sourceCompatibility = 1.8
 targetCompatibility = 1.8
 
@@ -26,6 +30,11 @@ task wrapper(type: Wrapper) {
 repositories {
     mavenCentral()
     jcenter()
+}
+
+jar {
+    from sourceSets.main.output
+    from sourceSets.main.allJava
 }
 
 dependencies {
@@ -44,6 +53,7 @@ dependencies {
     compile 'org.json:json:20140107'
     compile group: 'com.fasterxml.jackson.core', name: 'jackson-core', version: '2.8.2'
     compile group: 'com.fasterxml.jackson.core', name: 'jackson-databind', version: '2.8.2'
+    compile group: 'com.fasterxml.jackson.dataformat', name: 'jackson-dataformat-yaml', version: '2.8.2'
     compile group: 'org.apache.activemq', name: 'activemq-client', version: '5.14.0'
 }
 
@@ -89,30 +99,30 @@ task sourceJar(type: Jar) {
     classifier "sources"
 }
 
-// Declares the artifacts that will be published
 artifacts {
+    println "--------- In artifacts task -----------"
     archives jar
     archives sourceJar
     archives javadocJar
-    if (project.ext.pomFile.exists()) {
-        pom pomFile
+    if (arcPomFile.exists()) {
+        pom arcPomFile
     }
 }
 
+
 // We need to sign the POM
 task signPom(type: Sign) {
-    println "In signPom task"
-    sign configurations.pom
-    println "configurations.pom: ${configurations.pom}"
+    sign arcPomFile
+    println "========> in signPom: ${configurations.pom}"
 }
 
 task signJars (type : Sign, dependsOn: [jar, javadocJar, sourceJar]) {
     println "In signJars task"
     sign configurations.archives
-    println "configurations.archives: ${configurations.archives}"
+    println "========> in signJars: ${configurations.archives}"
 }
 
-if (project.ext.pomFile.exists()) {
+if (arcPomFile.exists()) {
     println "Signing jars and pom"
     task preparePublication (dependsOn : [signJars, signPom])
 } else {
@@ -141,27 +151,14 @@ def getSignatureFiles = {
 }
 
 def getPomSignature = {
-    println "======================================="
-    println "In getPomSignature function"
-    println "======================================="
-    def spom = project.tasks.signPom.signatureFiles.collect {it}
-    println spom
-    return spom[0]
+    def sPom = project.tasks.signPom.signatureFiles.collect{it}
+    println "pom signature files: $sPom"
+    return sPom[0]
 }
 
 publishing {
     publications {
-        polarizeJar(MavenPublication) {
-            println "============================================"
-            println "In polarizeJar"
-            println "============================================"
-            // telling gradle to publish project's jar archive and generate a pom.xml
-            from components.java
-        }
-        signatures(MavenPublication) {
-            println "============================================"
-            println "In signatures function"
-            println "============================================"
+        gpgJars(MavenPublication) {
             getSignatureFiles().each {signature ->
                 artifact (signature.archive) {
                     classifier = signature.classifier
@@ -204,15 +201,43 @@ publishing {
                 println pomFile.text
             }
         }
-        gpgPom(MavenPublication) {
-            println "in gpgPom task"
-            File pomFile = new File(pomPath)
-            def pFileExists = pomFile.exists()
-            println "Does ${pomPath} exist?: ${pFileExists}"
-            if (project.ext.pomFile.exists()) {
-                println "********************************************"
-                println "In gpgPom function"
-                println "********************************************"
+
+        mavenCustom(MavenPublication) {
+            from components.java
+
+            artifact sourceJar
+            artifact javadocJar
+
+            pom.withXml {
+                println "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+                println "Configuring the pom"
+                println "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+
+                asNode().appendNode('name', archivesBaseName)
+                asNode().appendNode('description', 'Annotations to supply metadata for testcase management')
+                asNode().appendNode('url', projectURL)
+
+                Node scmNode = new Node(asNode(), 'scm')
+                scmNode.appendNode('url', 'scm:git:' + projectURL)
+                scmNode.appendNode('connection', "scm:git:${projectURL}.git")
+                scmNode.appendNode('developerConnection', "scm:git:${devURL}")
+
+                Node devsNode = new Node(asNode(), 'developers')
+                Node devNode = new Node(devsNode, 'developer')
+                devNode.appendNode('id', 'stoner')
+                devNode.appendNode('name', 'Sean Toner')
+                devNode.appendNode('email', 'stoner@redhat.com')
+
+                Node licensesNode = new Node(asNode(), 'licenses')
+                Node licenseNode = new Node(licensesNode, 'license')
+                licenseNode.appendNode('name', 'The Apache Software License, Version 2.0')
+                licenseNode.appendNode('url', 'http://www.apache.org/license/LICENSE-2.0.txt')
+                licenseNode.appendNode('distribution', 'repo')
+            }
+        }
+
+        if (arcPomFile.exists()) {
+            gpgPom(MavenPublication) {
                 artifact (getPomSignature()) {
                     classifier = null
                     extension  = 'pom.asc'
@@ -223,7 +248,7 @@ publishing {
 
     repositories {
         maven {
-            if (project.ext.pomFile.exists()) {
+            if (arcPomFile.exists()) {
                 if (project.version.contains("SNAPSHOT")) {
                     url 'https://oss.sonatype.org/content/repositories/snapshots'
                 }
@@ -244,6 +269,11 @@ publishing {
             }
         }
     }
+}
+
+task copyTask(type: Copy) {
+    from mvnPom
+    into "${project.projectDir}/artifacts/com/github/redhatqe/polarize/polarize/${project.version}"
 }
 
 
