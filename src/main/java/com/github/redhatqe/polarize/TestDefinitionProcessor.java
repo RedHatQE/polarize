@@ -3,11 +3,11 @@ package com.github.redhatqe.polarize;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.github.redhatqe.polarize.configuration.YAMLConfig;
+import com.github.redhatqe.polarize.configuration.ConfigType;
+import com.github.redhatqe.polarize.configuration.XMLConfig;
 import com.github.redhatqe.polarize.exceptions.*;
 import com.github.redhatqe.polarize.importer.ImporterRequest;
 import com.github.redhatqe.polarize.importer.testcase.*;
-import com.github.redhatqe.polarize.junitreporter.ReporterConfig;
 import com.github.redhatqe.polarize.junitreporter.XUnitReporter;
 import com.github.redhatqe.polarize.metadata.*;
 
@@ -51,7 +51,6 @@ public class TestDefinitionProcessor extends AbstractProcessor {
     private Elements elements;
     private Messager msgr;
     private Logger logger;
-    private String reqPath;
     private String tcPath;
     private Map<String, Meta<Requirement>> methToRequirement;
     // map of qualified name -> {projectID: meta}
@@ -65,12 +64,9 @@ public class TestDefinitionProcessor extends AbstractProcessor {
     private Map<String, Map<String, IdParams>> mappingFile = new LinkedHashMap<>();
     public JAXBHelper jaxb = new JAXBHelper();
     private Testcases testcases = new Testcases();
-    // Deprecated
-    private ReporterConfig config = XUnitReporter.configure();
-    // Deprecated
-    private Map<String, String> polarizeConfig = Configurator.loadConfiguration();
     private Map<String, List<Testcase>> tcMap = new HashMap<>();
-    private YAMLConfig yconfig;
+    private XMLConfig config;
+    private ConfigType cfg;
 
     /**
      * Recursive function that will get the fully qualified name of a method.
@@ -226,7 +222,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         System.out.println("In process() method");
 
         // load the mapping file
-        File mapPath = new File(this.polarizeConfig.get("mapping.path"));
+        File mapPath = new File(this.cfg.getMapping().getPath());
         System.out.println(mapPath.toString());
         if (mapPath.exists()) {
             System.out.println("Loading the map");
@@ -319,7 +315,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
      * @return
      */
     private Optional<String> initTestcases(String selectorName, String selectorValue) {
-        String projectID = this.config.getProjectID();
+        String projectID = this.cfg.getProject();
         if (!this.tcMap.containsKey(projectID)) {
             this.logger.error("Project ID does not exist within Testcase Map");
             return Optional.empty();
@@ -329,7 +325,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
             return Optional.empty();
         }
         this.testcases.setProjectId(projectID);
-        this.testcases.setUserId(this.config.getAuthor());
+        this.testcases.setUserId(this.cfg.getAuthor());
         this.testcases.getTestcase().addAll(this.tcMap.get(projectID));
 
         ResponseProperties respProp = this.testcases.getResponseProperties();
@@ -342,7 +338,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         rprop.setValue(selectorValue);
         props.add(rprop);
 
-        File testcaseXml = new File(this.polarizeConfig.get("importer.testcases.file"));
+        File testcaseXml = new File(this.config.testcase.getFile().getPath());
         IJAXBHelper.marshaller(this.testcases, testcaseXml, this.jaxb.getXSDFromResource(Testcases.class));
         return Optional.of(projectID);
     }
@@ -359,11 +355,9 @@ public class TestDefinitionProcessor extends AbstractProcessor {
             this.logger.info("No more testcases to import ...");
             return maybeNode;
         }
-        if (this.polarizeConfig.get("do.xunit").equals("no"))
-            return maybeNode;
 
-        String selectorName = this.polarizeConfig.get("importer.testcase.response.name");
-        String selectorValue = this.polarizeConfig.get("importer.testcase.response.value");
+        String selectorName = this.config.testcase.getSelector().getName();
+        String selectorValue = this.config.testcase.getSelector().getVal();
         String selector = String.format("%s='%s'", selectorName, selectorValue);
         if (!this.initTestcases(selectorName, selectorValue).isPresent())
             return maybeNode;
@@ -404,7 +398,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
                     if (id.endsWith("\""))
                         id = id.substring(0, id.length() -1);
                     this.logger.info("New Testcase id = " + id);
-                    Optional<Path> maybeXML = FileHelper.getXmlPath(this.tcPath, name, this.config.getProjectID());
+                    Optional<Path> maybeXML = FileHelper.getXmlPath(this.tcPath, name, this.cfg.getProject());
                     if (!maybeXML.isPresent()) {
                         // In this case, we couldn't get the XML path due to a bad name or tcPath
                         String err = String.format("Couldn't generate XML path for %s and %s", this.tcPath, name);
@@ -458,10 +452,10 @@ public class TestDefinitionProcessor extends AbstractProcessor {
 
     private Optional<ObjectNode> sendTCImporterRequest(String selector)
             throws InterruptedException, ExecutionException, JMSException {
-        String url = this.polarizeConfig.get("polarion.url") + this.polarizeConfig.get("importer.testcase.endpoint");
-        File testcaseXml = new File(this.polarizeConfig.get("importer.testcases.file"));
-        String user = this.polarizeConfig.get("polarion.user");
-        String pw = this.polarizeConfig.get("polarion.pass");
+        String url = this.config.polarion.getUrl() + this.config.testcase.getEndpoint().getRoute();
+        File testcaseXml = new File(this.config.testcase.getFile().getPath());
+        String user = this.config.polarion.getUser();
+        String pw = this.config.polarion.getPassword();
         return ImporterRequest.sendImportRequest(url, user, pw, testcaseXml, selector, this.testcaseImportHandler());
     }
 
@@ -624,7 +618,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         return ids[index];
     }
 
-    public Optional<String> getPolarionIDFromMapFile(String name, String project) {
+    private Optional<String> getPolarionIDFromMapFile(String name, String project) {
         Map<String, IdParams> pToID = this.mappingFile.getOrDefault(name, null);
         if (pToID == null)
             return Optional.empty();
@@ -638,7 +632,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
             return Optional.of(id);
     }
 
-    public void setPolarionIDInMapFile(String name, String project, String id) {
+    private void setPolarionIDInMapFile(String name, String project, String id) {
         Map<String, IdParams> pToI;
         if (this.mappingFile.containsKey(name)) {
             pToI = this.mappingFile.get(name);
@@ -860,8 +854,9 @@ public class TestDefinitionProcessor extends AbstractProcessor {
      * Here's a rather complex example of a reduction.  Notice this uses the 3 arg version of reduce.
      * @return
      */
-    public void createMappingFile(File mapPath) {
+    private void createMappingFile(File mapPath) {
         HashMap<String, Map<String, IdParams>> collected = new HashMap<>();
+        // Iterate through the map of qualifiedMethod -> ProjectID -> Meta<TestDefinition>
         Map<String, Map<String, IdParams>> mpid = this.methToProjectDef.entrySet().stream()
                 .reduce(collected,
                         (accum, entry) -> {
@@ -920,22 +915,14 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         this.elements = env.getElementUtils();
         this.msgr = env.getMessager();
         this.logger = LoggerFactory.getLogger(TestDefinitionProcessor.class);
-        //this.types = env.getTypeUtils();
-        //this.filer = env.getFiler();
-
-        Map<String, String> config = Configurator.loadConfiguration();
-        this.reqPath = config.get("requirements.xml.path");
-        this.tcPath = config.get("testcases.xml.path");
 
         this.methNameToTestNGDescription = new HashMap<>();
         this.methToRequirement = new HashMap<>();
         this.methToProjectReq = new HashMap<>();
         this.testCaseToMeta = new HashMap<>();
-        try {
-            this.yconfig = YAMLConfig.load(null);
-        } catch (IOException e) {
-            throw new Error("No yaml config file found");
-        }
+        this.config = new XMLConfig(null);
+        this.cfg = this.config.config;
+        this.tcPath = this.cfg.getTestcasesXml().getPath();
     }
 
     @Override
