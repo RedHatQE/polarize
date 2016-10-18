@@ -379,6 +379,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
      *
      * This handler will take the ObjectNode (for example, decoded from a message on the message bus) gets the Polarion
      * ID from the ObjectNode, and edits the XML file with the Id.  It will also store
+     *
      * @return
      */
     public Consumer<Optional<ObjectNode>> testcaseImportHandler() {

@@ -1,0 +1,53 @@
+<config>
+    <requirements-xml path="/home/stoner/Projects/rhsm-qe/requirements"/>
+    <testcases-xml path="/home/stoner/Projects/rhsm-qe/testcases"/>
+    <!-- JSON file that maps the qualified name -> project -> id -->
+    <mapping path="/home/stoner/Projects/rhsm-qe/mapping.json"/>
+    <author>stoner</author>
+    <project>PLATTP</project>
+    <servers>
+        <server name="polarion"
+                url=""
+                user="stoner"
+                password=""/>
+        <server name="kerberos"
+                user=""
+                password=""/>
+        <!-- The ossrh server is only needed used to publish polarize jars to maven central -->
+        <server name="ossrh"
+                user="stoner"
+                password=""/>
+    </servers>
+    <importers>
+        <importer type="testcase"><!-- settings for the testcase importer -->
+            <endpoint route="/import/testcase"/>
+            <file path="/tmp/testcases.xml"/>
+            <selector name="rhsm_qe" val="testcase_importer"/><!-- Creates the JMS selector -->
+            <!-- An optional prefix and suffix.  If none is given, the qualified name of the method is the title -->
+            <title prefix="RHSM-TC : " suffix=""/>
+            <timeout millis="300000"/><!-- time in milliseconds to wait for message reply -->
+        </importer>
+        <importer type="xunit"><!-- # settings for the xunit importer -->
+            <!-- id is an optional unique id for testrun. Defaults to a timestamp (uniqueness guaranteed by client)
+                 title is the (possibly non-unique) name of the testrun-->
+            <testrun id="" title="Sean Toner Polarize TestRun"/>
+            <endpoint route="/import/xunit"/>
+            <!-- # the JMS selector <name>='<value>' -->
+            <selector name="rhsm_qe" val="stoner"/>
+            <!-- A list of key-value pairs.  The response properties are used by the xunit importer -->
+            <test-suite>
+                <property name="dry-run" val="false"/>
+                <property name="set-testrun-finished" val="true"/>
+                <property name="include-skipped" val="false"/>
+            </test-suite>
+            <!-- These are custom fields in the Polarion TestRun -->
+            <custom-fields>
+                <property name="template-id" val=""/><!-- The template id to use for test runs -->
+                <property name="plannedin" val=""/><!-- The plannedin phase -->
+                <property name="jenkinsjobs" val=""/><!-- Path to the jenkins job -->
+                <property name="notes" val=""/><!-- arbitrary field -->
+            </custom-fields>
+            <timeout millis="300000"/><!-- time in milliseconds to wait for reply message -->
+        </importer>
+    </importers>
+</config>
