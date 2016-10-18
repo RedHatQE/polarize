@@ -8,5 +8,5 @@ gradle clean
 gradle shadowJar
 pushd $TESTPOLARIZE
 gradle clean
-gradle build --info
+gradle build --info --stacktrace
 cd $OWD
