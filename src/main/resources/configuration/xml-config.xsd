@@ -1,0 +1,194 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema attributeFormDefault="unqualified" elementFormDefault="qualified" xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:element name="config" type="configType"/>
+  <xs:complexType name="titleType">
+
+    <xs:simpleContent>
+      <xs:extension base="xs:string">
+        <xs:attribute type="xs:string" name="prefix"/>
+        <xs:attribute type="xs:string" name="suffix"/>
+      </xs:extension>
+    </xs:simpleContent>
+  </xs:complexType>
+
+  <xs:complexType name="endpointType">
+    <xs:simpleContent>
+      <xs:extension base="xs:string">
+        <xs:attribute type="xs:string" name="route" use="optional"/>
+      </xs:extension>
+    </xs:simpleContent>
+  </xs:complexType>
+
+  <xs:complexType name="timeoutType">
+    <xs:simpleContent>
+      <xs:extension base="xs:string">
+        <xs:attribute type="xs:string" name="millis" use="optional"/>
+      </xs:extension>
+    </xs:simpleContent>
+  </xs:complexType>
+
+  <xs:complexType name="importerType">
+    <xs:sequence>
+      <xs:element type="testrunType" name="testrun" minOccurs="0">
+        <xs:annotation>
+          <xs:documentation># settings for the xunit importer  id is an optional unique id for testrun. Defaults to a timestamp (uniqueness guaranteed by client)
+           title is the (possibly non-unique) name of the testrun</xs:documentation>
+        </xs:annotation>
+      </xs:element>
+
+      <xs:element type="endpointType" name="endpoint">
+        <xs:annotation>
+          <xs:documentation>settings for the testcase importer</xs:documentation>
+        </xs:annotation>
+      </xs:element>
+
+      <xs:element type="fileType" name="file" minOccurs="0"/>
+
+      <xs:element type="selectorType" name="selector">
+        <xs:annotation>
+          <xs:documentation># the JMS selector &lt;name>='&lt;value>'</xs:documentation>
+        </xs:annotation>
+      </xs:element>
+
+      <xs:element type="titleType" name="title" minOccurs="0">
+        <xs:annotation>
+          <xs:documentation>Creates the JMS selector  An optional prefix and suffix.  If none is given, the qualified name of the method is the title</xs:documentation>
+        </xs:annotation>
+      </xs:element>
+
+      <xs:element type="test-suiteType" name="test-suite" minOccurs="0">
+        <xs:annotation>
+          <xs:documentation>A list of key-value pairs.  The response properties are used by the xunit importer</xs:documentation>
+        </xs:annotation>
+      </xs:element>
+
+      <xs:element type="custom-fieldsType" name="custom-fields" minOccurs="0">
+        <xs:annotation>
+          <xs:documentation>These are custom fields in the Polarion TestRun  arbitrary field</xs:documentation>
+        </xs:annotation>
+      </xs:element>
+
+      <xs:element type="timeoutType" name="timeout"/>
+    </xs:sequence>
+    <xs:attribute type="xs:string" name="type" use="optional"/>
+  </xs:complexType>
+
+  <xs:complexType name="testcases-xmlType">
+    <xs:simpleContent>
+      <xs:extension base="xs:string">
+        <xs:attribute type="xs:string" name="path"/>
+      </xs:extension>
+    </xs:simpleContent>
+  </xs:complexType>
+
+  <xs:complexType name="requirements-xmlType">
+    <xs:simpleContent>
+      <xs:extension base="xs:string">
+        <xs:attribute type="xs:string" name="path"/>
+      </xs:extension>
+    </xs:simpleContent>
+  </xs:complexType>
+
+  <xs:complexType name="configType">
+    <xs:sequence>
+      <xs:element type="requirements-xmlType" name="requirements-xml"/>
+      <xs:element type="testcases-xmlType" name="testcases-xml"/>
+      <xs:element type="mappingType" name="mapping">
+        <xs:annotation>
+          <xs:documentation>Maps the qualified name to project->id</xs:documentation>
+        </xs:annotation>
+      </xs:element>
+      <xs:element type="xs:string" name="author"/>
+      <xs:element type="xs:string" name="project"/>
+      <xs:element type="serversType" name="servers"/>
+      <xs:element type="importersType" name="importers"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="test-suiteType">
+    <xs:sequence>
+      <xs:element type="propertyType" name="property" maxOccurs="unbounded" minOccurs="0"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="custom-fieldsType">
+    <xs:sequence>
+      <xs:element type="propertyType" name="property" maxOccurs="unbounded" minOccurs="0">
+        <xs:annotation>
+          <xs:documentation>The template id to use for test runs  The plannedin phase  Path to the jenkins job</xs:documentation>
+        </xs:annotation>
+      </xs:element>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="mappingType">
+    <xs:simpleContent>
+      <xs:extension base="xs:string">
+        <xs:attribute type="xs:string" name="path"/>
+      </xs:extension>
+    </xs:simpleContent>
+  </xs:complexType>
+
+  <xs:complexType name="serverType">
+    <xs:simpleContent>
+      <xs:extension base="xs:string">
+        <xs:attribute type="xs:string" name="name" use="optional"/>
+        <xs:attribute type="xs:string" name="url" use="optional"/>
+        <xs:attribute type="xs:string" name="user" use="optional"/>
+        <xs:attribute type="xs:string" name="password" use="optional"/>
+      </xs:extension>
+    </xs:simpleContent>
+  </xs:complexType>
+
+  <xs:complexType name="testrunType">
+    <xs:simpleContent>
+      <xs:extension base="xs:string">
+        <xs:attribute type="xs:string" name="id"/>
+        <xs:attribute type="xs:string" name="title"/>
+      </xs:extension>
+    </xs:simpleContent>
+  </xs:complexType>
+
+  <xs:complexType name="propertyType">
+    <xs:simpleContent>
+      <xs:extension base="xs:string">
+        <xs:attribute type="xs:string" name="name" use="optional"/>
+        <xs:attribute type="xs:string" name="val" use="optional"/>
+      </xs:extension>
+    </xs:simpleContent>
+  </xs:complexType>
+
+  <xs:complexType name="importersType">
+    <xs:sequence>
+      <xs:element type="importerType" name="importer" maxOccurs="unbounded" minOccurs="0">
+        <xs:annotation>
+          <xs:documentation>time in milliseconds to wait for message reply  time in milliseconds to wait for reply message</xs:documentation>
+        </xs:annotation>
+      </xs:element>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="selectorType">
+    <xs:simpleContent>
+      <xs:extension base="xs:string">
+        <xs:attribute type="xs:string" name="name" use="optional"/>
+        <xs:attribute type="xs:string" name="val" use="optional"/>
+      </xs:extension>
+    </xs:simpleContent>
+  </xs:complexType>
+
+  <xs:complexType name="serversType">
+    <xs:sequence>
+      <xs:element type="serverType" name="server" maxOccurs="unbounded" minOccurs="0"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="fileType">
+    <xs:simpleContent>
+      <xs:extension base="xs:string">
+        <xs:attribute type="xs:string" name="path"/>
+      </xs:extension>
+    </xs:simpleContent>
+  </xs:complexType>
+
+</xs:schema>
