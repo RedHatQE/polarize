@@ -1,9 +1,12 @@
 # Why polarize?
 
-polarize has 2 main goals:
+polarize has several goals:
 
 - Make the source code where testcase definitions and requirements live
 - A TestNG reporter that generates junit reports compatible with the XUnit importer
+- Creates or updates Polarion TestCase based on Java annotations during compilation
+- A Java tool to send the XUnit and Testcase importer requests (no shelling out to curl)
+- A Java tool to consume importer messages from the CI Message Bus (no subscribe.py)
 
 
 Writing Requirements and TestCases in Polarion by hand is very time consuming.  Being able to auto-generate a Polarion 
@@ -113,16 +116,16 @@ After you execute your TestNG test, you will see a report generated like this:
         <testcase name="testUpgradeNegative" classname="com.github.redhatqe.rhsm.testpolarize.TestReq" status="success">
             <properties>
                 <property name="polarion-testcase-id" value="PLATTP-9520"/>
-                <property name="polarion-parameter-0" value="Sean"/>
-                <property name="polarion-parameter-1" value="44"/>
+                <property name="polarion-parameter-name" value="Sean"/>
+                <property name="polarion-parameter-age" value="44"/>
             </properties>
         </testcase>
         <testcase name="testUpgradeNegative" classname="com.github.redhatqe.rhsm.testpolarize.TestReq">
             <failure/>
             <properties>
                 <property name="polarion-testcase-id" value="PLATTP-9520"/>
-                <property name="polarion-parameter-0" value="Toner"/>
-                <property name="polarion-parameter-1" value="0"/>
+                <property name="polarion-parameter-name" value="Toner"/>
+                <property name="polarion-parameter-age" value="0"/>
             </properties>
         </testcase>
     </testsuite>
@@ -169,26 +172,19 @@ files or features files, all the mapping from a requirement/testcase to the test
 
 ## Configuring polarize
 
-**NOTE** Over time, polarize's properties has grown to be more complex and probably needs to move beyond a simple 
-properties file.  Considering writing a configuration format into YAML or JSON which can be marshalled into a real 
-Java Object
+Over time, polarize has gained a number of required settings that need to be configured.  It moved from a simple 
+properties style file to the now current XML based configuration.  Work was planned on a YAML based configuration, but
+although deserializing a YAML file to a POJO wasn't too hard, serializing a POJO into YAML turned out to be difficult.
 
-polarize is fairly easy to configure.  It really just needs to know where to generate/look for the xml description files
-that are analogous to the annotation data.  polarize will look in 2 places for configuration data:
+There are 2 main configuration files
 
-1. src/main/resources/polarize.properties
-2. ~/.polarize/polarize.properties
+1. src/main/resources/xml-config.xml
+2. ~/.polarize/xml-config.xml
 
-The latter (if it exists) will override the keys in the former.  The two keys are:
+The latter (if it exists) will override the keys in the former.  It is recommended to use the latter because you will 
+need to put passwords for 2 different servers in it, and you won't want to accidentally check these in. 
 
-requirements.xml.path=/home/stoner/Projects/testjong/requirements
-testcase.xml.path=/home/stoner/Projects/testjong/testcases
-
-requirements.xml.path is a base path to where to generate or look for xml files to create Requirements in Polarion.
-testcase.xml.path is a base path to where to generate or look for xml files to create TestCases in Polarion.
-
-**TODO:**
-Need to describe everything in polarize.properties and reporter.properties
+The config file has some documentation for what the various settings are used for and is hopefully self-documenting.
 
 ## How to use polarize
 
@@ -196,16 +192,13 @@ This section will describe how to make use of polarize
 
 ### Annotations for Testcase definitions
 
-The polarize project uses 2 new custom annotation types.  The @Polarion annotation is used to enter all the metadata
-necessary to describe a TestCase in Polarion and is annotated on methods, and the @Requirement annotation contains all
-the metadata necessary to describe a Requirement WorkItem type in Polarion.  The @Requirement annotation can be used
-either on a class or a method (if used on a method, it will override its parent class annotation if there is one).
+The polarize project uses 2 new custom annotation types.  The @TestDefinition annotation is used for all the metadata
+necessary to describe a TestCase in Polarion and is annotated on methods.
 
 Here is a full example:
 
 ```java
 package com.github.redhatqe.rhsm.testpolarize;
-
 
 import com.github.redhatqe.polarize.metadata.DefTypes;
 import com.github.redhatqe.polarize.metadata.Requirement;
@@ -277,7 +270,13 @@ public class TestReq {
 }
 ```
 
-Given the above annotations, and polarize.properties as shown earlier, polarize will do the following:
+Notice that the above uses repeating annotations, a feature only available in Java 8.  If your test method differs 
+in some aspect of the TestCase definition within Polarion, then you can enter 2 or more annotations.  For example, if 
+the description, setup, teardown, or any other information differs between RHEL6 and RedHatEnterpriseLinux7 for your 
+test method, then you should annotate it twice as above.  If your definitions are otherwise identical, you can just 
+put the projectID={Project.RHEL6, Project.RedHatEnterpriseLinux7} for example.
+
+Given the above annotations, and xml-config.xml as shown earlier, polarize will do the following:
 
 - Look at the xmlDesc field to get path to xml description file
   - If no such file exists, look in a configured path for the xml description file
@@ -338,8 +337,8 @@ Here's a little snippet of how to setup your test for debugging
 
 ```bash
 gradle clean
-gradle shadowJar
-gradle install
+gradle pP
+gradle publishToMavenLocal
 java -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=5006 \
 -cp /path/to/your/polarize-1.0.0-all.jar:/path/to/your/awesome-test-1.0.0.jar \
 org.testng.TestNG -reporter com.github.redhatqe.polarize.junitreporter.XUnitReporter /path/to/your/test-suite.xml
