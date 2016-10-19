@@ -7,11 +7,18 @@ import java.nio.file.FileAlreadyExistsException;
 import java.util.ArrayList;
 import java.util.List;
 
+import com.github.redhatqe.polarize.metadata.Meta;
+import com.github.redhatqe.polarize.metadata.TestDefAdapter;
+import com.github.redhatqe.polarize.metadata.TestDefinition;
 import com.google.gson.GsonBuilder;
+import com.google.gson.reflect.TypeToken;
 import joptsimple.OptionParser;
 import joptsimple.OptionSet;
 
 import com.google.gson.Gson;
+import java.lang.reflect.Type;
+import java.util.stream.Collector;
+import java.util.stream.Collectors;
 
 /**
  * Created by stoner on 3/9/16.
@@ -78,7 +85,7 @@ public class JarHelper implements IJarHelper {
             List<String> classes = new ArrayList<>();
             for(String s: jh.paths.split(",")) {
                 for(String pn: packName.split(",")){
-                    classes.addAll(IJarHelper.loadJar(s, pn));
+                    classes.addAll(IJarHelper.getClasses(s, pn));
                 }
                 classes.forEach(System.out::println);
                 Reflector refl = jh.loadClasses(classes);
@@ -86,7 +93,22 @@ public class JarHelper implements IJarHelper {
 
                 Gson gson = new GsonBuilder().setPrettyPrinting().create();
                 //String json = gson.toJson(refl.testsToClasses);
+                Type metaType = new TypeToken<List<Meta<TestDefAdapter>>>() {}.getType();
                 String json = gson.toJson(refl.methods);
+
+                refl.testDefAdapters = refl.testDefs.stream()
+                        .map(m -> {
+                            TestDefinition def = m.annotation;
+                            TestDefAdapter adap = TestDefAdapter.create(def);
+                            Meta<TestDefAdapter> meta = new Meta<>();
+                            meta.annotation = adap;
+                            meta.className = m.className;
+                            meta.methName = m.methName;
+                            return meta;
+                        })
+                        .collect(Collectors.toList());
+                String jsonDefs = gson.toJson(refl.testDefAdapters, metaType);
+                System.out.println(jsonDefs);
 
                 File file = new File(output);
                 if (file.exists()) {
@@ -107,7 +129,7 @@ public class JarHelper implements IJarHelper {
                 } catch (IOException ex) {
                     System.err.println(ex);
                 }
-                System.out.println(json);
+                //System.out.println(json);
 
             }
         } catch (IOException e) {

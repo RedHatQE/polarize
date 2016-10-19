@@ -260,7 +260,6 @@ public class TestDefinitionProcessor extends AbstractProcessor {
 
         // Update the mapping file
         if (this.methToProjectDef.size() > 0) {
-            System.out.println("Creating mapping file");
             this.createMappingFile(mapPath);
             try {
                 Files.lines(Paths.get(mapPath.toString())).forEach(System.out::println);
@@ -269,7 +268,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
             }
         }
         else {
-            System.out.println("Could not create mapping file");
+            System.out.println("Did not update the mapping file");
         }
 
         /* testcases holds all the methods that need a new or updated Polarion TestCase */
@@ -317,7 +316,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
     private Optional<String> initTestcases(String selectorName, String selectorValue) {
         String projectID = this.cfg.getProject();
         if (!this.tcMap.containsKey(projectID)) {
-            this.logger.error("Project ID does not exist within Testcase Map");
+            this.logger.error("ProjectType ID does not exist within Testcase Map");
             return Optional.empty();
         }
         if (this.tcMap.get(projectID).isEmpty()) {
@@ -484,7 +483,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
                     projects.put(project, m);
                 }
                 else
-                    this.logger.warn(String.format("Project %s already exists for %s", project, meth));
+                    this.logger.warn(String.format("ProjectType %s already exists for %s", project, meth));
             }
         }
         return methods;
@@ -856,6 +855,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
      * @return
      */
     private void createMappingFile(File mapPath) {
+        this.logger.info("Generating mapping file based on all methods");
         HashMap<String, Map<String, IdParams>> collected = new HashMap<>();
         // Iterate through the map of qualifiedMethod -> ProjectID -> Meta<TestDefinition>
         Map<String, Map<String, IdParams>> mpid = this.methToProjectDef.entrySet().stream()
@@ -903,7 +903,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         ObjectMapper mapper = new ObjectMapper();
         try {
             mapper.writer().withDefaultPrettyPrinter().writeValue(mapPath, mpid);
-            System.out.println(mapper.writer().withDefaultPrettyPrinter().writeValueAsString(mpid));
+            //System.out.println(mapper.writer().withDefaultPrettyPrinter().writeValueAsString(mpid));
         } catch (IOException e) {
             e.printStackTrace();
         }

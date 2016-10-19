@@ -6,6 +6,7 @@ import java.net.URL;
 import java.net.URLClassLoader;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Enumeration;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.zip.ZipFile;
@@ -18,7 +19,7 @@ public interface IJarHelper {
      * Given the path to a jar file, get all the .class files
      * @param jarPath
      */
-    static List<String> loadJar(String jarPath, String pkg) throws IOException {
+    static List<String> getClasses(String jarPath, String pkg) throws IOException {
        try(ZipFile zf = new ZipFile(jarPath)) {
            return zf.stream()
                    .filter(e -> !e.isDirectory() && e.getName().endsWith(".class") && !e.getName().contains("$"))
@@ -30,6 +31,19 @@ public interface IJarHelper {
                    .filter(e -> e.contains(pkg))
                    .collect(Collectors.toList());
        }
+    }
+
+    default List<String> fromClassPath(String pkg) {
+        ClassLoader loader = this.getClass().getClassLoader();
+        try {
+            Enumeration<URL> resources = loader.getResources("");
+            while(resources.hasMoreElements()) {
+
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        return null;
     }
 
     /**

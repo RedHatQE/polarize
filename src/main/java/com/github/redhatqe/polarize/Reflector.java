@@ -1,5 +1,9 @@
 package com.github.redhatqe.polarize;
 
+import com.github.redhatqe.polarize.metadata.DefTypes;
+import com.github.redhatqe.polarize.metadata.Meta;
+import com.github.redhatqe.polarize.metadata.TestDefAdapter;
+import com.github.redhatqe.polarize.metadata.TestDefinition;
 import org.reflections.Reflections;
 
 import java.lang.annotation.Annotation;
@@ -7,6 +11,8 @@ import java.lang.reflect.Method;
 import java.util.*;
 import java.util.stream.Collectors;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.testng.annotations.Test;
 
 /**
@@ -16,11 +22,17 @@ public class Reflector {
 
     public HashMap<String, List<MetaData>> testsToClasses;
     public List<MetaData> methods;
+    public List<Meta<TestDefinition>> testDefs;
+    public List<Meta<TestDefAdapter>> testDefAdapters;
+    public Map<String, Map<String, Meta<TestDefinition>>> methodToTestDefs;
     private Set<String> testTypes;
+    private Logger logger = LoggerFactory.getLogger(Reflector.class);
 
     public Reflector(){
         testsToClasses = new HashMap<>();
         testTypes = new HashSet<>(Arrays.asList("AcceptanceTests", "Tier1Tests", "Tier2Tests", "Tier3Tests"));
+        methodToTestDefs = new HashMap<>();
+        testDefs = new ArrayList<>();
     }
 
     public interface GetGroups<T> {
@@ -62,11 +74,52 @@ public class Reflector {
         this.showMap();
     }
 
-    public void showMap() {
+    private void showMap() {
         this.testsToClasses.entrySet().forEach((es) -> System.out.println(es.getKey() + "=" + es.getValue()));
     }
 
-    public <T> List<MetaData> getMetaData(Class<T> c) {
+    private <T> List<Meta<TestDefinition>> getTestDefMetaData(Class<T> c) {
+        Method[] methods = c.getMethods();
+        List<Method> meths = new ArrayList<>(Arrays.asList(methods));
+        List<Method> filtered = meths.stream()
+                        .filter(m -> m.getAnnotation(TestDefinition.class) != null)
+                        .collect(Collectors.toList());
+        return filtered.stream().flatMap(m -> {
+                            TestDefinition ann = m.getAnnotation(TestDefinition.class);
+                            String className = c.getName();
+                            Package pkg = c.getPackage();
+                            String p = pkg.getName();
+                            String methName = m.getName();
+                            String qual = className + "." + methName;
+                            DefTypes.Project[] projects = ann.projectID();
+                            String[] polarionIDs = ann.testCaseID();
+                            if (polarionIDs.length > 0 && polarionIDs.length != projects.length)
+                                this.logger.error("Length of projects and polarionIds not the same");
+
+                            List<Meta<TestDefinition>> metas = new ArrayList<>();
+                            for(int i = 0; i < projects.length; i++) {
+                                String project = projects[i].toString();
+                                String id;
+                                if (polarionIDs.length == 0)
+                                    id = "";
+                                else
+                                    id = polarionIDs[i];
+                                metas.add(Meta.create(qual, methName, className, p, project, id, ann));
+                            }
+                            return metas.stream().map( me -> me);
+                        })
+                        .filter(meta -> !meta.className.isEmpty() && !meta.methName.isEmpty())
+                        .collect(Collectors.toList());
+    }
+
+    /**
+     * Gets any methods annotated with TestDefinition
+     *
+     * @param c
+     * @param <T>
+     * @return
+     */
+    public <T> List<MetaData> getTestNGMetaData(Class<T> c) {
         Method[] methods = c.getMethods();
         List<Method> meths = new ArrayList<>(Arrays.asList(methods));
         List<MetaData> classMethods =
@@ -89,12 +142,14 @@ public class Reflector {
     }
 
     public <T> void getAnnotations(Class<T> c) {
-        List<MetaData> classMethods = this.getMetaData(c);
+        List<MetaData> classMethods = this.getTestNGMetaData(c);
         if(this.methods == null) {
             this.methods = classMethods;
         }
         else
             this.methods.addAll(classMethods);
+
+        this.testDefs.addAll(this.getTestDefMetaData(c));
 
         // Get the groups from the Test annotation, store it in a set
         Annotation ann = c.getAnnotation(Test.class);
