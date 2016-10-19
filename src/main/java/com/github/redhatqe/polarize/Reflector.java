@@ -1,19 +1,26 @@
 package com.github.redhatqe.polarize;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.github.redhatqe.polarize.configuration.XMLConfig;
+import com.github.redhatqe.polarize.importer.testcase.Testcase;
 import com.github.redhatqe.polarize.metadata.DefTypes;
 import com.github.redhatqe.polarize.metadata.Meta;
 import com.github.redhatqe.polarize.metadata.TestDefAdapter;
 import com.github.redhatqe.polarize.metadata.TestDefinition;
-import org.reflections.Reflections;
 
+import java.io.File;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
+import java.lang.reflect.Parameter;
+import java.nio.file.Path;
 import java.util.*;
 import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.testng.annotations.Test;
+
+import static com.github.redhatqe.polarize.metadata.DefTypes.Custom.*;
 
 /**
  * Created by stoner on 3/9/16.
@@ -24,55 +31,29 @@ public class Reflector {
     public List<MetaData> methods;
     public List<Meta<TestDefinition>> testDefs;
     public List<Meta<TestDefAdapter>> testDefAdapters;
-    public Map<String, Map<String, Meta<TestDefinition>>> methodToTestDefs;
+    public Map<String,
+               Map<String, Meta<TestDefinition>>> methodToTestDefs;
     private Set<String> testTypes;
-    private Logger logger = LoggerFactory.getLogger(Reflector.class);
+    private static Logger logger = LoggerFactory.getLogger(Reflector.class);
+    public Map<Testcase, Meta<TestDefinition>> testCaseToMeta = new HashMap<>();
+    public Map<String,
+                Map<String, IdParams>> mappingFile;
+    public XMLConfig config;
+    public String tcPath;
+    private Map<String, List<Testcase>> tcMap = new HashMap<>();
+    public Map<String,
+               Map<String, Meta<TestDefinition>>> methToProjectDef;
 
-    public Reflector(){
+    public Reflector() {
+        config = new XMLConfig(null);
         testsToClasses = new HashMap<>();
         testTypes = new HashSet<>(Arrays.asList("AcceptanceTests", "Tier1Tests", "Tier2Tests", "Tier3Tests"));
         methodToTestDefs = new HashMap<>();
         testDefs = new ArrayList<>();
+        mappingFile = FileHelper.loadMapping(new File(config.config.getMapping().getPath()));
+        tcPath = config.config.getTestcasesXml().getPath();
     }
 
-    public interface GetGroups<T> {
-        ArrayList<String> getGroups(T t);
-    }
-
-    public interface GetField<C, R> {
-        R getField(C c);
-    }
-
-    /**
-     *
-     * @param args
-     */
-    public void reflect(String[] args) {
-        //Reflector reflector = new Reflector();
-
-        /*
-          We have 4 categories of tests:
-          - Acceptance
-          - Tier1Tests
-          - Tier2Tests
-          - Tier3Tests
-
-          So we will have a mapping of key = plan type, value = class name
-         */
-
-        for(String s: args) {
-            Reflections refl = new Reflections(s);
-
-            GetGroups<Test> getGroups = C -> new ArrayList<>(Arrays.asList(C.groups()));
-            GetField<Class<?>, String> getName = Class::getName;
-
-            Set<Class<?>> classes = refl.getTypesAnnotatedWith(Test.class);
-            for (Class<?> c : classes) {
-                this.getAnnotations(c);
-            }
-        }
-        this.showMap();
-    }
 
     private void showMap() {
         this.testsToClasses.entrySet().forEach((es) -> System.out.println(es.getKey() + "=" + es.getValue()));
@@ -96,6 +77,20 @@ public class Reflector {
                             if (polarionIDs.length > 0 && polarionIDs.length != projects.length)
                                 this.logger.error("Length of projects and polarionIds not the same");
 
+                            // TODO: figure out a way to get the parameters.  This code does not get the actual
+                            // names of the parameters.  Might need to make Reflector and JarHelper in clojure, and get
+                            // the args that way.
+                            Parameter[] params = m.getParameters();
+                            List<com.github.redhatqe.polarize.importer.testcase.Parameter> args = Arrays.stream(params)
+                                    .map(arg -> {
+                                        com.github.redhatqe.polarize.importer.testcase.Parameter pm = new
+                                                com.github.redhatqe.polarize.importer.testcase.Parameter();
+                                        pm.setName(arg.getName());
+                                        pm.setScope("local");
+                                        return pm;
+                                    })
+                                    .collect(Collectors.toList());
+
                             List<Meta<TestDefinition>> metas = new ArrayList<>();
                             for(int i = 0; i < projects.length; i++) {
                                 String project = projects[i].toString();
@@ -104,7 +99,7 @@ public class Reflector {
                                     id = "";
                                 else
                                     id = polarionIDs[i];
-                                metas.add(Meta.create(qual, methName, className, p, project, id, ann));
+                                metas.add(Meta.create(qual, methName, className, p, project, id, args, ann));
                             }
                             return metas.stream().map( me -> me);
                         })
@@ -170,4 +165,122 @@ public class Reflector {
             }
         }
     }
+
+    /**
+     * Generates the data in the mapping file as needed
+     *
+     * @param meta
+     * @param mapFile
+     * @param tcToMeta
+     * @param testCasePath
+     * @param testCaseMap
+     * @return
+     */
+    public static Testcase processTC(Meta<TestDefinition> meta,
+                                     Map<String, Map<String, IdParams>> mapFile,
+                                     Map<Testcase, Meta<TestDefinition>> tcToMeta,
+                                     String testCasePath,
+                                     Map<String, List<Testcase>> testCaseMap) {
+        Testcase tc = TestDefinitionProcessor.initImporterTestcase(meta, null);
+        tcToMeta.put(tc, meta);
+        TestDefinition def = meta.annotation;
+
+        // If this method is in the mapping File for the project, and it's not an empty string, we are done
+        Optional<String> maybeMapFileID =
+                TestDefinitionProcessor.getPolarionIDFromMapFile(meta.qualifiedName, meta.project, mapFile);
+        if (maybeMapFileID.isPresent() && !maybeMapFileID.get().equals("")) {
+            logger.info(String.format("%s id is %s", meta.qualifiedName, maybeMapFileID.get()));
+            return tc;
+        }
+
+        // Check to see if there is an existing XML description file with Polarion ID
+        Optional<File> xml = meta.getFileFromMeta(testCasePath);
+        if (!xml.isPresent()) {
+            Path path = FileHelper.makeXmlPath(testCasePath, meta, meta.project);
+            File xmlDesc = path.toFile();
+            TestDefinitionProcessor.createTestCaseXML(tc, xmlDesc);
+        }
+
+        JAXBHelper jaxb = new JAXBHelper();
+        Optional<String> maybePolarionID = meta.getPolarionIDFromTestcase();
+        Optional<String> maybeIDXml = meta.getPolarionIDFromXML(testCasePath);
+        Boolean idExists = maybePolarionID.isPresent();
+        Boolean xmlIdExists = maybeIDXml.isPresent();
+        Boolean importRequest = false;
+        // i  | xmlIdExists  | idExists       | action            | How does this happen?
+        // ===|==============|================|===================|=============================================
+        //  0 | false        | false          | request and edit  | id="" in xml and in annotation
+        //  1 | false        | true           | edit XML          | id="" in xml, but id is in annotation
+        //  2 | true         | false          | edit mapfile      | non-empty id in xml, but not in annotation
+        //  3 | true         | true           | validate          | non-empty id in xml and in annotation
+        if (!xmlIdExists) {
+            importRequest = true;
+        }
+        if (idExists && !xmlIdExists) {
+            // This means that the ID exists in the annotation, but not the XML file.  Edit the xml file
+            if (def.update())
+                importRequest = true;
+            else {
+                importRequest = false;
+                Optional<Testcase> maybeTC = meta.getTypeFromMeta(Testcase.class, testCasePath);
+                if (maybeTC.isPresent()) {
+                    Testcase tcase = maybeTC.get();
+                    tcase.setId(maybePolarionID.get());
+                    Optional<File> path = meta.getFileFromMeta(testCasePath);
+                    if (path.isPresent()) {
+                        IJAXBHelper.marshaller(tcase, path.get(), jaxb.getXSDFromResource(Testcase.class));
+                    }
+                }
+            }
+        }
+        if (xmlIdExists && !idExists) {
+            // TODO: The ID exists in the XML file, but not in the annotation.  Set the mapping file with this info
+            Map<String, IdParams> projToId = mapFile.getOrDefault(meta.qualifiedName, null);
+            if (projToId != null) {
+                if (projToId.containsKey(meta.project)) {
+                    IdParams ip = projToId.get(meta.project);
+                    ip.id = maybeIDXml.get();
+                }
+            }
+            else {
+                // In this case, although the XML file existed and we have (some) annotation data, we don't have all
+                // of it.  So let's put it into this.mappingFile
+                String msg = "XML data exists, but does not exist in mapping file.  Editing map: %s -> {%s: %s}";
+                logger.debug(String.format(msg, meta.qualifiedName, meta.project, maybeIDXml.get()));
+                TestDefinitionProcessor.setPolarionIDInMapFile(meta.qualifiedName, meta.project, maybeIDXml.get(),
+                        mapFile);
+            }
+        }
+
+        if (importRequest) {
+            String projId = meta.project;
+            if (testCaseMap.containsKey(projId))
+                testCaseMap.get(projId).add(tc);
+            else {
+                List<Testcase> tcs = new ArrayList<>();
+                tcs.add(tc);
+                testCaseMap.put(projId, tcs);
+            }
+        }
+        return tc;
+    }
+
+    public void processTestDefs() {
+        this.testDefs.forEach(td -> Reflector.processTC(td, this.mappingFile, this.testCaseToMeta, this.tcPath,
+                this.tcMap));
+    }
+
+    public Map<String, Map<String, Meta<TestDefinition>>> makeMethToProjectMeta() {
+        Map<String, Map<String, Meta<TestDefinition>>> methToProjectMeta = new HashMap<>();
+        for(Meta<TestDefinition> meta: this.testDefs) {
+            String qual = meta.qualifiedName;
+            String project = meta.project;
+            Map<String, Meta<TestDefinition>> projToMeta = new HashMap<>();
+            projToMeta.put(project, meta);
+            methToProjectMeta.put(qual, projToMeta);
+        }
+        return methToProjectMeta;
+    }
+
+
 }

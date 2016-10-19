@@ -80,6 +80,9 @@ public class JarHelper implements IJarHelper {
             output = System.getProperty("user.dir") + "/groups-to-methods.json";
         }
 
+        Gson gson = new GsonBuilder().setPrettyPrinting().create();
+        Type metaType = new TypeToken<List<Meta<TestDefAdapter>>>() {}.getType();
+
         JarHelper jh = new JarHelper(jarPathsOpt);
         try {
             List<String> classes = new ArrayList<>();
@@ -88,14 +91,13 @@ public class JarHelper implements IJarHelper {
                     classes.addAll(IJarHelper.getClasses(s, pn));
                 }
                 classes.forEach(System.out::println);
+
                 Reflector refl = jh.loadClasses(classes);
-                //refl.showMap();
-
-                Gson gson = new GsonBuilder().setPrettyPrinting().create();
-                //String json = gson.toJson(refl.testsToClasses);
-                Type metaType = new TypeToken<List<Meta<TestDefAdapter>>>() {}.getType();
-                String json = gson.toJson(refl.methods);
-
+                refl.methToProjectDef = refl.makeMethToProjectMeta();
+                if (refl.methToProjectDef.size() > 0) {
+                    File mapPath = new File(refl.config.config.getMapping().getPath());
+                    TestDefinitionProcessor.createMappingFile(mapPath, refl.methToProjectDef, refl.mappingFile);
+                }
                 refl.testDefAdapters = refl.testDefs.stream()
                         .map(m -> {
                             TestDefinition def = m.annotation;
@@ -104,6 +106,10 @@ public class JarHelper implements IJarHelper {
                             meta.annotation = adap;
                             meta.className = m.className;
                             meta.methName = m.methName;
+                            meta.project = m.project;
+                            meta.packName = m.packName;
+                            meta.polarionID = m.polarionID;
+                            meta.params = m.params;
                             return meta;
                         })
                         .collect(Collectors.toList());
@@ -124,13 +130,11 @@ public class JarHelper implements IJarHelper {
                 BufferedWriter bw = new BufferedWriter(fw);
 
                 try {
-                    bw.write(json);
+                    bw.write(jsonDefs);
                     bw.close();
                 } catch (IOException ex) {
                     System.err.println(ex);
                 }
-                //System.out.println(json);
-
             }
         } catch (IOException e) {
             e.printStackTrace();

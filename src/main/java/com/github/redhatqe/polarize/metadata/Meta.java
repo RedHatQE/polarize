@@ -53,7 +53,8 @@ public class Meta<T> {
         return meta;
     }
 
-    public static <A> Meta<A> create(String qual, String meth, String cls, String pack, String proj, String id, A ann) {
+    public static <A> Meta<A> create(String qual, String meth, String cls, String pack, String proj, String id,
+                                     List<Parameter> params, A ann) {
         Meta<A> meta = new Meta<>();
         meta.qualifiedName = qual;
         meta.methName = meth;
@@ -62,6 +63,7 @@ public class Meta<T> {
         meta.project = proj;
         meta.polarionID = id;
         meta.annotation = ann;
+        meta.params = params;
         return meta;
     }
 
