@@ -31,7 +31,7 @@ public class XMLConfig {
     public XMLConfig(File path) {
         if (path == null) {
             String homeDir = System.getProperty("user.home");
-            path = FileSystems.getDefault().getPath(homeDir + "/.polarize/yaml-config.yml").toFile();
+            path = FileSystems.getDefault().getPath(homeDir + "/.polarize/xml-config.xml").toFile();
         }
         JAXBHelper jaxb = new JAXBHelper();
         Optional<ConfigType> maybeCfg;
@@ -125,6 +125,6 @@ public class XMLConfig {
     }
 
     public static void main(String[] args) {
-        XMLConfig xml = new XMLConfig(new File("/home/stoner/.polarize/xml-config.xml"));
+        XMLConfig xml = new XMLConfig(null);
     }
 }
