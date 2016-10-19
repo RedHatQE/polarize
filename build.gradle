@@ -100,7 +100,6 @@ task sourceJar(type: Jar) {
 }
 
 artifacts {
-    println "--------- In artifacts task -----------"
     archives jar
     archives sourceJar
     archives javadocJar
@@ -113,20 +112,17 @@ artifacts {
 // We need to sign the POM
 task signPom(type: Sign) {
     sign arcPomFile
-    println "========> in signPom: ${configurations.pom}"
+    //println "========> in signPom: ${configurations.pom}"
 }
 
 task signJars (type : Sign, dependsOn: [jar, javadocJar, sourceJar]) {
-    println "In signJars task"
     sign configurations.archives
-    println "========> in signJars: ${configurations.archives}"
+    //println "========> in signJars: ${configurations.archives}"
 }
 
 if (arcPomFile.exists()) {
-    println "Signing jars and pom"
     task preparePublication (dependsOn : [signJars, signPom])
 } else {
-    println "Signing jars only"
     task preparePublication (dependsOn : signJars)
 }
 
@@ -136,9 +132,9 @@ signing {
 
 // extract signature file and give them proper name
 def getSignatureFiles = {
-    println "############################################"
-    println "In getSignatureFiles"
-    println "############################################"
+    //println "############################################"
+    //println "In getSignatureFiles"
+    //println "############################################"
     def allFiles = project.tasks.signJars.signatureFiles.collect { it }
     println "Signed Files: ${allFiles}"
     def signedSources = allFiles.find { it.name.contains('-sources') }
@@ -152,7 +148,6 @@ def getSignatureFiles = {
 
 def getPomSignature = {
     def sPom = project.tasks.signPom.signatureFiles.collect{it}
-    println "pom signature files: $sPom"
     return sPom[0]
 }
 
@@ -167,9 +162,9 @@ publishing {
             }
 
             pom.withXml {
-                println "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
-                println "Configuring the pom"
-                println "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+                //println "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+                //println "Configuring the pom"
+                //println "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
 
                 asNode().appendNode('name', archivesBaseName)
                 asNode().appendNode('description', 'Annotations to supply metadata for testcase management')
@@ -195,10 +190,10 @@ publishing {
                 //println asString().toString()
                 writeTo (project.ext.pomFile)
                 File pomFile = new File(pomPath)
-                println "======================================="
-                println "After writing to pom"
-                println "======================================="
-                println pomFile.text
+                //println "======================================="
+                //println "After writing to pom"
+                //println "======================================="
+                //println pomFile.text
             }
         }
 
@@ -209,9 +204,9 @@ publishing {
             artifact javadocJar
 
             pom.withXml {
-                println "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
-                println "Configuring the pom"
-                println "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+                //println "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+                //println "Configuring the pom"
+                //println "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
 
                 asNode().appendNode('name', archivesBaseName)
                 asNode().appendNode('description', 'Annotations to supply metadata for testcase management')
@@ -277,6 +272,6 @@ task copyTask(type: Copy) {
 }
 
 
-task displayProject {
-    println project.projectDir
+task classPath << {
+    println sourceSets.main.runtimeClasspath.asPath
 }
