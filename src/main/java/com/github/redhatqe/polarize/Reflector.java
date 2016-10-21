@@ -1,8 +1,10 @@
 package com.github.redhatqe.polarize;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.github.redhatqe.polarize.configuration.XMLConfig;
+import com.github.redhatqe.polarize.importer.ImporterRequest;
 import com.github.redhatqe.polarize.importer.testcase.Testcase;
+import com.github.redhatqe.polarize.importer.testcase.Testcases;
 import com.github.redhatqe.polarize.metadata.DefTypes;
 import com.github.redhatqe.polarize.metadata.Meta;
 import com.github.redhatqe.polarize.metadata.TestDefAdapter;
@@ -14,11 +16,15 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
 import java.nio.file.Path;
 import java.util.*;
+import java.util.concurrent.ExecutionException;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.testng.annotations.Test;
+
+import javax.jms.JMSException;
 
 import static com.github.redhatqe.polarize.metadata.DefTypes.Custom.*;
 
@@ -43,6 +49,7 @@ public class Reflector {
     private Map<String, List<Testcase>> tcMap = new HashMap<>();
     public Map<String,
                Map<String, Meta<TestDefinition>>> methToProjectDef;
+    private Testcases testcases = new Testcases();
 
     public Reflector() {
         config = new XMLConfig(null);
@@ -76,6 +83,11 @@ public class Reflector {
                             String[] polarionIDs = ann.testCaseID();
                             if (polarionIDs.length > 0 && polarionIDs.length != projects.length)
                                 this.logger.error("Length of projects and polarionIds not the same");
+
+                            if (className.contains(".")) {
+                                String[] split = className.split("\\.");
+                                className = split[split.length - 1];
+                            }
 
                             // TODO: figure out a way to get the parameters.  This code does not get the actual
                             // names of the parameters.  Might need to make Reflector and JarHelper in clojure, and get
@@ -270,7 +282,7 @@ public class Reflector {
                 this.tcMap));
     }
 
-    public Map<String, Map<String, Meta<TestDefinition>>> makeMethToProjectMeta() {
+    Map<String, Map<String, Meta<TestDefinition>>> makeMethToProjectMeta() {
         Map<String, Map<String, Meta<TestDefinition>>> methToProjectMeta = new HashMap<>();
         for(Meta<TestDefinition> meta: this.testDefs) {
             String qual = meta.qualifiedName;
@@ -282,5 +294,56 @@ public class Reflector {
         return methToProjectMeta;
     }
 
+    static List<Meta<TestDefAdapter>> sortTestDefs(List<Meta<TestDefAdapter>> defs) {
+        List<Meta<TestDefAdapter>> adaps = defs.stream().sorted((d1, d2) -> {
+            String qual1 = d1.qualifiedName;
+            String qual2 = d2.qualifiedName;
+            if (qual1 == null || qual2 == null) {
+                String class1 = d1.className;
+                String class2 = d2.className;
+                String meth1 = d1.methName;
+                String meth2 = d2.methName;
+                qual1 = String.format("%s.%s", class1, meth1);
+                qual2 = String.format("%s.%s", class2, meth2);
+            }
+            return qual1.compareTo(qual2);
+        }).collect(Collectors.toList());
+        return adaps;
+    }
 
+    Optional<ObjectNode> testcasesImporterRequest() {
+        Optional<ObjectNode> maybeNode = Optional.empty();
+        if (this.tcMap.isEmpty()) {
+            logger.info("No more testcases to import ...");
+            return maybeNode;
+        }
+
+        String sName = this.config.testcase.getSelector().getName();
+        String sValue = this.config.testcase.getSelector().getVal();
+        String selector = String.format("%s='%s'", sName, sValue);
+        String ID = this.config.config.getProject();
+        String author = this.config.config.getAuthor();
+        File tcXML = new File(this.config.testcase.getFile().getPath());
+        Optional<String> maybe = TestDefinitionProcessor.initTestcases(sName, sValue, ID, author, tcXML, this.tcMap,
+                                                                       this.testcases);
+        if (!maybe.isPresent())
+            return maybeNode;
+
+        try {
+            String user = this.config.polarion.getUser();
+            String pass = this.config.polarion.getPassword();
+            String url = this.config.polarion.getUrl() + this.config.testcase.getEndpoint().getRoute();
+            Consumer<Optional<ObjectNode>> handler =
+                    TestDefinitionProcessor.testcaseImportHandler(this.tcPath, ID, this.testcases);
+            if (this.config.testcase.getEnabled().value().equals("true"))
+                maybeNode = ImporterRequest.sendImportRequest(url, user, pass, tcXML, selector, handler);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        } catch (ExecutionException e) {
+            e.printStackTrace();
+        } catch (JMSException e) {
+            e.printStackTrace();
+        }
+        return maybeNode;
+    }
 }
