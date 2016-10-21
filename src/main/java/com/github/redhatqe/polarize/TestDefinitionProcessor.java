@@ -62,7 +62,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
     private Map<Testcase, Meta<TestDefinition>> testCaseToMeta;
     // Map of qualified name -> { projectID: testcaseID }
     private Map<String, Map<String, IdParams>> mappingFile = new LinkedHashMap<>();
-    public JAXBHelper jaxb = new JAXBHelper();
+    public static JAXBHelper jaxb = new JAXBHelper();
     private Testcases testcases = new Testcases();
     private Map<String, List<Testcase>> tcMap = new HashMap<>();
     private XMLConfig config;
@@ -314,36 +314,56 @@ public class TestDefinitionProcessor extends AbstractProcessor {
      * @return
      */
     private Optional<String> initTestcases(String selectorName, String selectorValue) {
-        String projectID = this.cfg.getProject();
-        if (!this.tcMap.containsKey(projectID)) {
+        String author = this.cfg.getAuthor();
+        String ID = this.cfg.getProject();
+        File testXml = new File(this.config.testcase.getFile().getPath());
+        return TestDefinitionProcessor.initTestcases(selectorName, selectorValue, ID, author, testXml, this.tcMap,
+                this.testcases);
+    }
+
+    /**
+     * Initializes the Testcases object and returns an optional project ID
+     *
+     * @param selectorName name part of selector
+     * @param selectorValue value part of selector (eg <name>='<value>')
+     * @param projectID project ID of the Testcases object
+     * @param author author for the Testcases
+     * @param testcaseXml File to where the Testcases object will be marshalled to
+     * @param testMap a map of methodName to Testcase list
+     * @param tests the Testcases object that will be initialized
+     * @return an optional of the Testcases project
+     */
+    public static Optional<String>
+    initTestcases(String selectorName, String selectorValue, String projectID, String author, File testcaseXml,
+                  Map<String, List<Testcase>> testMap, Testcases tests) {
+        if (!testMap.containsKey(projectID)) {
             logger.error("ProjectType ID does not exist within Testcase Map");
             return Optional.empty();
         }
-        if (this.tcMap.get(projectID).isEmpty()) {
+        if (testMap.get(projectID).isEmpty()) {
             logger.info(String.format("No testcases for %s to import", projectID));
             return Optional.empty();
         }
-        this.testcases.setProjectId(projectID);
-        this.testcases.setUserId(this.cfg.getAuthor());
-        this.testcases.getTestcase().addAll(this.tcMap.get(projectID));
+        tests.setProjectId(projectID);
+        tests.setUserId(author);
+        tests.getTestcase().addAll(testMap.get(projectID));
 
-        ResponseProperties respProp = this.testcases.getResponseProperties();
+        ResponseProperties respProp = tests.getResponseProperties();
         if (respProp == null)
             respProp = new ResponseProperties();
-        this.testcases.setResponseProperties(respProp);
+        tests.setResponseProperties(respProp);
         List<ResponseProperty> props = respProp.getResponseProperty();
         ResponseProperty rprop = new ResponseProperty();
         rprop.setName(selectorName);
         rprop.setValue(selectorValue);
         props.add(rprop);
 
-        File testcaseXml = new File(this.config.testcase.getFile().getPath());
-        IJAXBHelper.marshaller(this.testcases, testcaseXml, this.jaxb.getXSDFromResource(Testcases.class));
+        JAXBHelper jaxb = new JAXBHelper();
+        IJAXBHelper.marshaller(tests, testcaseXml, jaxb.getXSDFromResource(Testcases.class));
         return Optional.of(projectID);
     }
 
     /**
-     * FIXME: Need to redo this like the XUnitReporter.sendXunitImportRequest
      * FIXME: Look into guice to inject dependency args (ie, don't look up polarize.properties)
      *
      * Generates the xml file that will be sent via a REST call to the TestCase Importer
@@ -373,15 +393,23 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         return maybeNode;
     }
 
+    private Consumer<Optional<ObjectNode>> testcaseImportHandler() {
+        return TestDefinitionProcessor.testcaseImportHandler(this.tcPath, this.cfg.getProject(), this.testcases);
+    }
+
+
     /**
      * Returns a lambda usable as a handler for ImporterRequest.sendImportRequest
      *
      * This handler will take the ObjectNode (for example, decoded from a message on the message bus) gets the Polarion
      * ID from the ObjectNode, and edits the XML file with the Id.  It will also store
      *
+     * @param testPath path to where the testcase XML defs will be stored
+     * @param pID project ID to be worked on
+     * @param tcs Testcases object to be examined
      * @return
      */
-    public Consumer<Optional<ObjectNode>> testcaseImportHandler() {
+    public static Consumer<Optional<ObjectNode>> testcaseImportHandler(String testPath, String pID, Testcases tcs) {
         return node -> {
             if (!node.isPresent()) {
                 logger.warn("No message was received");
@@ -398,10 +426,10 @@ public class TestDefinitionProcessor extends AbstractProcessor {
                     if (id.endsWith("\""))
                         id = id.substring(0, id.length() -1);
                     logger.info("New Testcase id = " + id);
-                    Optional<Path> maybeXML = FileHelper.getXmlPath(this.tcPath, name, this.cfg.getProject());
+                    Optional<Path> maybeXML = FileHelper.getXmlPath(testPath, name, pID);
                     if (!maybeXML.isPresent()) {
                         // In this case, we couldn't get the XML path due to a bad name or tcPath
-                        String err = String.format("Couldn't generate XML path for %s and %s", this.tcPath, name);
+                        String err = String.format("Couldn't generate XML path for %s and %s", testPath, name);
                         logger.error(err);
                         throw new InvalidArgument();
                     }
@@ -410,8 +438,9 @@ public class TestDefinitionProcessor extends AbstractProcessor {
                         File xmlFile = xmlDefinition.toFile();
                         if (!xmlFile.exists()) {
                             logger.info("No XML file exists...generating one");
-                            Testcase matched = this.findTestcaseByName(name);
-                            IJAXBHelper.marshaller(matched, xmlFile, this.jaxb.getXSDFromResource(Testcase.class));
+                            Testcase matched = TestDefinitionProcessor.findTestcaseByName(name, tcs);
+
+                            IJAXBHelper.marshaller(matched, xmlFile, jaxb.getXSDFromResource(Testcase.class));
                         }
                         logger.debug(String.format("Found %s for method %s", xmlDefinition.toString(), name));
                         logger.debug("Unmarshalling to edit the XML file");
@@ -420,7 +449,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
                             logger.error("Setting the id for the XML on the Testcase failed");
                             throw new XMLEditError();
                         }
-                        IJAXBHelper.marshaller(tc, xmlFile, this.jaxb.getXSDFromResource(Testcase.class));
+                        IJAXBHelper.marshaller(tc, xmlFile, jaxb.getXSDFromResource(Testcase.class));
                     }
                 }
                 else {
@@ -437,7 +466,17 @@ public class TestDefinitionProcessor extends AbstractProcessor {
      * @return the matching Testcase for the name
      */
     private Testcase findTestcaseByName(String name) {
-        List<Testcase> tcs = this.testcases.getTestcase().stream()
+        return TestDefinitionProcessor.findTestcaseByName(name, this.testcases);
+    }
+
+    /**
+     * Finds a Testcase in testcases by matching name to the titles of the testcase
+     *
+     * @param name qualified name of method
+     * @return the matching Testcase for the name
+     */
+    public static Testcase findTestcaseByName(String name, Testcases tests) {
+        List<Testcase> tcs = tests.getTestcase().stream()
                 .filter(tc -> {
                     String title = tc.getTitle();
                     return title.equals(name);
@@ -897,7 +936,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
                                                         String idForProject = pToI.get(project).id;
                                                         Boolean idIsEmpty = idForProject.equals("");
                                                         if (!idIsEmpty) {
-                                                            logger.debug("Id for %s is in mapping file");
+                                                            logger.debug("Id for %s is in mapping file", idForProject);
                                                             m.polarionID = idForProject;
                                                         }
                                                     }
