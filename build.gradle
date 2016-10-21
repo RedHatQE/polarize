@@ -136,7 +136,7 @@ def getSignatureFiles = {
     //println "In getSignatureFiles"
     //println "############################################"
     def allFiles = project.tasks.signJars.signatureFiles.collect { it }
-    println "Signed Files: ${allFiles}"
+    //println "Signed Files: ${allFiles}"
     def signedSources = allFiles.find { it.name.contains('-sources') }
     def signedJavadoc = allFiles.find { it.name.contains('-javadoc') }
     def signedJar = (allFiles - [signedSources, signedJavadoc])[0]

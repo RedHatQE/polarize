@@ -1,6 +1,8 @@
 package com.github.redhatqe.polarize.importer;
 
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.github.redhatqe.polarize.TestDefinitionProcessor;
+import com.github.redhatqe.polarize.junitreporter.XUnitReporter;
 import com.github.redhatqe.polarize.messagebus.CIBusListener;
 import com.github.redhatqe.polarize.IFileHelper;
 import com.github.redhatqe.polarize.IJAXBHelper;
@@ -174,12 +176,14 @@ public class ImporterRequest {
 
         CloseableHttpResponse resp = ImporterRequest.post(url, reportPath, user, pw);
         HttpEntity entity = resp.getEntity();
+        /* FIXME: This code sometimes gets an exception that the stream is closed
         try {
             BufferedReader bfr = new BufferedReader(new InputStreamReader(entity.getContent()));
             System.out.println(bfr.lines().collect(Collectors.joining("\n")));
         } catch (IOException e) {
             e.printStackTrace();
         }
+        */
         System.out.println(resp.toString());
 
         // FIXME:  Should I synchronize here?  If I leave this out and return future, it is the caller's responsibility

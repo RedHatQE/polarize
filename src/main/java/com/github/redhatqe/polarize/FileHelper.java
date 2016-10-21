@@ -48,6 +48,7 @@ public class FileHelper implements IFileHelper {
 
     public static <T> Path makeXmlPath(String base, Meta<T> meta) throws InvalidArgumentType {
         String xmlname;
+        String className = meta.className;
         xmlname = meta.methName;
         String packClass = meta.packName;
         if (xmlname == null || xmlname.equals("")) {
