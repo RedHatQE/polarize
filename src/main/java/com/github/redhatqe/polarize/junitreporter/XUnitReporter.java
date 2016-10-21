@@ -172,7 +172,7 @@ public class XUnitReporter implements IReporter {
      *
      * @return a Consumer function
      */
-    private static Consumer<Optional<ObjectNode>> xunitMessageHandler() {
+    public static Consumer<Optional<ObjectNode>> xunitMessageHandler() {
         return (node) -> {
             if (!node.isPresent()) {
                 logger.warn("No ObjectNode received from the Message");
@@ -186,16 +186,20 @@ public class XUnitReporter implements IReporter {
                     logger.info(root.get("testrun-url").textValue());
                 } else {
                     // Figure out which one failed
-                    JsonNode results = root.get("import-results");
-                    results.elements().forEachRemaining(element -> {
-                        if (element.has("status") && !element.get("status").textValue().equals("passed")) {
-                            if (element.has("suite-name")) {
-                                String suite = element.get("suite-name").textValue();
-                                logger.info(suite + " failed to be updated");
-                                XUnitReporter.failedSuites.add(suite);
+                    if (root.has("import-results")) {
+                        JsonNode results = root.get("import-results");
+                        results.elements().forEachRemaining(element -> {
+                            if (element.has("status") && !element.get("status").textValue().equals("passed")) {
+                                if (element.has("suite-name")) {
+                                    String suite = element.get("suite-name").textValue();
+                                    logger.info(suite + " failed to be updated");
+                                    XUnitReporter.failedSuites.add(suite);
+                                }
                             }
-                        }
-                    });
+                        });
+                    }
+                    else
+                        logger.error(root.get("message").asText());
                 }
             }
         };
@@ -280,7 +284,9 @@ public class XUnitReporter implements IReporter {
             }
             String qual = String.format("%s.%s", classname, methname);
             Map<String, Map<String, IdParams>> mapping = FileHelper.loadMapping(fpath);
-            List<String> args = mapping.get(qual).get(project).getParameters();
+            Map<String, IdParams> inner = mapping.get(qual);
+            IdParams ip = inner.get(project);
+            List<String> args = ip.getParameters();
 
             // Get all the iteration data
             Object[] params = result.getParameters();
@@ -330,6 +336,8 @@ public class XUnitReporter implements IReporter {
         cfg.set();
         cfg = XUnitReporter.createConditionalProperty("polarion-testrun-id", null, properties);
         cfg.set();
+        cfg = XUnitReporter.createConditionalProperty("polarion-template-id", null, properties);
+        cfg.set();
 
         tsuites.setProperties(props);
         return tsuites;
@@ -370,6 +378,14 @@ public class XUnitReporter implements IReporter {
         prop.setName(name);
 
         switch(name) {
+            case "polarion-template-id":
+                cfg = () -> {
+                    if (config.xunit.getTemplateId().getId().equals(""))
+                        return;
+                    prop.setValue(config.xunit.getTemplateId().getId());
+                    properties.add(prop);
+                };
+                break;
             case "polarion-testrun-title":
                 cfg = () -> {
                     if (config.xunit.getTestrun().getTitle().equals(""))
@@ -403,10 +419,12 @@ public class XUnitReporter implements IReporter {
                     customFields.entrySet().forEach(entry -> {
                         String key = "polarion-custom-" + entry.getKey();
                         String val = entry.getValue();
-                        Property p = new Property();
-                        p.setName(key);
-                        p.setValue(val);
-                        properties.add(p);
+                        if (!val.equals("")) {
+                            Property p = new Property();
+                            p.setName(key);
+                            p.setValue(val);
+                            properties.add(p);
+                        }
                     });
                 };
                 break;
