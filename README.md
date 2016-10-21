@@ -3,7 +3,7 @@
 polarize has several goals:
 
 - Make the source code where testcase definitions and requirements live
-- A TestNG reporter that generates junit reports compatible with the XUnit importer
+- A TestNG reporter that generates junit reports compatible with the XUnit importer to update TestRun results
 - Creates or updates Polarion TestCase based on Java annotations during compilation
 - A Java tool to send the XUnit and Testcase importer requests (no shelling out to curl)
 - A Java tool to consume importer messages from the CI Message Bus (no subscribe.py)
@@ -43,7 +43,7 @@ already exist.  This is not only a bad idea technically, it's also wrong from a 
 and Requirements really should be written before the automation is.  Disregarding the methodology, there's also a 
 practical technical requirement.
 
-One of the requirements for the XUnit importer is that each <testcase> must have a polarion ID or custom ID set.  This 
+One of the requirements for the XUnit importer is that each \<testcase\> must have a polarion ID or custom ID set.  This 
 is to map the testcase to the Polarion ID.  The XML files that polarize generates will either contain the ID or not.  As
 the annotation processor runs, it will use an algorithm to map the qualified name of the testmethod to where the XML 
 file should be.  If it doesn't exist, the processor will create it from the given annotation data.  If the XML 
@@ -89,11 +89,21 @@ From the following annotation:
     }
 ```
 
+As well as generating the test definition XML file, at the beginning of the source code processing, polarize will load 
+a mapping file in a JSON format (or if this is the first time compiling with polarize, or if the mapping file is missing 
+it will generate the mapping file).  Rather than do a cumbersome look up algorithm  of qualified test name to its 
+matching test definition XML file, and then loading this file to obtain the Polarion ID, the mapping file is loaded once
+into memory, and used for any look up of the qualified test method name to its matching Project ID and Polarion ID.  
+Note that this is a 2-level mapping of qualifiedName -\> ProjectID -\> PolarionID, since a method can and probably does 
+exist in more than one Project, it will also have one or more corresponding Polarion TestCases.  The mapping file also 
+contains an array of the names of the parameters used for this method if it is a parameterized test.  This is so that 
+the xunit report generator can also read in this file to properly generate the parameterization information for each 
+test method that was executed in the TestRun.
 
-For testrun results, polarize also comes with a class XUnitReporter that implements TestNG's IReporter interface.  By 
+Speaking of this, polarize also comes with a class XUnitReporter that implements TestNG's IReporter interface.  By 
 setting your TestNG test to use this Reporter, it will generate the xunit which is compatible with the XUnit Importer.
-In fact, if your tests use Data Providers, it will also generate the parameterized data for you too (note that this 
-feature is still waiting on the ability to add TestStep and Parameters in the TestCase importer).
+In fact, if your tests use Data Providers, it will also generate the parameterized data for you too with the previously
+mentioned mapping.json file.
 
 After you execute your TestNG test, you will see a report generated like this:
 
@@ -355,6 +365,41 @@ but the XUnit importer.
 ### POST to the importers
 
 **TODO** explain how to use the ImporterReqest class to issue the POST calls that will send to the correct endpoint
+
+# Using polarize with clojure or other dynamic JVM languages
+
+Since polarize's main use was for Java annotations that could be processed at compile time, this doesn't make sense 
+for clojure.  When you run lein compile, even though polarize is in the classpath, it does not run the annotation 
+processor.  In theory, this should work, since annotation processors can examine either java source code or bytecode 
+(and lein compile generates .class files), but I was unable to get leiningen to "hook" into our clojure code.  I even 
+tried modifying the testng-clj project's gen-class-testng macro, since it is the macro that runs gen-class on all the 
+clojure code to generate the java classes, and I told it to also accept any method annotated with a TestDefinition 
+annotation.  But even that did not cause the TestDefinitionProcessor class to be executed on the bytecode.
+
+So an alternative solution was to grab the annotation information at runtime.  All annotations have a retention policy.
+An annotation can only exist at compile time, or it can exist at runtime.  The latter is useful if your code uses 
+reflection so that you can use annotations as metadata.  To use the annotation at runtime, you need to compile your 
+project code as an uberjar (aka fatjar).  You then need to put this uberjar on the classpath with polarize, and also 
+add it as a command line option.  Since polarize uses gradle as its build tool, it's a little tricky to get it to 
+return the classpath (ie, the equivalent of `lein classpath`).  There is a task I created called classPath which will
+display the classpath, but also some extraneous information.  I just copy what I need and export it into a var:
+
+Once you have saved off the classpath to a var (say $CP), you can run the annotation processing like this:
+
+```
+java -cp $CP -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=5009 com.github.redhatqe.polarize.JarHelper \
+--jar file:///home/stoner/Projects/rhsm-qe/target/sm-1.0.0-SNAPSHOT-standalone.jar \
+--packages "rhsm.gui.tests,rhsm.cli.tests"
+```
+
+The --jar option specifies the path of the uberjar, and the --packages is a comma separated list of packages to scan 
+for.  Note that this example also sets the debugger option so that you can setup a remote debug configuration if needed.
+
+Speaking of debugging, if you need to debug your clojure code you can set in your project.clj file the following:
+
+```clojure
+:jvm-opts ["-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=5007"]
+```
 
 # Roadmap
 
