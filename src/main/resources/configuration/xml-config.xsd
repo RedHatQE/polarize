@@ -2,11 +2,25 @@
 <xs:schema attributeFormDefault="unqualified" elementFormDefault="qualified" xmlns:xs="http://www.w3.org/2001/XMLSchema">
   <xs:element name="config" type="configType"/>
   <xs:complexType name="titleType">
-
     <xs:simpleContent>
       <xs:extension base="xs:string">
         <xs:attribute type="xs:string" name="prefix"/>
         <xs:attribute type="xs:string" name="suffix"/>
+      </xs:extension>
+    </xs:simpleContent>
+  </xs:complexType>
+
+  <xs:simpleType name="enabledType">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="true"/>
+      <xs:enumeration value="false"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:complexType name="templateIdType">
+    <xs:simpleContent>
+      <xs:extension base="xs:string">
+        <xs:attribute type="xs:string" name="id" use="optional"/>
       </xs:extension>
     </xs:simpleContent>
   </xs:complexType>
@@ -29,6 +43,12 @@
 
   <xs:complexType name="importerType">
     <xs:sequence>
+      <xs:element type="templateIdType" name="template-id" minOccurs="0" maxOccurs="1">
+        <xs:annotation>
+          <xs:documentation>Parent template ID to use for the TestRun</xs:documentation>
+        </xs:annotation>
+      </xs:element>
+
       <xs:element type="testrunType" name="testrun" minOccurs="0">
         <xs:annotation>
           <xs:documentation># settings for the xunit importer  id is an optional unique id for testrun. Defaults to a timestamp (uniqueness guaranteed by client)
@@ -69,6 +89,7 @@
       </xs:element>
 
       <xs:element type="timeoutType" name="timeout"/>
+      <xs:element type="enabledType" name="enabled"/>
     </xs:sequence>
     <xs:attribute type="xs:string" name="type" use="optional"/>
   </xs:complexType>

@@ -16,15 +16,15 @@ import javax.xml.bind.annotation.XmlValue;
 
 
 /**
- * <p>Java class for requirements-xmlType complex type.
+ * <p>Java class for templateIdType complex type.
  * 
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="requirements-xmlType">
+ * &lt;complexType name="templateIdType">
  *   &lt;simpleContent>
  *     &lt;extension base="&lt;http://www.w3.org/2001/XMLSchema>string">
- *       &lt;attribute name="path" type="{http://www.w3.org/2001/XMLSchema}string" />
+ *       &lt;attribute name="id" type="{http://www.w3.org/2001/XMLSchema}string" />
  *     &lt;/extension>
  *   &lt;/simpleContent>
  * &lt;/complexType>
@@ -33,15 +33,15 @@ import javax.xml.bind.annotation.XmlValue;
  * 
  */
 @XmlAccessorType(XmlAccessType.FIELD)
-@XmlType(name = "requirements-xmlType", propOrder = {
+@XmlType(name = "templateIdType", propOrder = {
     "value"
 })
-public class RequirementsXmlType {
+public class TemplateIdType {
 
     @XmlValue
     protected String value;
-    @XmlAttribute(name = "path")
-    protected String path;
+    @XmlAttribute(name = "id")
+    protected String id;
 
     /**
      * Gets the value of the value property.
@@ -68,27 +68,27 @@ public class RequirementsXmlType {
     }
 
     /**
-     * Gets the value of the path property.
+     * Gets the value of the id property.
      * 
      * @return
      *     possible object is
      *     {@link String }
      *     
      */
-    public String getPath() {
-        return path;
+    public String getId() {
+        return id;
     }
 
     /**
-     * Sets the value of the path property.
+     * Sets the value of the id property.
      * 
      * @param value
      *     allowed object is
      *     {@link String }
      *     
      */
-    public void setPath(String value) {
-        this.path = value;
+    public void setId(String value) {
+        this.id = value;
     }
 
 }
