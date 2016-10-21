@@ -16,8 +16,8 @@ import joptsimple.OptionParser;
 import joptsimple.OptionSet;
 
 import com.google.gson.Gson;
+
 import java.lang.reflect.Type;
-import java.util.stream.Collector;
 import java.util.stream.Collectors;
 
 /**
@@ -63,7 +63,8 @@ public class JarHelper implements IJarHelper {
 
     /**
      * Takes the jars (which must also be on the classpath) and the names of packages
-     * eg java -cp sm-0.0.1-SNAPSHOT.jar --jar sm-0.0.1-SNAPSHOT  --packages "polarize.cli.tests,polarize.gui.tests"
+     * eg java -cp sm-0.0.1-SNAPSHOT.jar --jar file:///path/to/sm-0.0.1-SNAPSHOT-standalone.jar \
+     * --packages "polarize.cli.tests,polarize.gui.tests"
      * @param args
      */
     public static void main(String[] args) {
@@ -94,26 +95,24 @@ public class JarHelper implements IJarHelper {
 
                 Reflector refl = jh.loadClasses(classes);
                 refl.methToProjectDef = refl.makeMethToProjectMeta();
+                refl.processTestDefs();
+                refl.testcasesImporterRequest();
                 if (refl.methToProjectDef.size() > 0) {
                     File mapPath = new File(refl.config.config.getMapping().getPath());
                     TestDefinitionProcessor.createMappingFile(mapPath, refl.methToProjectDef, refl.mappingFile);
                 }
+
                 refl.testDefAdapters = refl.testDefs.stream()
                         .map(m -> {
                             TestDefinition def = m.annotation;
                             TestDefAdapter adap = TestDefAdapter.create(def);
-                            Meta<TestDefAdapter> meta = new Meta<>();
-                            meta.annotation = adap;
-                            meta.className = m.className;
-                            meta.methName = m.methName;
-                            meta.project = m.project;
-                            meta.packName = m.packName;
-                            meta.polarionID = m.polarionID;
-                            meta.params = m.params;
+                            Meta<TestDefAdapter> meta = Meta.create(m.qualifiedName, m.methName, m.className,
+                                    m.packName, m.project, m.polarionID, m.params, adap);
                             return meta;
                         })
                         .collect(Collectors.toList());
-                String jsonDefs = gson.toJson(refl.testDefAdapters, metaType);
+                List<Meta<TestDefAdapter>> sorted = Reflector.sortTestDefs(refl.testDefAdapters);
+                String jsonDefs = gson.toJson(sorted, metaType);
                 System.out.println(jsonDefs);
 
                 File file = new File(output);
@@ -133,7 +132,7 @@ public class JarHelper implements IJarHelper {
                     bw.write(jsonDefs);
                     bw.close();
                 } catch (IOException ex) {
-                    System.err.println(ex);
+                    System.err.println(ex.getMessage());
                 }
             }
         } catch (IOException e) {
