@@ -15,6 +15,7 @@ import com.github.redhatqe.polarize.exceptions.XMLDescriptionError;
 import com.github.redhatqe.polarize.exceptions.XMLUnmarshallError;
 import com.github.redhatqe.polarize.importer.ImporterRequest;
 import com.github.redhatqe.polarize.importer.xunit.*;
+import com.github.redhatqe.polarize.importer.xunit.Error;
 import com.github.redhatqe.polarize.metadata.Requirement;
 import com.github.redhatqe.polarize.metadata.TestDefinition;
 import org.apache.http.HttpEntity;
@@ -39,13 +40,13 @@ import java.util.stream.Collectors;
  * Class that handles junit report generation for TestNG
  *
  * Use this class when running TestNG tests as -reporter XUnitReporter.  It can be
- * configured through the reporter.properties file.  A default configuration is contained in the resources folder, but
+ * configured through the xml-config.xml file.  A default configuration is contained in the resources folder, but
  * a global environment variable of XUNIT_IMPORTER_CONFIG can also be set.  If this env var exists and it points to a
  * file, this file will be loaded instead.
  */
 public class XUnitReporter implements IReporter {
     private final static Logger logger = LoggerFactory.getLogger(XUnitReporter.class);
-    private final static XMLConfig config = new XMLConfig(null);
+    private static XMLConfig config = new XMLConfig(null);
     private final static ConfigType cfg = config.config;
     private final static File defaultPropertyFile =
             new File(System.getProperty("user.home") + "/.polarize/reporter.properties");
@@ -134,9 +135,6 @@ public class XUnitReporter implements IReporter {
 
         // Now that we've gone through the suites, let's marshall this into an XML file for the XUnit Importer
         File reportPath = new File(outputDirectory + "/testng-polarion.xml");
-        String url = config.polarion.getUrl() + config.xunit.getEndpoint().getRoute();
-        String user = config.kerb.getUser();
-        String pw = config.kerb.getPassword();
         JAXBHelper jaxb = new JAXBHelper();
         IJAXBHelper.marshaller(tsuites, reportPath, jaxb.getXSDFromResource(Testsuites.class));
     }
@@ -212,11 +210,24 @@ public class XUnitReporter implements IReporter {
      * @param tc
      */
     private static void getStatus(ITestResult result, Testcase tc) {
+        Throwable t = result.getThrowable();
         int status = result.getStatus();
         switch(status) {
+            // Unfortunately, TestNG doesn't distinguish between an assertion failure and an error.  The way to check
+            // is if getThrowable() returns non-null
             case ITestResult.FAILURE:
-                Failure fail = new Failure();
-                tc.getFailure().add(fail);
+                if (t != null && !(t instanceof java.lang.AssertionError)) {
+                    Error err = new Error();
+                    err.setMessage(t.getMessage().substring(128));
+                    err.setContent(t.getMessage());
+                    tc.getError().add(err);
+                }
+                else {
+                    Failure fail = new Failure();
+                    if (t != null)
+                        fail.setContent(t.getMessage());
+                    tc.getFailure().add(fail);
+                }
                 break;
             case ITestResult.SKIP:
                 tc.setSkipped("true");
@@ -225,7 +236,12 @@ public class XUnitReporter implements IReporter {
                 tc.setStatus("success");
                 break;
             default:
-                XUnitReporter.logger.warn("Unused status for testcase");
+                if (t != null) {
+                    Error err = new Error();
+                    err.setMessage(t.getMessage().substring(128));
+                    err.setContent(t.getMessage());
+                    tc.getError().add(err);
+                }
                 break;
         }
     }
@@ -252,7 +268,8 @@ public class XUnitReporter implements IReporter {
 
             //XmlTest test = fn.getXmlTest();
             ITestResult result = meth.getTestResult();
-            result.getStartMillis();
+            Long millis = result.getEndMillis() - result.getStartMillis();
+            testcase.setTime(millis.toString());
 
             ITestClass clz = fn.getTestClass();
             String methname = fn.getMethodName();
