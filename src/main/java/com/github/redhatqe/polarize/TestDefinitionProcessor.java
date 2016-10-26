@@ -199,6 +199,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
                 else if (m.params.isEmpty())
                     m.params.addAll(params);
                 metas.add(m);
+                i++;
             }
         }
         return metas;
@@ -491,6 +492,8 @@ public class TestDefinitionProcessor extends AbstractProcessor {
 
     private Optional<ObjectNode> sendTCImporterRequest(String selector)
             throws InterruptedException, ExecutionException, JMSException {
+        if (!this.config.testcase.isEnabled())
+            return Optional.empty();
         String url = this.config.polarion.getUrl() + this.config.testcase.getEndpoint().getRoute();
         File testcaseXml = new File(this.config.testcase.getFile().getPath());
         String user = this.config.polarion.getUser();
@@ -813,32 +816,63 @@ public class TestDefinitionProcessor extends AbstractProcessor {
      * @param meta a Meta object holding annotation data from a test method
      * @return a Testcase object that can be unmarshalled into XML
      */
-    private Testcase processTC(Meta<TestDefinition> meta) {
-        Testcase tc = TestDefinitionProcessor.initImporterTestcase(meta, this.methNameToTestNGDescription);
-        this.testCaseToMeta.put(tc, meta);
+    private Testcase processTC(Meta<TestDefinition> meta) throws MismatchError {
+        return TestDefinitionProcessor.processTC(meta, this.mappingFile, this.testCaseToMeta, this.tcPath, this.tcMap);
+    }
+
+
+    /**
+     * Generates the data in the mapping file as needed
+     *
+     * @param meta
+     * @param mapFile
+     * @param tcToMeta
+     * @param testCasePath
+     * @param testCaseMap
+     * @return
+     */
+    public static Testcase processTC(Meta<TestDefinition> meta,
+                                     Map<String, Map<String, IdParams>> mapFile,
+                                     Map<Testcase, Meta<TestDefinition>> tcToMeta,
+                                     String testCasePath,
+                                     Map<String, List<Testcase>> testCaseMap) {
+        Testcase tc = TestDefinitionProcessor.initImporterTestcase(meta, null);
+        tcToMeta.put(tc, meta);
         TestDefinition def = meta.annotation;
 
         // If this method is in the mapping File for the project, and it's not an empty string, we are done
-        Optional<String> maybeMapFileID = this.getPolarionIDFromMapFile(meta.qualifiedName, meta.project);
+        Optional<String> maybeMapFileID =
+                TestDefinitionProcessor.getPolarionIDFromMapFile(meta.qualifiedName, meta.project, mapFile);
         if (maybeMapFileID.isPresent() && !maybeMapFileID.get().equals("")) {
+            String mapId = maybeMapFileID.get();
             logger.info(String.format("%s id is %s", meta.qualifiedName, maybeMapFileID.get()));
-            return tc;
+            if (meta.polarionID.equals(maybeMapFileID.get()))
+                return tc;
+            else if (meta.polarionID.equals("")) {
+                logger.warn("For %s, in project %s, the testCaseID is an empty string even though the corresponding " +
+                        "XML description file is present and has ID = %s", meta.qualifiedName, meta.project, mapId);
+            }
+            else {
+                String err = "Mismatch of TestCaseID: annotation ID = %s, mapping file ID = %s";
+                throw new MismatchError(String.format(err, meta.polarionID, maybeMapFileID.get()));
+            }
         }
 
         // Check to see if there is an existing XML description file with Polarion ID
-        Optional<File> xml = meta.getFileFromMeta(this.tcPath);
+        Optional<File> xml = meta.getFileFromMeta(testCasePath);
         if (!xml.isPresent()) {
-            Path path = FileHelper.makeXmlPath(this.tcPath, meta, meta.project);
+            Path path = FileHelper.makeXmlPath(testCasePath, meta, meta.project);
             File xmlDesc = path.toFile();
             TestDefinitionProcessor.createTestCaseXML(tc, xmlDesc);
         }
 
+        JAXBHelper jaxb = new JAXBHelper();
         Optional<String> maybePolarionID = meta.getPolarionIDFromTestcase();
-        Optional<String> maybeIDXml = meta.getPolarionIDFromXML(this.tcPath);
+        Optional<String> maybeIDXml = meta.getPolarionIDFromXML(testCasePath);
         Boolean idExists = maybePolarionID.isPresent();
         Boolean xmlIdExists = maybeIDXml.isPresent();
         Boolean importRequest = false;
-        // i  | xmlIdExists  | idExists       | action            | How does this happen?
+        //  i | xmlIdExists  | idExists       | action            | How does this happen?
         // ===|==============|================|===================|=============================================
         //  0 | false        | false          | request and edit  | id="" in xml and in annotation
         //  1 | false        | true           | edit XML          | id="" in xml, but id is in annotation
@@ -853,11 +887,11 @@ public class TestDefinitionProcessor extends AbstractProcessor {
                 importRequest = true;
             else {
                 importRequest = false;
-                Optional<Testcase> maybeTC = meta.getTypeFromMeta(Testcase.class, this.tcPath);
+                Optional<Testcase> maybeTC = meta.getTypeFromMeta(Testcase.class, testCasePath);
                 if (maybeTC.isPresent()) {
                     Testcase tcase = maybeTC.get();
                     tcase.setId(maybePolarionID.get());
-                    Optional<File> path = meta.getFileFromMeta(this.tcPath);
+                    Optional<File> path = meta.getFileFromMeta(testCasePath);
                     if (path.isPresent()) {
                         IJAXBHelper.marshaller(tcase, path.get(), jaxb.getXSDFromResource(Testcase.class));
                     }
@@ -866,11 +900,17 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         }
         if (xmlIdExists && !idExists) {
             // TODO: The ID exists in the XML file, but not in the annotation.  Set the mapping file with this info
-            Map<String, IdParams> projToId = this.mappingFile.getOrDefault(meta.qualifiedName, null);
+            Map<String, IdParams> projToId = mapFile.getOrDefault(meta.qualifiedName, null);
             if (projToId != null) {
                 if (projToId.containsKey(meta.project)) {
                     IdParams ip = projToId.get(meta.project);
                     ip.id = maybeIDXml.get();
+                }
+                else {
+                    IdParams ip = new IdParams();
+                    ip.setId(maybeIDXml.get());
+                    ip.setParameters(meta.params.stream().map(p -> p.getName()).collect(Collectors.toList()));
+                    projToId.put(meta.project, ip);
                 }
             }
             else {
@@ -878,18 +918,19 @@ public class TestDefinitionProcessor extends AbstractProcessor {
                 // of it.  So let's put it into this.mappingFile
                 String msg = "XML data exists, but does not exist in mapping file.  Editing map: %s -> {%s: %s}";
                 logger.debug(String.format(msg, meta.qualifiedName, meta.project, maybeIDXml.get()));
-                this.setPolarionIDInMapFile(meta.qualifiedName, meta.project, maybeIDXml.get());
+                TestDefinitionProcessor.setPolarionIDInMapFile(meta.qualifiedName, meta.project, maybeIDXml.get(),
+                        mapFile);
             }
         }
 
         if (importRequest) {
             String projId = meta.project;
-            if (this.tcMap.containsKey(projId))
-                this.tcMap.get(projId).add(tc);
+            if (testCaseMap.containsKey(projId))
+                testCaseMap.get(projId).add(tc);
             else {
                 List<Testcase> tcs = new ArrayList<>();
                 tcs.add(tc);
-                this.tcMap.put(projId, tcs);
+                testCaseMap.put(projId, tcs);
             }
         }
         return tc;
@@ -964,10 +1005,18 @@ public class TestDefinitionProcessor extends AbstractProcessor {
                             return partial;
                         });
         ObjectMapper mapper = new ObjectMapper();
-        mapFile.putAll(mpid);
+        for(Map.Entry<String, Map<String, IdParams>> me: mpid.entrySet()) {
+            String functionName = me.getKey();
+            Map<String, IdParams> val = me.getValue();
+            for(Map.Entry<String, IdParams> e: val.entrySet()) {
+                String project = e.getKey();
+                IdParams params = e.getValue();
+                mapFile.get(functionName).put(project, params);
+            }
+        }
         try {
             mapper.writer().withDefaultPrettyPrinter().writeValue(mapPath, mapFile);
-            System.out.println(mapper.writer().withDefaultPrettyPrinter().writeValueAsString(mapFile));
+            //System.out.println(mapper.writer().withDefaultPrettyPrinter().writeValueAsString(mapFile));
         } catch (IOException e) {
             e.printStackTrace();
         }

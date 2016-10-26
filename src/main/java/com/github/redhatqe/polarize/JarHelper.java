@@ -97,10 +97,6 @@ public class JarHelper implements IJarHelper {
                 refl.methToProjectDef = refl.makeMethToProjectMeta();
                 refl.processTestDefs();
                 refl.testcasesImporterRequest();
-                if (refl.methToProjectDef.size() > 0) {
-                    File mapPath = new File(refl.config.config.getMapping().getPath());
-                    TestDefinitionProcessor.createMappingFile(mapPath, refl.methToProjectDef, refl.mappingFile);
-                }
 
                 refl.testDefAdapters = refl.testDefs.stream()
                         .map(m -> {
@@ -112,6 +108,12 @@ public class JarHelper implements IJarHelper {
                         })
                         .collect(Collectors.toList());
                 List<Meta<TestDefAdapter>> sorted = Reflector.sortTestDefs(refl.testDefAdapters);
+
+                if (refl.methToProjectDef.size() > 0) {
+                    File mapPath = new File(refl.config.config.getMapping().getPath());
+                    TestDefinitionProcessor.createMappingFile(mapPath, refl.methToProjectDef, refl.mappingFile);
+                }
+
                 String jsonDefs = gson.toJson(sorted, metaType);
                 System.out.println(jsonDefs);
 

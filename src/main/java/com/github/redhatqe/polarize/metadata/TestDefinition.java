@@ -41,7 +41,7 @@ public @interface TestDefinition {
 
     String[] testCaseID() default {};
     String author() default "CI User";
-    String title() default "";
+    String title() default "";          // If you don't use the default, must specify the xmlDesc path
     String description() default "";    // Must have description but may come from @Test
     String setup() default "";
     String teardown() default "";
@@ -69,6 +69,7 @@ public @interface TestDefinition {
     String upstream() default "";
 
     // These are not directly used by the importer
-    String xmlDesc() default "";
+    String xmlDesc() default "";             // This is the path to the XML description file (the xml of the TestCase)
+                                             // eg ${PROJECT_DIR}/testcases/{PROJECT}/{PACKAGE.CLASS.METHOD_NAME/xmlDesc
     boolean update() default false;          // If true, when xml description file exists, update with new one
 }

@@ -2,6 +2,7 @@ package com.github.redhatqe.polarize;
 
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.github.redhatqe.polarize.configuration.XMLConfig;
+import com.github.redhatqe.polarize.exceptions.MismatchError;
 import com.github.redhatqe.polarize.importer.ImporterRequest;
 import com.github.redhatqe.polarize.importer.testcase.Testcase;
 import com.github.redhatqe.polarize.importer.testcase.Testcases;
@@ -178,108 +179,11 @@ public class Reflector {
         }
     }
 
-    /**
-     * Generates the data in the mapping file as needed
-     *
-     * @param meta
-     * @param mapFile
-     * @param tcToMeta
-     * @param testCasePath
-     * @param testCaseMap
-     * @return
-     */
-    public static Testcase processTC(Meta<TestDefinition> meta,
-                                     Map<String, Map<String, IdParams>> mapFile,
-                                     Map<Testcase, Meta<TestDefinition>> tcToMeta,
-                                     String testCasePath,
-                                     Map<String, List<Testcase>> testCaseMap) {
-        Testcase tc = TestDefinitionProcessor.initImporterTestcase(meta, null);
-        tcToMeta.put(tc, meta);
-        TestDefinition def = meta.annotation;
 
-        // If this method is in the mapping File for the project, and it's not an empty string, we are done
-        Optional<String> maybeMapFileID =
-                TestDefinitionProcessor.getPolarionIDFromMapFile(meta.qualifiedName, meta.project, mapFile);
-        if (maybeMapFileID.isPresent() && !maybeMapFileID.get().equals("")) {
-            logger.info(String.format("%s id is %s", meta.qualifiedName, maybeMapFileID.get()));
-            return tc;
-        }
-
-        // Check to see if there is an existing XML description file with Polarion ID
-        Optional<File> xml = meta.getFileFromMeta(testCasePath);
-        if (!xml.isPresent()) {
-            Path path = FileHelper.makeXmlPath(testCasePath, meta, meta.project);
-            File xmlDesc = path.toFile();
-            TestDefinitionProcessor.createTestCaseXML(tc, xmlDesc);
-        }
-
-        JAXBHelper jaxb = new JAXBHelper();
-        Optional<String> maybePolarionID = meta.getPolarionIDFromTestcase();
-        Optional<String> maybeIDXml = meta.getPolarionIDFromXML(testCasePath);
-        Boolean idExists = maybePolarionID.isPresent();
-        Boolean xmlIdExists = maybeIDXml.isPresent();
-        Boolean importRequest = false;
-        // i  | xmlIdExists  | idExists       | action            | How does this happen?
-        // ===|==============|================|===================|=============================================
-        //  0 | false        | false          | request and edit  | id="" in xml and in annotation
-        //  1 | false        | true           | edit XML          | id="" in xml, but id is in annotation
-        //  2 | true         | false          | edit mapfile      | non-empty id in xml, but not in annotation
-        //  3 | true         | true           | validate          | non-empty id in xml and in annotation
-        if (!xmlIdExists) {
-            importRequest = true;
-        }
-        if (idExists && !xmlIdExists) {
-            // This means that the ID exists in the annotation, but not the XML file.  Edit the xml file
-            if (def.update())
-                importRequest = true;
-            else {
-                importRequest = false;
-                Optional<Testcase> maybeTC = meta.getTypeFromMeta(Testcase.class, testCasePath);
-                if (maybeTC.isPresent()) {
-                    Testcase tcase = maybeTC.get();
-                    tcase.setId(maybePolarionID.get());
-                    Optional<File> path = meta.getFileFromMeta(testCasePath);
-                    if (path.isPresent()) {
-                        IJAXBHelper.marshaller(tcase, path.get(), jaxb.getXSDFromResource(Testcase.class));
-                    }
-                }
-            }
-        }
-        if (xmlIdExists && !idExists) {
-            // TODO: The ID exists in the XML file, but not in the annotation.  Set the mapping file with this info
-            Map<String, IdParams> projToId = mapFile.getOrDefault(meta.qualifiedName, null);
-            if (projToId != null) {
-                if (projToId.containsKey(meta.project)) {
-                    IdParams ip = projToId.get(meta.project);
-                    ip.id = maybeIDXml.get();
-                }
-            }
-            else {
-                // In this case, although the XML file existed and we have (some) annotation data, we don't have all
-                // of it.  So let's put it into this.mappingFile
-                String msg = "XML data exists, but does not exist in mapping file.  Editing map: %s -> {%s: %s}";
-                logger.debug(String.format(msg, meta.qualifiedName, meta.project, maybeIDXml.get()));
-                TestDefinitionProcessor.setPolarionIDInMapFile(meta.qualifiedName, meta.project, maybeIDXml.get(),
-                        mapFile);
-            }
-        }
-
-        if (importRequest) {
-            String projId = meta.project;
-            if (testCaseMap.containsKey(projId))
-                testCaseMap.get(projId).add(tc);
-            else {
-                List<Testcase> tcs = new ArrayList<>();
-                tcs.add(tc);
-                testCaseMap.put(projId, tcs);
-            }
-        }
-        return tc;
-    }
 
     public void processTestDefs() {
-        this.testDefs.forEach(td -> Reflector.processTC(td, this.mappingFile, this.testCaseToMeta, this.tcPath,
-                this.tcMap));
+        this.testDefs.forEach(td -> TestDefinitionProcessor.processTC(td, this.mappingFile, this.testCaseToMeta,
+                this.tcPath, this.tcMap));
     }
 
     Map<String, Map<String, Meta<TestDefinition>>> makeMethToProjectMeta() {
@@ -335,7 +239,7 @@ public class Reflector {
             String url = this.config.polarion.getUrl() + this.config.testcase.getEndpoint().getRoute();
             Consumer<Optional<ObjectNode>> handler =
                     TestDefinitionProcessor.testcaseImportHandler(this.tcPath, ID, this.testcases);
-            if (this.config.testcase.getEnabled().value().equals("true"))
+            if (this.config.testcase.isEnabled())
                 maybeNode = ImporterRequest.sendImportRequest(url, user, pass, tcXML, selector, handler);
         } catch (InterruptedException e) {
             e.printStackTrace();
