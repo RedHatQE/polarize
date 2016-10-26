@@ -54,10 +54,9 @@ public class CIBusListener {
             Session session = connection.createSession(false, Session.AUTO_ACKNOWLEDGE);
             Topic dest = session.createTopic("CI");
 
-            if (selector == null || selector.equals("")) {
-                this.logger.error("Must supply a value for the selector");
-                throw new ConfigurationError();
-            }
+            if (selector == null || selector.equals(""))
+                throw new ConfigurationError("Must supply a value for the selector");
+
             this.logger.debug(String.format("Using selector of:\n%s", selector));
             connection.start();
             consumer = session.createConsumer(dest, selector);
@@ -96,10 +95,9 @@ public class CIBusListener {
             Session session = connection.createSession(false, Session.AUTO_ACKNOWLEDGE);
             Topic dest = session.createTopic("CI");
 
-            if (selector == null || selector.equals("")) {
-                this.logger.error("Must supply a value for selector");
-                throw new ConfigurationError();
-            }
+            if (selector == null || selector.equals(""))
+                throw new ConfigurationError("Must supply a value for the selector");
+
             consumer = session.createConsumer(dest, selector);
 
             // FIXME: We need to have some way to know when we see our message.
