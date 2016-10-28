@@ -83,16 +83,15 @@ public class Reflector {
                             DefTypes.Project[] projects = ann.projectID();
                             String[] polarionIDs = ann.testCaseID();
                             if (polarionIDs.length > 0 && polarionIDs.length != projects.length)
-                                this.logger.error("Length of projects and polarionIds not the same");
+                                logger.error("Length of projects and polarionIds not the same");
 
                             if (className.contains(".")) {
                                 String[] split = className.split("\\.");
                                 className = split[split.length - 1];
                             }
 
-                            // TODO: figure out a way to get the parameters.  This code does not get the actual
-                            // names of the parameters.  Might need to make Reflector and JarHelper in clojure, and get
-                            // the args that way.
+                            // TODO: This doesnt get clojure param names. Might need to make Reflector and JarHelper
+                            // in clojure, and get the args that way.
                             Parameter[] params = m.getParameters();
                             List<com.github.redhatqe.polarize.importer.testcase.Parameter> args = Arrays.stream(params)
                                     .map(arg -> {
@@ -107,12 +106,19 @@ public class Reflector {
                             List<Meta<TestDefinition>> metas = new ArrayList<>();
                             for(int i = 0; i < projects.length; i++) {
                                 String project = projects[i].toString();
-                                String id;
-                                if (polarionIDs.length == 0)
-                                    id = "";
-                                else
+                                String id = "";
+                                Boolean dirty = false;
+                                try {
                                     id = polarionIDs[i];
-                                metas.add(Meta.create(qual, methName, className, p, project, id, args, ann));
+                                }
+                                catch (ArrayIndexOutOfBoundsException ae) {
+                                    dirty = true;
+                                }
+                                Meta<TestDefinition> meta = Meta.create(qual, methName, className, p, project, id, args,
+                                        ann);
+                                if (dirty)
+                                    meta.dirty = dirty;
+                                metas.add(meta);
                             }
                             return metas.stream().map( me -> me);
                         })

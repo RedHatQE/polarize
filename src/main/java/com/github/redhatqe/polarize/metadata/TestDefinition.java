@@ -39,7 +39,7 @@ import java.lang.annotation.*;
 public @interface TestDefinition {
     DefTypes.Project[] projectID();     // An array (actually set) of projects this definition applies to
 
-    String[] testCaseID() default {};
+    String[] testCaseID() default {""};
     String author() default "CI User";
     String title() default "";          // If you don't use the default, must specify the xmlDesc path
     String description() default "";    // Must have description but may come from @Test

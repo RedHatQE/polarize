@@ -8,7 +8,6 @@ import com.github.redhatqe.polarize.exceptions.XMLUnmarshallError;
 import com.github.redhatqe.polarize.exceptions.XSDValidationError;
 
 import com.github.redhatqe.polarize.importer.xunit.Property;
-import com.github.redhatqe.polarize.importer.xunit.Testsuite;
 import com.github.redhatqe.polarize.importer.xunit.Testsuites;
 import com.github.redhatqe.polarize.utils.Tuple;
 import joptsimple.OptionParser;
@@ -62,16 +61,16 @@ public class Configurator implements IJAXBHelper {
     public String tcPath;
     public List<ServerType> servers;
 
-    public Map<String, Tuple<Getter<String>, Setter<String>>> sOptToAccessors = new HashMap<>();
-    public Map<String, Tuple<Getter<Boolean>, Setter<Boolean>>> bOptToAccessors = new HashMap<>();
-    public Map<String, Tuple<Getter<Integer>,Setter<Integer>>> iOptToAccessors = new HashMap<>();
-    public Map<String, OptionSpec<String>> sSpecs = new HashMap<>();
-    public Map<String, OptionSpec<Boolean>> bSpecs = new HashMap<>();
-    public Map<String, OptionSpec<Integer>> iSpecs = new HashMap<>();
-    public Map<String, String> testsuiteProps = new HashMap<>();
-    public List<Property> customProps;
+    private Map<String, Tuple<Getter<String>, Setter<String>>> sOptToAccessors = new HashMap<>();
+    private Map<String, Tuple<Getter<Boolean>, Setter<Boolean>>> bOptToAccessors = new HashMap<>();
+    private Map<String, Tuple<Getter<Integer>,Setter<Integer>>> iOptToAccessors = new HashMap<>();
+    private Map<String, OptionSpec<String>> sSpecs = new HashMap<>();
+    private Map<String, OptionSpec<Boolean>> bSpecs = new HashMap<>();
+    private Map<String, OptionSpec<Integer>> iSpecs = new HashMap<>();
+    private Map<String, String> testsuiteProps = new HashMap<>();
+    private List<Property> customProps;
 
-    public OptionSet opts;
+    private OptionSet opts;
 
     public Configurator() {
         this.configPath = java.lang.System.getProperty("user.home") + "/.polarize/xml-config.xml";
@@ -93,7 +92,7 @@ public class Configurator implements IJAXBHelper {
         this.configureParser();
     }
 
-    public void configureParser() {
+    private void configureParser() {
         sOptToAccessors.put(Opts.TESTRUN_TITLE, new Tuple<>(this::getTestrunTitle, this::setTestrunTitle));
         sOptToAccessors.put(Opts.PROJECT, new Tuple<>(this::getProject, this::setProject));
         sOptToAccessors.put(Opts.TESTCASE_PREFIX, new Tuple<>(this::getTestcasePrefix, this::setTestcasePrefix));
@@ -141,7 +140,7 @@ public class Configurator implements IJAXBHelper {
      *
      * @param args
      */
-    public void parse(String[] args){
+    private void parse(String[] args){
         OptionSet opts = parser.parse(args);
         this.opts = opts;
         this.sOptToAccessors.entrySet().forEach(es -> {
@@ -204,7 +203,7 @@ public class Configurator implements IJAXBHelper {
         }
     }
 
-    public void setConfigType() {
+    private void setConfigType() {
         this.cfg.setProject(this.getProject());
         ImportersType importers = this.cfg.getImporters();
         List<ImporterType> importerList = importers.getImporter();
@@ -273,7 +272,7 @@ public class Configurator implements IJAXBHelper {
     }
 
 
-    public void setTCImporter(ImporterType imp) {
+    private void setTCImporter(ImporterType imp) {
         if (this.opts.has(iSpecs.get(Opts.TC_IMPORTER_TIMEOUT))) {
             Integer timeout = this.opts.valueOf(iSpecs.get(Opts.TC_IMPORTER_TIMEOUT));
             imp.getTimeout().setMillis(timeout.toString());
@@ -300,7 +299,7 @@ public class Configurator implements IJAXBHelper {
         }
     }
 
-    public void setXunitImporter(ImporterType imp) {
+    private void setXunitImporter(ImporterType imp) {
         List<PropertyType> customProps = imp.getCustomFields().getProperty();
         this.setCustomProperties(customProps);
 
@@ -327,7 +326,7 @@ public class Configurator implements IJAXBHelper {
         this.setSelectorName(imp, Opts.XUNIT_SELECTOR_NAME, Opts.XUNIT_SELECTOR_VAL);
     }
 
-    public void setSelectorName(ImporterType imp, String name, String val) {
+    private void setSelectorName(ImporterType imp, String name, String val) {
         if (sSpecs.containsKey(name) && this.opts.has(sSpecs.get(name))) {
             SelectorType st = imp.getSelector();
             if (imp.getType().equals("xunit"))
@@ -346,7 +345,7 @@ public class Configurator implements IJAXBHelper {
     }
 
 
-    public ServerType parseServer(String server) {
+    private ServerType parseServer(String server) {
         ServerType st = new ServerType();
 
         String[] tokens = server.split(",");
@@ -363,7 +362,7 @@ public class Configurator implements IJAXBHelper {
      * This is a string in the command line like --property plannedin=RHEL_7_3
      * @param cust
      */
-    public Property parseProperty(String cust) {
+    private Property parseProperty(String cust) {
         String[] tokens = cust.split("=");
         if (tokens.length != 2)
             throw new InvalidArgument("--property must be in key=value form");
@@ -405,38 +404,38 @@ public class Configurator implements IJAXBHelper {
         IJAXBHelper.marshaller(cfg, config, jaxb.getXSDFromResource(ConfigType.class));
     }
 
-    public class Opts {
-        public static final String TESTRUN_TITLE = "testrun-title";
-        public static final String PROJECT = "project";
-        public static final String TESTCASE_PREFIX = "testcase-prefix";
-        public static final String TESTCASE_SUFFIX = "testcase-suffix";
-        public static final String PLANNEDIN= "plannedin";
-        public static final String JENKINSJOBS= "jenkinsjobs";
-        public static final String NOTES ="notes";
-        public static final String TEMPLATE_ID = "template-id";
-        public static final String TC_SELECTOR_NAME = "testcase-selector-name";
-        public static final String TC_SELECTOR_VAL = "testcase-selector-val";
-        public static final String XUNIT_SELECTOR_NAME = "xunit-selector-name";
-        public static final String XUNIT_SELECTOR_VAL = "xunit-selector-val";
+    private class Opts {
+        static final String TESTRUN_TITLE = "testrun-title";
+        static final String PROJECT = "project";
+        static final String TESTCASE_PREFIX = "testcase-prefix";
+        static final String TESTCASE_SUFFIX = "testcase-suffix";
+        static final String PLANNEDIN= "plannedin";
+        static final String JENKINSJOBS= "jenkinsjobs";
+        static final String NOTES ="notes";
+        static final String TEMPLATE_ID = "template-id";
+        static final String TC_SELECTOR_NAME = "testcase-selector-name";
+        static final String TC_SELECTOR_VAL = "testcase-selector-val";
+        static final String XUNIT_SELECTOR_NAME = "xunit-selector-name";
+        static final String XUNIT_SELECTOR_VAL = "xunit-selector-val";
 
-        public static final String TC_IMPORTER_ENABLED = "testcase-importer-enabled";
-        public static final String XUNIT_IMPORTER_ENABLED = "xunit-importer-enabled";
-        public static final String TR_DRY_RUN = "testrun-dry-run";
-        public static final String TR_SET_FINISHED = "testrun-set-finished";
-        public static final String TR_INCLUDE_SKIPPED = "testrun-include-skipped";
+        static final String TC_IMPORTER_ENABLED = "testcase-importer-enabled";
+        static final String XUNIT_IMPORTER_ENABLED = "xunit-importer-enabled";
+        static final String TR_DRY_RUN = "testrun-dry-run";
+        static final String TR_SET_FINISHED = "testrun-set-finished";
+        static final String TR_INCLUDE_SKIPPED = "testrun-include-skipped";
 
-        public static final String TC_IMPORTER_TIMEOUT = "testcase-importer-timeout";
-        public static final String XUNIT_IMPORTER_TIMEOUT = "xunit-importer-timeout";
-        public static final String TR_PROPERTY = "property";
+        static final String TC_IMPORTER_TIMEOUT = "testcase-importer-timeout";
+        static final String XUNIT_IMPORTER_TIMEOUT = "xunit-importer-timeout";
+        static final String TR_PROPERTY = "property";
 
         // This option takes the form of name,user,pw,url.  If any are missing, leave it empty. name is required
         // --server polarion,ci-user,&$Err,http://some/url
         // --server kerb,stoner,myP@ss,
         // --server ossrh,stoner,ossrh-p@ss,
-        public static final String SERVER = "server";
+        static final String SERVER = "server";
     }
 
-    public enum TestsuiteProps {
+    private enum TestsuiteProps {
         USER("polarion-user-id"),
         PROJECT("polarion-project-id"),
         TESTRUN_FINISHED("polarion-set-testrun-finished"),
@@ -486,7 +485,7 @@ public class Configurator implements IJAXBHelper {
     /**
      * Backs up the original xml-config.xml
      */
-    public void rotator() {
+    private void rotator() {
         // Create a backup directory
         File dir = new File(this.configPath);
         Path pdir = dir.toPath();
@@ -602,6 +601,11 @@ public class Configurator implements IJAXBHelper {
         IJAXBHelper.marshaller(suites ,newxunit, jaxb.getXSDFromResource(Testsuites.class));
     }
 
+    /**
+     * Program to edit xml-config.xml or a testng-polarion.xml file
+     *
+     * @param args
+     */
     public static void main(String[] args) {
         Configurator cfg = new Configurator();
         cfg.parse(args);

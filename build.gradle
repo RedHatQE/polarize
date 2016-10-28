@@ -64,7 +64,7 @@ test {
 
 shadowJar {
     manifest {
-        attributes('Implementation-Title': 'Jong',
+        attributes('Implementation-Title': 'polarize',
                    'Implementation-Version': version,
                    'Main-Class': 'com.github.redhatqe.polarize.JarHelper')
     }

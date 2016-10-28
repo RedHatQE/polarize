@@ -218,8 +218,13 @@ public class XUnitReporter implements IReporter {
             case ITestResult.FAILURE:
                 if (t != null && !(t instanceof java.lang.AssertionError)) {
                     Error err = new Error();
-                    err.setMessage(t.getMessage().substring(128));
-                    err.setContent(t.getMessage());
+                    String msg = t.getMessage().length() > 128 ? t.getMessage().substring(128) : t.getMessage();
+                    err.setMessage(msg);
+                    StringBuilder sb = new StringBuilder();
+                    Arrays.stream(t.getStackTrace()).forEach(st -> {
+                        sb.append(String.format(st.toString() + "\n"));
+                    });
+                    err.setContent(sb.toString());
                     tc.getError().add(err);
                 }
                 else {
@@ -465,8 +470,7 @@ public class XUnitReporter implements IReporter {
         Path path = Paths.get(tcXMLPath, projID, className, methName + ".xml");
         File xmlDesc = path.toFile();
         if(!xmlDesc.exists()) {
-            XUnitReporter.logger.error("Could not find xml description file for " + path.toString());
-            throw new XMLDescriptionError();
+            throw new XMLDescriptionError("Could not find xml description file for " + path.toString());
         }
 
         return xmlDesc;
@@ -490,7 +494,7 @@ public class XUnitReporter implements IReporter {
             throw new RequirementAnnotationException();
         }
         else
-            throw new XMLDescriptionError();
+            throw new XMLDescriptionError(String.format("Unknown class %s to unmarshall to", t.toString()));
     }
 
     public static com.github.redhatqe.polarize.importer.testcase.Testcase

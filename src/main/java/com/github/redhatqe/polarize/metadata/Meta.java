@@ -26,6 +26,7 @@ public class Meta<T> {
     public List<Parameter> params = null;
     public String polarionID = "";
     public static final Logger logger = LoggerFactory.getLogger(Meta.class);
+    public Boolean dirty = false;
 
     public Meta() {
 
@@ -107,8 +108,6 @@ public class Meta<T> {
     }
 
     /**
-     * FIXME: I think this should go in Meta
-     *
      * Unmarshalls Testcase from XML pointed at in meta, and gets the Polarion ID
      *
      * @param tcPath path to the testcases
