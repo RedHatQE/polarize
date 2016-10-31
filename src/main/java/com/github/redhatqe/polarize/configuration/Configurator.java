@@ -10,6 +10,7 @@ import com.github.redhatqe.polarize.exceptions.XSDValidationError;
 import com.github.redhatqe.polarize.importer.xunit.Property;
 import com.github.redhatqe.polarize.importer.xunit.Testsuites;
 import com.github.redhatqe.polarize.utils.Tuple;
+import com.sun.org.apache.xpath.internal.operations.Bool;
 import joptsimple.OptionParser;
 import joptsimple.OptionSet;
 import joptsimple.OptionSpec;
@@ -48,12 +49,15 @@ public class Configurator implements IJAXBHelper {
     private String tcSelectorVal;
     private String xunitSelectorName;
     private String xunitSelectorVal;
+    private String newXunit;
+    private String currentXunit;
 
     private Boolean testcaseImporterEnabled;
     private Boolean xunitImporterEnabled;
     private Boolean testrunDryRun;
     private Boolean testrunSetFinished;
     private Boolean testrunIncludeSkipped;
+    private Boolean editConfig;
 
     private Integer testcaseTimeout;
     private Integer xunitTimeout;
@@ -106,6 +110,8 @@ public class Configurator implements IJAXBHelper {
         sOptToAccessors.put(Opts.XUNIT_SELECTOR_NAME, new Tuple<>(this::getXunitSelectorName,
                                                                   this::setXunitSelectorName));
         sOptToAccessors.put(Opts.XUNIT_SELECTOR_VAL, new Tuple<>(this::getXunitSelectorVal, this::setXunitSelectorVal));
+        sOptToAccessors.put(Opts.NEW_XUNIT, new Tuple<>(this::getNewXunit, this::setNewXunit));
+        sOptToAccessors.put(Opts.CURRENT_XUNIT, new Tuple<>(this::getCurrentXunit, this::setCurrentXunit));
 
         bOptToAccessors.put(Opts.TC_IMPORTER_ENABLED, new Tuple<>(this::getTestcaseImporterEnabled,
                 this::setTestcaseImporterEnabled));
@@ -134,6 +140,8 @@ public class Configurator implements IJAXBHelper {
         // Non standard parsing required for these
         sSpecs.put(Opts.SERVER, this.parser.accepts(Opts.SERVER).withRequiredArg().ofType(String.class));
         sSpecs.put(Opts.TR_PROPERTY, this.parser.accepts(Opts.TR_PROPERTY).withRequiredArg().ofType(String.class));
+        bSpecs.put(Opts.EDIT_CONFIG, this.parser.accepts(Opts.EDIT_CONFIG).withOptionalArg().ofType(Boolean.class)
+        .defaultsTo(Boolean.FALSE));
     }
 
     /**
@@ -427,6 +435,9 @@ public class Configurator implements IJAXBHelper {
         static final String TC_IMPORTER_TIMEOUT = "testcase-importer-timeout";
         static final String XUNIT_IMPORTER_TIMEOUT = "xunit-importer-timeout";
         static final String TR_PROPERTY = "property";
+        static final String NEW_XUNIT = "new-xunit";
+        static final String CURRENT_XUNIT = "current-xunit";
+        static final String EDIT_CONFIG = "edit-config";
 
         // This option takes the form of name,user,pw,url.  If any are missing, leave it empty. name is required
         // --server polarion,ci-user,&$Err,http://some/url
@@ -486,7 +497,6 @@ public class Configurator implements IJAXBHelper {
      * Backs up the original xml-config.xml
      */
     private void rotator() {
-        // Create a backup directory
         File dir = new File(this.configPath);
         Path pdir = dir.toPath();
         Path parent = pdir.getParent();
@@ -610,9 +620,14 @@ public class Configurator implements IJAXBHelper {
         Configurator cfg = new Configurator();
         cfg.parse(args);
         String path = cfg.configPath;
-        cfg.editTestSuite("/tmp/testng-polarion.xml", "/tmp/modified-polarion.xml");
-        cfg.rotator();
-        Configurator.writeOut(path, cfg.cfg);
+        String testng = cfg.config.xunit.getFile().getPath();
+        String newXunit = cfg.getNewXunit();
+        cfg.editTestSuite(testng, newXunit);
+
+        if (cfg.getEditConfig()) {
+            cfg.rotator();
+            Configurator.writeOut(path, cfg.cfg);
+        }
     }
 
     public String getTestrunTitle() {
@@ -765,6 +780,30 @@ public class Configurator implements IJAXBHelper {
 
     public void setXunitSelectorVal(String xunitSelectorVal) {
         this.xunitSelectorVal = xunitSelectorVal;
+    }
+
+    public String getNewXunit() {
+        return newXunit;
+    }
+
+    public void setNewXunit(String newXunit) {
+        this.newXunit = newXunit;
+    }
+
+    public String getCurrentXunit() {
+        return currentXunit;
+    }
+
+    public void setCurrentXunit(String currentXunit) {
+        this.currentXunit = currentXunit;
+    }
+
+    public Boolean getEditConfig() {
+        return editConfig;
+    }
+
+    public void setEditConfig(Boolean editConfig) {
+        this.editConfig = editConfig;
     }
 
     @Override
