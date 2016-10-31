@@ -275,3 +275,7 @@ task copyTask(type: Copy) {
 task classPath << {
     println sourceSets.main.runtimeClasspath.asPath
 }
+
+task version {
+    println version
+}
