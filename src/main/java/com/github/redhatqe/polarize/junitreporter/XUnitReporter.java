@@ -18,6 +18,9 @@ import com.github.redhatqe.polarize.importer.xunit.*;
 import com.github.redhatqe.polarize.importer.xunit.Error;
 import com.github.redhatqe.polarize.metadata.Requirement;
 import com.github.redhatqe.polarize.metadata.TestDefinition;
+import joptsimple.OptionParser;
+import joptsimple.OptionSet;
+import joptsimple.OptionSpec;
 import org.apache.http.HttpEntity;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.slf4j.Logger;
@@ -178,7 +181,10 @@ public class XUnitReporter implements IReporter {
                 // TODO: figure out if the xunit import was successful.  If it wasn't, what do we do?  Retry?  Perhaps,
                 // depending on the exception type, we might be able to retry.  Finding the log when we get an exception
                 // will be very difficult
-                JsonNode root = node.get().get("root");
+                JsonNode n = node.get();
+                if (n.size() == 0)
+                    return;
+                JsonNode root = n.get("root");
                 if (root.get("status").textValue().equals("passed")) {
                     logger.info("XUnit importer was successful");
                     logger.info(root.get("testrun-url").textValue());
@@ -527,11 +533,31 @@ public class XUnitReporter implements IReporter {
      * @param args url, user, pw, path to xml, selector
      */
     public static void main(String[] args) throws InterruptedException, ExecutionException, JMSException {
-        if (args.length != 5) {
-            XUnitReporter.logger.error("url, user, pw, path to xml");
-            return;
-        }
-        File xml = new File(args[3]);
-        ImporterRequest.sendImportRequest(args[0], args[1], args[2], xml, args[4], XUnitReporter.xunitMessageHandler());
+        OptionParser parser = new OptionParser();
+
+        String defaultUrl = XUnitReporter.config.polarion.getUrl();
+        defaultUrl += XUnitReporter.config.xunit.getEndpoint().getRoute();
+        String defaultSelector = "%s='%s'";
+        defaultSelector = String.format(defaultSelector, XUnitReporter.config.xunit.getSelector().getName(),
+                XUnitReporter.config.xunit.getSelector().getVal());
+
+        OptionSpec<String> urlOpt = parser.accepts("url").withRequiredArg().ofType(String.class)
+                .defaultsTo(defaultUrl);
+        OptionSpec<String> userOpt = parser.accepts("user").withRequiredArg().ofType(String.class)
+                .defaultsTo(XUnitReporter.config.kerb.getUser());
+        OptionSpec<String> pwOpt = parser.accepts("pass").withRequiredArg().ofType(String.class)
+                .defaultsTo(XUnitReporter.config.kerb.getPassword());
+        OptionSpec<String> xunitOpt = parser.accepts("xunit").withRequiredArg().ofType(String.class).required();
+        OptionSpec<String> selectorOpt = parser.accepts("selector").withRequiredArg().ofType(String.class)
+                .defaultsTo(defaultSelector);
+
+        OptionSet opts = parser.parse(args);
+        File xml = new File(opts.valueOf(xunitOpt));
+        String url = opts.valueOf(urlOpt);
+        String pw = opts.valueOf(pwOpt);
+        String user = opts.valueOf(userOpt);
+        String selector = opts.valueOf(selectorOpt);
+
+        ImporterRequest.sendImportRequest(url, user, pw, xml, selector, XUnitReporter.xunitMessageHandler());
     }
 }
