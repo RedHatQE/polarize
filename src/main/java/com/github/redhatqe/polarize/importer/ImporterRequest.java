@@ -1,8 +1,6 @@
 package com.github.redhatqe.polarize.importer;
 
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.github.redhatqe.polarize.TestDefinitionProcessor;
-import com.github.redhatqe.polarize.junitreporter.XUnitReporter;
 import com.github.redhatqe.polarize.messagebus.CIBusListener;
 import com.github.redhatqe.polarize.IFileHelper;
 import com.github.redhatqe.polarize.IJAXBHelper;
@@ -13,6 +11,7 @@ import org.apache.http.auth.AuthScope;
 import org.apache.http.auth.UsernamePasswordCredentials;
 import org.apache.http.client.CredentialsProvider;
 import org.apache.http.client.methods.CloseableHttpResponse;
+import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.conn.ssl.NoopHostnameVerifier;
 import org.apache.http.entity.ContentType;
@@ -25,9 +24,13 @@ import org.slf4j.LoggerFactory;
 import javax.jms.JMSException;
 import javax.net.ssl.SSLContext;
 import java.io.*;
+import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.net.URL;
 import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.security.KeyManagementException;
 import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
@@ -37,6 +40,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * Created by stoner on 8/31/16.
@@ -152,6 +156,32 @@ public class ImporterRequest {
         System.out.println(response.toString());
     }
 
+    private static Optional<File> getBody(HttpResponse response, String path) {
+        if (response.getStatusLine().getStatusCode() != 200) {
+            logger.error("Status was %s", response.getStatusLine().toString());
+            return Optional.empty();
+        }
+
+        HttpEntity entity = response.getEntity();
+        Path file = null;
+        try {
+            BufferedReader bfr = new BufferedReader(new InputStreamReader(entity.getContent()));
+            String body = bfr.lines().collect(Collectors.joining("\n"));
+            System.out.println(body);
+
+            file = Paths.get(path);
+            try (BufferedWriter writer = Files.newBufferedWriter(file)) {
+                writer.write(body);
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        if (file == null)
+            return Optional.empty();
+        else
+            return Optional.of(file.toFile());
+    }
+
     /**
      * Makes an importer REST call to upload testrun results
      *
@@ -193,5 +223,79 @@ public class ImporterRequest {
         // FIXME: Should I add a message handler here?  or just do it externally?
         handler.accept(maybeNode);
         return maybeNode;
+    }
+
+    public static Optional<File> get(String url, String user, String pw, String path) {
+        CloseableHttpResponse response;
+        CredentialsProvider provider = new BasicCredentialsProvider();
+        UsernamePasswordCredentials credentials = new UsernamePasswordCredentials(user, pw);
+        provider.setCredentials(AuthScope.ANY, credentials);
+        Optional<File> maybeFile = Optional.empty();
+
+        HttpClientBuilder builder = HttpClients.custom()
+                .setDefaultCredentialsProvider(provider)
+                .setRedirectStrategy(new LaxRedirectStrategy());
+
+        try {
+            URI server = null;
+            try {
+                server = new URI(url);
+            } catch (URISyntaxException e) {
+                e.printStackTrace();
+            }
+            CloseableHttpClient httpClient;
+            if(server != null && server.getScheme().equals("https")) {
+                // setup a Trust Strategy that allows all certificates.
+                SSLContext sslContext = null;
+                try {
+                    sslContext = new SSLContextBuilder().loadTrustMaterial(null, (arg0, arg1) -> true).build();
+                } catch (NoSuchAlgorithmException e) {
+                    e.printStackTrace();
+                } catch (KeyManagementException e) {
+                    ImporterRequest.logger.error("KeyManagement error");
+                    e.printStackTrace();
+                } catch (KeyStoreException e) {
+                    ImporterRequest.logger.error("KeyStore error");
+                    e.printStackTrace();
+                }
+                builder.setSSLHostnameVerifier(new NoopHostnameVerifier())
+                        .setSSLContext(sslContext)
+                        .setDefaultCredentialsProvider(provider)
+                        .setRedirectStrategy(new LaxRedirectStrategy());
+            }
+
+            httpClient = builder.build();
+            HttpGet getMethod = new HttpGet(url);
+            response = httpClient.execute(getMethod);
+            ImporterRequest.logger.info(response.toString());
+
+            maybeFile = ImporterRequest.getBody(response, path);
+            response.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+        return maybeFile;
+    }
+
+    public static void main(String[] args) {
+        // Get a file from jenkins
+        String url = "https://rhsm-jenkins.rhev-ci-vms.eng.rdu2.redhat.com/view/Scratch/job/stoner-pong-test/" +
+                "lastSuccessfulBuild/artifact/test-output/testng-results.xml";
+
+        String user = args[0];
+        String pw = args[1];
+        String path = args[2];
+        Optional<File> file = ImporterRequest.get(url, user, pw, path);
+        if (file.isPresent()) {
+            Path fpath = file.get().toPath();
+            try {
+                BufferedReader bfr = Files.newBufferedReader(fpath);
+                String body = bfr.lines().collect(Collectors.joining("\n"));
+                System.out.println(body);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
     }
 }
