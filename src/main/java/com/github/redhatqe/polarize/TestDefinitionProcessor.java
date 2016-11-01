@@ -3,8 +3,7 @@ package com.github.redhatqe.polarize;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.github.redhatqe.polarize.configuration.ConfigType;
-import com.github.redhatqe.polarize.configuration.XMLConfig;
+import com.github.redhatqe.polarize.configuration.*;
 import com.github.redhatqe.polarize.exceptions.*;
 import com.github.redhatqe.polarize.importer.ImporterRequest;
 import com.github.redhatqe.polarize.importer.testcase.*;
@@ -277,12 +276,12 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         System.out.println("In process() method");
 
         // load the mapping file
-        File mapPath = new File(this.cfg.getMapping().getPath());
+        File mapPath = new File(this.config.getMappingPath());
         System.out.println(mapPath.toString());
         if (mapPath.exists()) {
             System.out.println("Loading the map");
             this.mappingFile = FileHelper.loadMapping(mapPath);
-            System.out.println(this.mappingFile.toString());
+            //System.out.println(this.mappingFile.toString());
         }
 
         /* ************************************************************************************
@@ -339,6 +338,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
     private static void updateMappingFile(Map<String, Map<String, IdParams>> mapFile,
                                          Map<String, Map<String, Meta<TestDefinition>>> methMap,
                                          String tcpath) {
+        List<String> badFunctions = new ArrayList<>();
         methMap.entrySet().forEach(e -> {
             String fnName = e.getKey();
             Map<String, Meta<TestDefinition>> projectToMeta = e.getValue();
@@ -347,17 +347,39 @@ public class TestDefinitionProcessor extends AbstractProcessor {
                 Meta<TestDefinition> meta = es.getValue();
                 String id = meta.getPolarionIDFromTestcase()
                         .orElseGet(() -> meta.getPolarionIDFromXML(tcpath).orElse(""));
+                Boolean badFn = false;
                 // Check if the mapFile has the corresponding project of this function name
                 if (!mapFile.containsKey(fnName) || !mapFile.get(fnName).containsKey(project)) {
-                    if (id.equals("")) {
-                        String err = "No ID in XML or annotation.  Check your Annotation %s";
-                        err = String.format(err, meta.dirty ? meta.qualifiedName : "");
-                        throw new PolarionMappingError(err);
-                    }
-                    TestDefinitionProcessor.addToMapFile(mapFile, meta, id);
+                    if (id.equals(""))
+                        badFn = true;
                 }
+                else {
+                    String newid = mapFile.get(fnName).get(project).getId();
+                    if (newid.equals(""))
+                        badFn= true;
+                    if (id.equals(""))
+                        id = newid;
+                }
+
+                if (badFn) {
+                    String err = "No ID in XML or annotation.  Check your Annotation %s in %s";
+                    err = String.format(err, meta.qualifiedName, project);
+                    logger.error(err);
+                    // throw new PolarionMappingError(err);
+                    badFunctions.add(err);
+                }
+                TestDefinitionProcessor.addToMapFile(mapFile, meta, id);
             });
         });
+        if (badFunctions.size() > 0)
+            logger.error("You must check your annotations or enable the TestCase importer in your config" +
+                    "before using your project with the XUnit Importer.  Please see the file " +
+                    "/tmp/bad-functions.txt for all the functions to check");
+        try {
+            Files.write(Paths.get("/tmp/bad-functions.txt"), badFunctions);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 
     /**
@@ -401,7 +423,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
     private Optional<String> initTestcases(String selectorName, String selectorValue) {
         String author = this.cfg.getAuthor();
         String ID = this.cfg.getProject();
-        File testXml = new File(this.config.testcase.getFile().getPath());
+        File testXml = new File(this.config.getTCImporterFilePath());
         return TestDefinitionProcessor.initTestcases(selectorName, selectorValue, ID, author, testXml, this.tcMap,
                 this.testcases);
     }
@@ -610,7 +632,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         if (!this.config.testcase.isEnabled())
             return Optional.empty();
         String url = this.config.polarion.getUrl() + this.config.testcase.getEndpoint().getRoute();
-        File testcaseXml = new File(this.config.testcase.getFile().getPath());
+        File testcaseXml = new File(this.config.getTestcasesXMLPath());
         String user = this.config.polarion.getUser();
         String pw = this.config.polarion.getPassword();
         return ImporterRequest.sendImportRequest(url, user, pw, testcaseXml, selector, this.testcaseImportHandler());
@@ -1180,7 +1202,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         this.testCaseToMeta = new HashMap<>();
         this.config = new XMLConfig(null);
         this.cfg = this.config.config;
-        this.tcPath = this.cfg.getTestcasesXml().getPath();
+        this.tcPath = this.config.getTestcasesXMLPath();
     }
 
     @Override

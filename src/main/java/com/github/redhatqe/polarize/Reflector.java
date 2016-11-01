@@ -60,6 +60,7 @@ public class Reflector {
         testDefs = new ArrayList<>();
         mappingFile = FileHelper.loadMapping(new File(config.config.getMapping().getPath()));
         tcPath = config.config.getTestcasesXml().getPath();
+        tcPath = config.getTestcasesXMLPath();
     }
 
 
@@ -67,6 +68,12 @@ public class Reflector {
         this.testsToClasses.entrySet().forEach((es) -> System.out.println(es.getKey() + "=" + es.getValue()));
     }
 
+    /**
+     *
+     * @param c
+     * @param <T>
+     * @return
+     */
     private <T> List<Meta<TestDefinition>> getTestDefMetaData(Class<T> c) {
         Method[] methods = c.getMethods();
         List<Method> meths = new ArrayList<>(Arrays.asList(methods));
@@ -233,7 +240,7 @@ public class Reflector {
         String selector = String.format("%s='%s'", sName, sValue);
         String ID = this.config.config.getProject();
         String author = this.config.config.getAuthor();
-        File tcXML = new File(this.config.testcase.getFile().getPath());
+        File tcXML = new File(this.config.getTCImporterFilePath());
         Optional<String> maybe = TestDefinitionProcessor.initTestcases(sName, sValue, ID, author, tcXML, this.tcMap,
                                                                        this.testcases);
         if (!maybe.isPresent())

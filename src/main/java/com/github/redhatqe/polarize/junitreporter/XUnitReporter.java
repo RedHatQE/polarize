@@ -470,7 +470,7 @@ public class XUnitReporter implements IReporter {
      * @return File which is path to the fully qualified method
      */
     private static File getXMLDescFile(String className, String methName) {
-        String tcXMLPath = cfg.getTestcasesXml().getPath();
+        String tcXMLPath = config.getTestcasesXMLPath();
         String projID = cfg.getProject();
 
         Path path = Paths.get(tcXMLPath, projID, className, methName + ".xml");
