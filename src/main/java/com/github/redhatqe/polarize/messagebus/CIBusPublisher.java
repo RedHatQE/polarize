@@ -1,34 +1,33 @@
 package com.github.redhatqe.polarize.messagebus;
 
-import com.github.redhatqe.polarize.Configurator;
+import com.github.redhatqe.polarize.configuration.XMLConfig;
 import org.apache.activemq.ActiveMQConnectionFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.jms.*;
-import java.util.Map;
 
 /**
  * Publishes messages to the central CI Message Bus
  *
  */
 public class CIBusPublisher {
-    private Map<String, String> polarizeConfig;
+    private XMLConfig polarizeConfig;
     private Logger logger;
 
     public CIBusPublisher() {
-        this.polarizeConfig = Configurator.loadConfiguration();
+        this.polarizeConfig = new XMLConfig(null);
         this.logger = LoggerFactory.getLogger(CIBusListener.class);
     }
 
     public void sendMessage(String text) {
-        String brokerUrl = this.polarizeConfig.get("broker");
+        String brokerUrl = this.polarizeConfig.broker.getUrl();
         ActiveMQConnectionFactory factory = new ActiveMQConnectionFactory(brokerUrl);
         Connection connection;
         MessageProducer producer;
 
-        String user = this.polarizeConfig.get("kerb.user");
-        String pw = this.polarizeConfig.get("kerb.pass");
+        String user = this.polarizeConfig.kerb.getUser();
+        String pw = this.polarizeConfig.kerb.getPassword();
         factory.setUserName(user);
         factory.setPassword(pw);
         try {

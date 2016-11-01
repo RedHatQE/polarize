@@ -1,7 +1,8 @@
 package com.github.redhatqe.polarize.messagebus;
 
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.github.redhatqe.polarize.Configurator;
+import com.github.redhatqe.polarize.configuration.Configurator;
+import com.github.redhatqe.polarize.configuration.XMLConfig;
 import com.github.redhatqe.polarize.exceptions.ConfigurationError;
 import com.github.redhatqe.polarize.utils.Tuple;
 import org.apache.activemq.*;
@@ -18,7 +19,6 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.util.Enumeration;
-import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Supplier;
@@ -27,24 +27,33 @@ import java.util.function.Supplier;
  * A Class that provides functionality to listen to the CI Message Bus
  */
 public class CIBusListener {
-    Map<String, String> polarizeConfig;
+    //Map<String, String> polarizeConfig;
+    Configurator configurator;
+    XMLConfig polarizeConfig;
     private Logger logger;
 
-    public CIBusListener(Map<String, String> config) {
-        this.polarizeConfig = config;
+    public CIBusListener(String configpath) {
+        this.configurator = new Configurator(configpath);
+        this.polarizeConfig = this.configurator.config;
+        this.logger = LoggerFactory.getLogger(CIBusListener.class);
+    }
+
+    public CIBusListener() {
+        this.configurator = new Configurator();
+        this.polarizeConfig = this.configurator.config;
         this.logger = LoggerFactory.getLogger(CIBusListener.class);
     }
 
     public Optional<Tuple<Connection, Message>> waitForMessage(String selector) {
-        String brokerUrl = this.polarizeConfig.get("broker");
+        String brokerUrl = this.polarizeConfig.broker.getUrl();
         ActiveMQConnectionFactory factory = new ActiveMQConnectionFactory(brokerUrl);
         Connection connection;
         MessageConsumer consumer;
         Message msg;
 
         try {
-            String user = this.polarizeConfig.get("kerb.user");
-            String pw = this.polarizeConfig.get("kerb.pass");
+            String user = this.polarizeConfig.kerb.getUser();
+            String pw = this.polarizeConfig.kerb.getPassword();
             factory.setUserName(user);
             factory.setPassword(pw);
             connection = factory.createConnection();
@@ -60,7 +69,7 @@ public class CIBusListener {
             this.logger.debug(String.format("Using selector of:\n%s", selector));
             connection.start();
             consumer = session.createConsumer(dest, selector);
-            String timeout = this.polarizeConfig.getOrDefault("importer.timeout", "600000");
+            String timeout = this.polarizeConfig.xunit.getTimeout().getMillis();
             msg = consumer.receive(Integer.parseInt(timeout));
 
         } catch (JMSException e) {
@@ -78,15 +87,15 @@ public class CIBusListener {
      * @return
      */
     public Optional<Tuple<Connection, ObjectNode>> tapIntoMessageBus(String selector) {
-        String brokerUrl = this.polarizeConfig.get("broker");
+        String brokerUrl = this.polarizeConfig.broker.getUrl();
         ActiveMQConnectionFactory factory = new ActiveMQConnectionFactory(brokerUrl);
         Connection connection;
         MessageConsumer consumer;
         ObjectMapper mapper = new ObjectMapper();
         ObjectNode root = mapper.createObjectNode();
         try {
-            factory.setUserName(this.polarizeConfig.get("kerb.user"));
-            factory.setPassword(this.polarizeConfig.get("kerb.pass"));
+            factory.setUserName(this.polarizeConfig.kerb.getUser());
+            factory.setPassword(this.polarizeConfig.kerb.getPassword());
             connection = factory.createConnection();
             connection.setClientID("polarize");
             connection.setExceptionListener(exc -> this.logger.error(exc.getMessage()));
@@ -179,7 +188,7 @@ public class CIBusListener {
     public static Supplier<Optional<ObjectNode>> getCIMessage(String selector) {
         return () -> {
             ObjectNode root = null;
-            CIBusListener bl = new CIBusListener(com.github.redhatqe.polarize.Configurator.loadConfiguration());
+            CIBusListener bl = new CIBusListener();
             Optional<Tuple<Connection, Message>> maybeConn = bl.waitForMessage(selector);
             if (!maybeConn.isPresent()) {
                 bl.logger.error("No Connection object found");
@@ -217,7 +226,7 @@ public class CIBusListener {
      * @param args
      */
     public static void main(String[] args) throws ExecutionException, InterruptedException, JMSException {
-        CIBusListener bl = new CIBusListener(Configurator.loadConfiguration());
+        CIBusListener bl = new CIBusListener();
         String responseName = args[0];
 
         // waitForMessage will block here until we get a message or we time out
