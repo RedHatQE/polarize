@@ -16,16 +16,15 @@ import javax.xml.bind.annotation.XmlValue;
 
 
 /**
- * <p>Java class for selectorType complex type.
+ * <p>Java class for basedir-Type complex type.
  * 
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="selectorType">
+ * &lt;complexType name="basedir-Type">
  *   &lt;simpleContent>
  *     &lt;extension base="&lt;http://www.w3.org/2001/XMLSchema>string">
- *       &lt;attribute name="name" type="{http://www.w3.org/2001/XMLSchema}string" />
- *       &lt;attribute name="val" type="{http://www.w3.org/2001/XMLSchema}string" />
+ *       &lt;attribute name="path" type="{http://www.w3.org/2001/XMLSchema}string" />
  *     &lt;/extension>
  *   &lt;/simpleContent>
  * &lt;/complexType>
@@ -34,17 +33,15 @@ import javax.xml.bind.annotation.XmlValue;
  * 
  */
 @XmlAccessorType(XmlAccessType.FIELD)
-@XmlType(name = "selectorType", propOrder = {
+@XmlType(name = "basedir-Type", propOrder = {
     "value"
 })
-public class SelectorType {
+public class BasedirType {
 
     @XmlValue
     protected String value;
-    @XmlAttribute(name = "name")
-    protected String name;
-    @XmlAttribute(name = "val")
-    protected String val;
+    @XmlAttribute(name = "path")
+    protected String path;
 
     /**
      * Gets the value of the value property.
@@ -71,51 +68,27 @@ public class SelectorType {
     }
 
     /**
-     * Gets the value of the name property.
+     * Gets the value of the path property.
      * 
      * @return
      *     possible object is
      *     {@link String }
      *     
      */
-    public String getName() {
-        return name;
+    public String getPath() {
+        return path;
     }
 
     /**
-     * Sets the value of the name property.
+     * Sets the value of the path property.
      * 
      * @param value
      *     allowed object is
      *     {@link String }
      *     
      */
-    public void setName(String value) {
-        this.name = value;
-    }
-
-    /**
-     * Gets the value of the val property.
-     * 
-     * @return
-     *     possible object is
-     *     {@link String }
-     *     
-     */
-    public String getVal() {
-        return val;
-    }
-
-    /**
-     * Sets the value of the val property.
-     * 
-     * @param value
-     *     allowed object is
-     *     {@link String }
-     *     
-     */
-    public void setVal(String value) {
-        this.val = value;
+    public void setPath(String value) {
+        this.path = value;
     }
 
 }

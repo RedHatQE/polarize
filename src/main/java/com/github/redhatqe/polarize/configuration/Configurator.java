@@ -10,7 +10,6 @@ import com.github.redhatqe.polarize.exceptions.XSDValidationError;
 import com.github.redhatqe.polarize.importer.xunit.Property;
 import com.github.redhatqe.polarize.importer.xunit.Testsuites;
 import com.github.redhatqe.polarize.utils.Tuple;
-import com.sun.org.apache.xpath.internal.operations.Bool;
 import joptsimple.OptionParser;
 import joptsimple.OptionSet;
 import joptsimple.OptionSpec;
@@ -31,7 +30,7 @@ import java.util.stream.Collectors;
  * Class that defines an API to edit the xml-config.xml file
  */
 public class Configurator implements IJAXBHelper {
-    public Logger logger;
+    public static Logger logger = LoggerFactory.getLogger(Configurator.class);
     public OptionParser parser;
     public XMLConfig config;
     public ConfigType cfg;
@@ -76,24 +75,21 @@ public class Configurator implements IJAXBHelper {
 
     private OptionSet opts;
 
-    public Configurator() {
+    private void init(XMLConfig cfg) {
         this.configPath = java.lang.System.getProperty("user.home") + "/.polarize/xml-config.xml";
-        this.logger = LoggerFactory.getLogger(Configurator.class);
-        this.config = new XMLConfig(null);
+        this.config = cfg;
         this.cfg = this.config.config;
         this.parser = new OptionParser();
         this.servers = new ArrayList<>();
         this.configureParser();
     }
 
+    public Configurator() {
+        this.init(new XMLConfig(null));
+    }
+
     public Configurator(String configPath) {
-        this.configPath = configPath;
-        this.logger = LoggerFactory.getLogger(Configurator.class);
-        this.config = new XMLConfig(new File(configPath));
-        this.cfg = this.config.config;
-        this.parser = new OptionParser();
-        this.servers = new ArrayList<>();
-        this.configureParser();
+        this.init(new XMLConfig(new File(configPath)));
     }
 
     private void configureParser() {
@@ -496,8 +492,8 @@ public class Configurator implements IJAXBHelper {
     /**
      * Backs up the original xml-config.xml
      */
-    private void rotator() {
-        File dir = new File(this.configPath);
+    public static void rotator(String cfgPath) {
+        File dir = new File(cfgPath);
         Path pdir = dir.toPath();
         Path parent = pdir.getParent();
         Path backupDir = Paths.get(parent.toString(), "backup");
@@ -620,12 +616,12 @@ public class Configurator implements IJAXBHelper {
         Configurator cfg = new Configurator();
         cfg.parse(args);
         String path = cfg.configPath;
-        String testng = cfg.config.xunit.getFile().getPath();
+        String testng = cfg.config.getXunitImporterFilePath();
         String newXunit = cfg.getNewXunit();
         cfg.editTestSuite(testng, newXunit);
 
         if (cfg.getEditConfig()) {
-            cfg.rotator();
+            Configurator.rotator(path);
             Configurator.writeOut(path, cfg.cfg);
         }
     }

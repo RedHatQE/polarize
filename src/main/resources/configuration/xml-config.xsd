@@ -95,6 +95,14 @@
     <xs:attribute type="xs:string" name="type" use="optional"/>
   </xs:complexType>
 
+  <xs:complexType name="basedir-Type">
+    <xs:simpleContent>
+      <xs:extension base="xs:string">
+        <xs:attribute type="xs:string" name="path"/>
+      </xs:extension>
+    </xs:simpleContent>
+  </xs:complexType>
+
   <xs:complexType name="testcases-xmlType">
     <xs:simpleContent>
       <xs:extension base="xs:string">
@@ -113,6 +121,7 @@
 
   <xs:complexType name="configType">
     <xs:sequence>
+      <xs:element type="basedir-Type" name="basedir" minOccurs="0"/>
       <xs:element type="requirements-xmlType" name="requirements-xml"/>
       <xs:element type="testcases-xmlType" name="testcases-xml"/>
       <xs:element type="mappingType" name="mapping">
