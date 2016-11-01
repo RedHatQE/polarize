@@ -4,7 +4,7 @@ plugins {
 }
 
 group 'com.github.redhatqe.polarize'
-version '0.5.2'
+version '0.5.3-SNAPSHOT'
 String archivesBaseName = "polarize"
 String projectURL = 'https://github.com/RedHatQE/polarize'
 String devURL = 'git@github.com:RedHatQE/polarize.git'
@@ -71,6 +71,7 @@ shadowJar {
 }
 
 ext {
+    isReleaseVersion = !version.endsWith("SNAPSHOT")
     pomFilePath = pomPath
     pomFile = file(pomFilePath)
 }
@@ -127,6 +128,7 @@ if (arcPomFile.exists()) {
 }
 
 signing {
+    required { isReleaseVersion && gradle.taskGraph.hasTask("uploadArchives") }
     sign configurations.archives
 }
 
