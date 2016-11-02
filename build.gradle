@@ -71,7 +71,7 @@ shadowJar {
 }
 
 ext {
-    isReleaseVersion = !version.endsWith("SNAPSHOT")
+    isReleaseVersion = !version.endsWith("TESTING")
     pomFilePath = pomPath
     pomFile = file(pomFilePath)
 }
@@ -151,6 +151,17 @@ def getSignatureFiles = {
 def getPomSignature = {
     def sPom = project.tasks.signPom.signatureFiles.collect{it}
     return sPom[0]
+}
+
+def findPom(String ad) {
+    def arcDirFile = file(ad)
+    if (arcDirFile.exists()) {
+        // Get the files in the directory
+        def result = arcDirFile.list().any { s -> s.endsWith(".pom")}
+        //println result
+        return result
+    }
+    return false
 }
 
 publishing {
@@ -276,8 +287,4 @@ task copyTask(type: Copy) {
 
 task classPath << {
     println sourceSets.main.runtimeClasspath.asPath
-}
-
-task version {
-    println version
 }

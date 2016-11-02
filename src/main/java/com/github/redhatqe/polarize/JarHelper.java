@@ -7,6 +7,8 @@ import java.nio.file.FileAlreadyExistsException;
 import java.util.ArrayList;
 import java.util.List;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.redhatqe.polarize.metadata.Meta;
 import com.github.redhatqe.polarize.metadata.TestDefAdapter;
 import com.github.redhatqe.polarize.metadata.TestDefinition;
@@ -18,6 +20,8 @@ import joptsimple.OptionSet;
 import com.google.gson.Gson;
 
 import java.lang.reflect.Type;
+import java.util.Map;
+import java.util.TreeMap;
 import java.util.stream.Collectors;
 
 /**
@@ -97,6 +101,8 @@ public class JarHelper implements IJarHelper {
                 refl.methToProjectDef = refl.makeMethToProjectMeta();
                 refl.processTestDefs();
                 refl.testcasesImporterRequest();
+                String tcpath = refl.config.getTestcasesXMLPath();
+                TestDefinitionProcessor.updateMappingFile(refl.mappingFile, refl.methToProjectDef, tcpath);
 
                 refl.testDefAdapters = refl.testDefs.stream()
                         .map(m -> {
@@ -110,8 +116,10 @@ public class JarHelper implements IJarHelper {
                 List<Meta<TestDefAdapter>> sorted = Reflector.sortTestDefs(refl.testDefAdapters);
 
                 if (refl.methToProjectDef.size() > 0) {
-                    File mapPath = new File(refl.config.config.getMapping().getPath());
-                    TestDefinitionProcessor.createMappingFile(mapPath, refl.methToProjectDef, refl.mappingFile);
+                    File mapPath = new File(refl.config.getMappingPath());
+                    Map<String, Map<String, IdParams>> tmap;
+                    tmap = TestDefinitionProcessor.printSortedMappingFile(refl.mappingFile);
+                    TestDefinitionProcessor.createMappingFile(mapPath, refl.methToProjectDef, tmap);
                 }
 
                 String jsonDefs = gson.toJson(sorted, metaType);

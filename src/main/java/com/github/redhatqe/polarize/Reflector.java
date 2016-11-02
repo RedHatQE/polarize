@@ -6,10 +6,7 @@ import com.github.redhatqe.polarize.exceptions.MismatchError;
 import com.github.redhatqe.polarize.importer.ImporterRequest;
 import com.github.redhatqe.polarize.importer.testcase.Testcase;
 import com.github.redhatqe.polarize.importer.testcase.Testcases;
-import com.github.redhatqe.polarize.metadata.DefTypes;
-import com.github.redhatqe.polarize.metadata.Meta;
-import com.github.redhatqe.polarize.metadata.TestDefAdapter;
-import com.github.redhatqe.polarize.metadata.TestDefinition;
+import com.github.redhatqe.polarize.metadata.*;
 
 import java.io.File;
 import java.lang.annotation.Annotation;
@@ -20,6 +17,7 @@ import java.util.*;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -68,7 +66,68 @@ public class Reflector {
         this.testsToClasses.entrySet().forEach((es) -> System.out.println(es.getKey() + "=" + es.getValue()));
     }
 
+    private <T> List<Meta<TestDefinition>> getTestDefsMetaData(Class<T> c) {
+        Method[] methods = c.getMethods();
+        List<Method> meths = new ArrayList<>(Arrays.asList(methods));
+        List<Method> filtered = meths.stream()
+                .filter(m -> m.getAnnotation(TestDefinitions.class) != null)
+                .collect(Collectors.toList());
+        return filtered.stream().flatMap(m -> this.flatMapTestDefinitions(m, c))
+                .filter(meta -> !meta.className.isEmpty() && !meta.methName.isEmpty())
+                .collect(Collectors.toList());
+    }
+
+    private <T> Stream<Meta<TestDefinition>> flatMapTestDefinitions(Method m, Class<T> c) {
+        TestDefinition ann = m.getAnnotation(TestDefinition.class);
+        String className = c.getName();
+        String pkg = c.getPackage().getName();
+        String methName = m.getName();
+        String qual = className + "." + methName;
+        DefTypes.Project[] projects = ann.projectID();
+        String[] polarionIDs = ann.testCaseID();
+        if (polarionIDs.length > 0 && polarionIDs.length != projects.length)
+            logger.error("Length of projects and polarionIds not the same");
+
+        if (className.contains(".")) {
+            String[] split = className.split("\\.");
+            className = split[split.length - 1];
+        }
+
+        // TODO: This doesnt get clojure param names. Might need to make Reflector and JarHelper
+        // in clojure, and get the args that way.
+        Parameter[] params = m.getParameters();
+        List<com.github.redhatqe.polarize.importer.testcase.Parameter> args = Arrays.stream(params)
+                .map(arg -> {
+                    com.github.redhatqe.polarize.importer.testcase.Parameter pm = new
+                            com.github.redhatqe.polarize.importer.testcase.Parameter();
+                    pm.setName(arg.getName());
+                    pm.setScope("local");
+                    return pm;
+                })
+                .collect(Collectors.toList());
+
+        List<Meta<TestDefinition>> metas = new ArrayList<>();
+        for(int i = 0; i < projects.length; i++) {
+            String project = projects[i].toString();
+            String id = "";
+            Boolean dirty = false;
+            try {
+                id = polarionIDs[i];
+            }
+            catch (ArrayIndexOutOfBoundsException ae) {
+                dirty = true;
+            }
+            Meta<TestDefinition> meta = Meta.create(qual, methName, className, pkg, project, id, args,
+                    ann);
+            if (dirty)
+                meta.dirty = dirty;
+            metas.add(meta);
+        }
+        return metas.stream().map( me -> me);
+    }
+
     /**
+     * This is the equivalent of  TestDefinitionProcess.makeMetaFromTestDefinition
      *
      * @param c
      * @param <T>
@@ -80,55 +139,7 @@ public class Reflector {
         List<Method> filtered = meths.stream()
                         .filter(m -> m.getAnnotation(TestDefinition.class) != null)
                         .collect(Collectors.toList());
-        return filtered.stream().flatMap(m -> {
-                            TestDefinition ann = m.getAnnotation(TestDefinition.class);
-                            String className = c.getName();
-                            Package pkg = c.getPackage();
-                            String p = pkg.getName();
-                            String methName = m.getName();
-                            String qual = className + "." + methName;
-                            DefTypes.Project[] projects = ann.projectID();
-                            String[] polarionIDs = ann.testCaseID();
-                            if (polarionIDs.length > 0 && polarionIDs.length != projects.length)
-                                logger.error("Length of projects and polarionIds not the same");
-
-                            if (className.contains(".")) {
-                                String[] split = className.split("\\.");
-                                className = split[split.length - 1];
-                            }
-
-                            // TODO: This doesnt get clojure param names. Might need to make Reflector and JarHelper
-                            // in clojure, and get the args that way.
-                            Parameter[] params = m.getParameters();
-                            List<com.github.redhatqe.polarize.importer.testcase.Parameter> args = Arrays.stream(params)
-                                    .map(arg -> {
-                                        com.github.redhatqe.polarize.importer.testcase.Parameter pm = new
-                                                com.github.redhatqe.polarize.importer.testcase.Parameter();
-                                        pm.setName(arg.getName());
-                                        pm.setScope("local");
-                                        return pm;
-                                    })
-                                    .collect(Collectors.toList());
-
-                            List<Meta<TestDefinition>> metas = new ArrayList<>();
-                            for(int i = 0; i < projects.length; i++) {
-                                String project = projects[i].toString();
-                                String id = "";
-                                Boolean dirty = false;
-                                try {
-                                    id = polarionIDs[i];
-                                }
-                                catch (ArrayIndexOutOfBoundsException ae) {
-                                    dirty = true;
-                                }
-                                Meta<TestDefinition> meta = Meta.create(qual, methName, className, p, project, id, args,
-                                        ann);
-                                if (dirty)
-                                    meta.dirty = dirty;
-                                metas.add(meta);
-                            }
-                            return metas.stream().map( me -> me);
-                        })
+        return filtered.stream().flatMap(m -> this.flatMapTestDefinitions(m, c))
                         .filter(meta -> !meta.className.isEmpty() && !meta.methName.isEmpty())
                         .collect(Collectors.toList());
     }
@@ -171,6 +182,7 @@ public class Reflector {
             this.methods.addAll(classMethods);
 
         this.testDefs.addAll(this.getTestDefMetaData(c));
+        this.testDefs.addAll(this.getTestDefsMetaData(c));
 
         // Get the groups from the Test annotation, store it in a set
         Annotation ann = c.getAnnotation(Test.class);
@@ -228,39 +240,20 @@ public class Reflector {
         return adaps;
     }
 
-    Optional<ObjectNode> testcasesImporterRequest() {
+    List<Optional<ObjectNode>> testcasesImporterRequest() {
+        List<Optional<ObjectNode>> maybes = new ArrayList<>();
         Optional<ObjectNode> maybeNode = Optional.empty();
-        if (this.tcMap.isEmpty()) {
-            logger.info("No more testcases to import ...");
-            return maybeNode;
+        if (!this.config.testcase.isEnabled() || this.tcMap.isEmpty()) {
+            maybes.add(maybeNode);
+            return maybes;
         }
 
         String sName = this.config.testcase.getSelector().getName();
-        String sValue = this.config.testcase.getSelector().getVal();
-        String selector = String.format("%s='%s'", sName, sValue);
-        String ID = this.config.config.getProject();
+        String sVal = this.config.testcase.getSelector().getVal();
         String author = this.config.config.getAuthor();
-        File tcXML = new File(this.config.getTCImporterFilePath());
-        Optional<String> maybe = TestDefinitionProcessor.initTestcases(sName, sValue, ID, author, tcXML, this.tcMap,
-                                                                       this.testcases);
-        if (!maybe.isPresent())
-            return maybeNode;
-
-        try {
-            String user = this.config.polarion.getUser();
-            String pass = this.config.polarion.getPassword();
-            String url = this.config.polarion.getUrl() + this.config.testcase.getEndpoint().getRoute();
-            Consumer<Optional<ObjectNode>> handler =
-                    TestDefinitionProcessor.testcaseImportHandler(this.tcPath, ID, this.testcases);
-            if (this.config.testcase.isEnabled())
-                maybeNode = ImporterRequest.sendImportRequest(url, user, pass, tcXML, selector, handler);
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        } catch (ExecutionException e) {
-            e.printStackTrace();
-        } catch (JMSException e) {
-            e.printStackTrace();
-        }
-        return maybeNode;
+        String user = this.config.polarion.getUser();
+        String pw = this.config.polarion.getPassword();
+        String url = this.config.polarion.getUrl() + this.config.testcase.getEndpoint().getRoute();
+        return TestDefinitionProcessor.tcImportRequest(this.tcMap, sName, sVal, author, url, user, pw, this.testcases);
     }
 }

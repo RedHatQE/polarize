@@ -198,24 +198,31 @@ public class TestDefinitionProcessor extends AbstractProcessor {
                     else
                         badAnn = true;
 
-                    Meta<TestDefinition> m = new Meta<>();
-                    m.polarionID = testID;
-                    String full = this.getTopLevel(e, "", m);
-                    logger.info(String.format("Fully qualified name is %s", full));
-                    m.qualifiedName = full;
-                    m.annotation = r;
-                    m.project = project.toString();
-                    if (m.params == null)
-                        m.params = params;
-                    else if (m.params.isEmpty())
-                        m.params.addAll(params);
-                    if (badAnn)
-                        m.dirty = true;
+                    Meta<TestDefinition> m;
+                    m = this.createMeta(r, params, project, e, testID, badAnn);
                     metas.add(m);
                 }
             }
         }
         return metas;
+    }
+
+    private Meta<TestDefinition>
+    createMeta(TestDefinition r, List<Parameter> params, Project project, Element e, String testID, Boolean badAnn) {
+        Meta<TestDefinition> m = new Meta<>();
+        m.polarionID = testID;
+        String full = this.getTopLevel(e, "", m);
+        logger.info(String.format("Fully qualified name is %s", full));
+        m.qualifiedName = full;
+        m.annotation = r;
+        m.project = project.toString();
+        if (m.params == null)
+            m.params = params;
+        else if (m.params.isEmpty())
+            m.params.addAll(params);
+        if (badAnn)
+            m.dirty = true;
+        return m;
     }
 
     private List<Meta<TestDefinition>>
@@ -238,19 +245,8 @@ public class TestDefinitionProcessor extends AbstractProcessor {
                 else
                     badAnn = true;
 
-                Meta<TestDefinition> m = new Meta<>();
-                String full = this.getTopLevel(e, "", m);
-                logger.info(String.format("Fully qualified name is %s", full));
-                m.polarionID = testID;
-                m.qualifiedName = full;
-                m.annotation = def;
-                m.project = project.toString();
-                if (m.params == null)
-                    m.params = params;
-                else if (m.params.isEmpty())
-                    m.params.addAll(params);
-                if (badAnn)
-                    m.dirty = true;
+                Meta<TestDefinition> m;
+                m = this.createMeta(def, params, project, e, testID, badAnn);
                 metas.add(m);
                 i++;
             }
@@ -335,7 +331,26 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         return true;
     }
 
-    private static void updateMappingFile(Map<String, Map<String, IdParams>> mapFile,
+    private static void addBadFunction(String qualName, String project, List<String> badFuncs) {
+        String err = "No ID in XML or annotation.  Check your Annotation %s in %s";
+        err = String.format(err, qualName, project);
+        logger.error(err);
+        badFuncs.add(err);
+    }
+
+    private static void writeBadFunctionText(List<String> badFunctions) {
+        if (badFunctions.size() > 0)
+            logger.error("You must check your annotations or enable the TestCase importer in your config " +
+                    "before using your project with the XUnit Importer.  Please see the file " +
+                    "/tmp/bad-functions.txt for all the functions to check");
+        try {
+            Files.write(Paths.get("/tmp/bad-functions.txt"), badFunctions);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public static void updateMappingFile(Map<String, Map<String, IdParams>> mapFile,
                                          Map<String, Map<String, Meta<TestDefinition>>> methMap,
                                          String tcpath) {
         List<String> badFunctions = new ArrayList<>();
@@ -350,36 +365,20 @@ public class TestDefinitionProcessor extends AbstractProcessor {
                 Boolean badFn = false;
                 // Check if the mapFile has the corresponding project of this function name
                 if (!mapFile.containsKey(fnName) || !mapFile.get(fnName).containsKey(project)) {
-                    if (id.equals(""))
-                        badFn = true;
+                    if (id.equals("")) badFn = true;
                 }
                 else {
                     String newid = mapFile.get(fnName).get(project).getId();
-                    if (newid.equals(""))
-                        badFn= true;
-                    if (id.equals(""))
-                        id = newid;
+                    if (newid.equals("")) badFn= true;
+                    if (id.equals("")) id = newid;
                 }
 
-                if (badFn) {
-                    String err = "No ID in XML or annotation.  Check your Annotation %s in %s";
-                    err = String.format(err, meta.qualifiedName, project);
-                    logger.error(err);
-                    // throw new PolarionMappingError(err);
-                    badFunctions.add(err);
-                }
+                if (badFn)
+                    TestDefinitionProcessor.addBadFunction(meta.qualifiedName, project, badFunctions);
                 TestDefinitionProcessor.addToMapFile(mapFile, meta, id);
             });
         });
-        if (badFunctions.size() > 0)
-            logger.error("You must check your annotations or enable the TestCase importer in your config" +
-                    "before using your project with the XUnit Importer.  Please see the file " +
-                    "/tmp/bad-functions.txt for all the functions to check");
-        try {
-            Files.write(Paths.get("/tmp/bad-functions.txt"), badFunctions);
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+        TestDefinitionProcessor.writeBadFunctionText(badFunctions);
     }
 
     /**
@@ -415,19 +414,12 @@ public class TestDefinitionProcessor extends AbstractProcessor {
      * Sets all the information necessary for the testcases object, and marshalls it to an XML file
      *
      * The XML that is created by this call can be used for the sendImportRequest method
-     *
-     * @param selectorName the response name (part of selector string)
-     * @param selectorValue value for the response name (part of selector string)
-     * @return an Optional String of the project for this XML
+     * @param selectorName name part of JMS selector string
+     * @param selectorValue value part of JMS selector string
+     * @param pID project ID
+     * @param testXml File of where the XML representation will go
+     * @return
      */
-    private Optional<String> initTestcases(String selectorName, String selectorValue) {
-        String author = this.cfg.getAuthor();
-        String ID = this.cfg.getProject();
-        File testXml = new File(this.config.getTCImporterFilePath());
-        return TestDefinitionProcessor.initTestcases(selectorName, selectorValue, ID, author, testXml, this.tcMap,
-                this.testcases);
-    }
-
     private Optional<String> initTestcases(String selectorName, String selectorValue, String pID, File testXml) {
         String author = this.cfg.getAuthor();
         return TestDefinitionProcessor.initTestcases(selectorName, selectorValue, pID, author, testXml, this.tcMap,
@@ -446,7 +438,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
      * @param tests the Testcases object that will be initialized
      * @return an optional of the Testcases project
      */
-    static Optional<String>
+    private static Optional<String>
     initTestcases(String selectorName, String selectorValue, String projectID, String author, File testcaseXml,
                   Map<String, List<Testcase>> testMap, Testcases tests) {
         if (!testMap.containsKey(projectID)) {
@@ -466,46 +458,50 @@ public class TestDefinitionProcessor extends AbstractProcessor {
             respProp = new ResponseProperties();
         tests.setResponseProperties(respProp);
         List<ResponseProperty> props = respProp.getResponseProperty();
-        ResponseProperty rprop = new ResponseProperty();
-        rprop.setName(selectorName);
-        rprop.setValue(selectorValue);
-        props.add(rprop);
+        if (!props.stream().anyMatch(p -> p.getName().equals(selectorName) && p.getValue().equals(selectorValue))) {
+            ResponseProperty rprop = new ResponseProperty();
+            rprop.setName(selectorName);
+            rprop.setValue(selectorValue);
+            props.add(rprop);
+        }
 
         JAXBHelper jaxb = new JAXBHelper();
         IJAXBHelper.marshaller(tests, testcaseXml, jaxb.getXSDFromResource(Testcases.class));
         return Optional.of(projectID);
     }
 
-    /**
-     * FIXME: Look into guice to inject dependency args (ie, don't look up polarize.properties)
-     *
-     * Generates the xml file that will be sent via a REST call to the TestCase Importer
-     *
-    private Optional<ObjectNode> testcasesImporterRequest() {
-        Optional<ObjectNode> maybeNode = Optional.empty();
-        if (this.tcMap.isEmpty()) {
-            logger.info("No more testcases to import ...");
-            return maybeNode;
-        }
+    public static List<Optional<ObjectNode>>
+    tcImportRequest(Map<String, List<Testcase>> testcaseMap, String selectorName, String selectorValue, String author,
+                    String url, String user, String pw, Testcases tests) {
+        List<Optional<ObjectNode>> maybeNodes = new ArrayList<>();
+        if (testcaseMap.isEmpty())
+            return maybeNodes;
 
-        String selectorName = this.config.testcase.getSelector().getName();
-        String selectorValue = this.config.testcase.getSelector().getVal();
         String selector = String.format("%s='%s'", selectorName, selectorValue);
-        if (!this.initTestcases(selectorName, selectorValue).isPresent())
-            return maybeNode;
-
-        try {
-            maybeNode = this.sendTCImporterRequest(selector);
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        } catch (ExecutionException e) {
-            e.printStackTrace();
-        } catch (JMSException e) {
-            e.printStackTrace();
+        for(String project: testcaseMap.keySet()) {
+            String path = String.format("/tmp/testcases-%s.xml", project);
+            File testXml = new File(path);
+            if (!TestDefinitionProcessor.initTestcases(selectorName, selectorValue, project, author, testXml,
+                    testcaseMap, tests).isPresent())
+                maybeNodes.add(Optional.empty());
+            else {
+                try {
+                    Consumer<Optional<ObjectNode>> hdlr;
+                    hdlr = TestDefinitionProcessor.testcaseImportHandler(path, project, tests);
+                    maybeNodes.add(ImporterRequest.sendImportRequest(url, user, pw, testXml, selector, hdlr));
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                } catch (ExecutionException e) {
+                    logger.warn("FIXME: Retry due to exception");
+                    e.printStackTrace();
+                } catch (JMSException e) {
+                    logger.warn("TODO: Retry after a sleep");
+                    e.printStackTrace();
+                }
+            }
         }
-        return maybeNode;
+        return maybeNodes;
     }
-     */
 
     private List<Optional<ObjectNode>> tcImportRequest() {
         List<Optional<ObjectNode>> maybeNodes = new ArrayList<>();
@@ -528,8 +524,10 @@ public class TestDefinitionProcessor extends AbstractProcessor {
                 } catch (InterruptedException e) {
                     e.printStackTrace();
                 } catch (ExecutionException e) {
+                    logger.warn("FIXME: Retry on ExecutionException");
                     e.printStackTrace();
                 } catch (JMSException e) {
+                    logger.warn("TODO: Retry due to JMS Exception");
                     e.printStackTrace();
                 }
             }
@@ -551,7 +549,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
      * @param testPath path to where the testcase XML defs will be stored
      * @param pID project ID to be worked on
      * @param tcs Testcases object to be examined
-     * @return
+     * @return lambda of a Consumer
      */
     public static Consumer<Optional<ObjectNode>> testcaseImportHandler(String testPath, String pID, Testcases tcs) {
         return node -> {
@@ -625,17 +623,6 @@ public class TestDefinitionProcessor extends AbstractProcessor {
             throw new SizeError();
         }
         return tcs.get(0);
-    }
-
-    private Optional<ObjectNode> sendTCImporterRequest(String selector)
-            throws InterruptedException, ExecutionException, JMSException {
-        if (!this.config.testcase.isEnabled())
-            return Optional.empty();
-        String url = this.config.polarion.getUrl() + this.config.testcase.getEndpoint().getRoute();
-        File testcaseXml = new File(this.config.getTestcasesXMLPath());
-        String user = this.config.polarion.getUser();
-        String pw = this.config.polarion.getPassword();
-        return ImporterRequest.sendImportRequest(url, user, pw, testcaseXml, selector, this.testcaseImportHandler());
     }
 
     private Optional<ObjectNode> sendTCImporterRequest(String selector, File testcaseXml)
@@ -1063,9 +1050,8 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         //  1 | false        | true           | edit XML          | id="" in xml, but id is in annotation
         //  2 | true         | false          | edit mapfile      | non-empty id in xml, but not in annotation
         //  3 | true         | true           | validate          | non-empty id in xml and in annotation
-        if (!xmlIdExists) {
+        if (!xmlIdExists)
             importRequest = true;
-        }
         if (idExists && !xmlIdExists) {
             // This means that the ID exists in the annotation, but not the XML file.  Edit the xml file
             if (def.update())
@@ -1077,9 +1063,8 @@ public class TestDefinitionProcessor extends AbstractProcessor {
                     Testcase tcase = maybeTC.get();
                     tcase.setId(maybePolarionID.get());
                     Optional<File> path = meta.getFileFromMeta(testCasePath);
-                    if (path.isPresent()) {
+                    if (path.isPresent())
                         IJAXBHelper.marshaller(tcase, path.get(), jaxb.getXSDFromResource(Testcase.class));
-                    }
                 }
             }
         }
@@ -1090,7 +1075,6 @@ public class TestDefinitionProcessor extends AbstractProcessor {
             if (!id.equals(""))
                 TestDefinitionProcessor.addToMapFile(mapFile, meta, id);
         }
-
 
         if (importRequest) {
             String projId = meta.project;
@@ -1113,7 +1097,8 @@ public class TestDefinitionProcessor extends AbstractProcessor {
      * @return
      */
     private void createMappingFile(File mapPath) {
-        TestDefinitionProcessor.createMappingFile(mapPath, this.methToProjectDef, this.mappingFile);
+        Map<String, Map<String, IdParams>> tmap = TestDefinitionProcessor.printSortedMappingFile(this.mappingFile);
+        TestDefinitionProcessor.createMappingFile(mapPath, this.methToProjectDef, tmap);
     }
 
     /**
@@ -1187,6 +1172,36 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         } catch (IOException e) {
             e.printStackTrace();
         }
+    }
+
+    static Map<String, Map<String, IdParams>> printSortedMappingFile(Map<String, Map<String, IdParams>> defs) {
+        Map<String, Map<String, IdParams>> sorted = new TreeMap<>();
+        for(Map.Entry<String, Map<String, IdParams>> me: defs.entrySet()) {
+            String fnName = me.getKey();
+            Map<String, IdParams> projMap = new TreeMap<>(me.getValue());
+            sorted.put(fnName, projMap);
+        }
+
+        for(Map.Entry<String, Map<String, IdParams>> me: defs.entrySet()) {
+            String key = me.getKey();
+            Map<String, IdParams> val = me.getValue();
+            String fmt = "{\n  %s : {\n    %s : {\n      id : %s,\n      params : %s\n    }\n}";
+            for(Map.Entry<String, IdParams> e: val.entrySet()) {
+                String project = e.getKey();
+                IdParams param = e.getValue();
+                String id = param.getId();
+                String ps = param.getParameters().stream().reduce("", (acc, n) -> {
+                    String total = acc += n + ", ";
+                    return total;
+                });
+                if (ps.length() > 0)
+                    ps = String.format("[ %s ]", ps.substring(0, ps.length() - 2));
+                else
+                    ps = "[ ]";
+                System.out.println(String.format(fmt, key, project, id, ps));
+            }
+        }
+        return sorted;
     }
 
     @Override
