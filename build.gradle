@@ -4,7 +4,7 @@ plugins {
 }
 
 group 'com.github.redhatqe.polarize'
-version '0.5.3'
+version '0.5.4-SNAPSHOT'
 String archivesBaseName = "polarize"
 String projectURL = 'https://github.com/RedHatQE/polarize'
 String devURL = 'git@github.com:RedHatQE/polarize.git'
@@ -14,7 +14,8 @@ String pomPath = "${project.projectDir}/build/tmp/pom.xml"
 String mvnPom = "${project.projectDir}/build/tmp/${project.name}-${project.version}.pom"
 String arcDir = "${project.projectDir}/artifacts/com/github/redhatqe/polarize/polarize/${project.version}"
 String arcPom = "${arcDir}/${project.name}-${project.version}.pom"
-File arcPomFile = file(arcPom)
+//File arcPomFile = file(arcPom)
+File arcPomFile = makeSigningPomFile(arcDir)
 sourceCompatibility = 1.8
 targetCompatibility = 1.8
 
@@ -128,7 +129,7 @@ if (arcPomFile.exists()) {
 }
 
 signing {
-    required { isReleaseVersion && gradle.taskGraph.hasTask("uploadArchives") }
+    //required { isReleaseVersion && gradle.taskGraph.hasTask("uploadArchives") }
     sign configurations.archives
 }
 
@@ -149,6 +150,7 @@ def getSignatureFiles = {
 }
 
 def getPomSignature = {
+    println "In getPomSignature"
     def sPom = project.tasks.signPom.signatureFiles.collect{it}
     return sPom[0]
 }
@@ -158,10 +160,23 @@ def findPom(String ad) {
     if (arcDirFile.exists()) {
         // Get the files in the directory
         def result = arcDirFile.list().any { s -> s.endsWith(".pom")}
-        //println result
         return result
     }
     return false
+}
+
+def findPomFiles(String ad) {
+    def arcDirFile = file(ad)
+    if (arcDirFile.exists()) {
+        return arcDirFile.list().findAll {f -> f.endsWith(".pom")}
+    }
+}
+
+def makeSigningPomFile(String ad) {
+    def found = findPomFiles(ad)
+    if (found) {
+        return file("${ad}/${found[-1]}")
+    }
 }
 
 publishing {
@@ -244,7 +259,7 @@ publishing {
             }
         }
 
-        if (arcPomFile.exists()) {
+        if (findPom(arcDir)) {
             gpgPom(MavenPublication) {
                 artifact (getPomSignature()) {
                     classifier = null
@@ -287,4 +302,8 @@ task copyTask(type: Copy) {
 
 task classPath << {
     println sourceSets.main.runtimeClasspath.asPath
+}
+
+task getPomFiles {
+    println findPomFiles(arcDir)
 }
