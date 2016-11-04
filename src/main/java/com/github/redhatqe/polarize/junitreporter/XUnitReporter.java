@@ -9,10 +9,7 @@ import com.github.redhatqe.polarize.IdParams;
 import com.github.redhatqe.polarize.JAXBHelper;
 import com.github.redhatqe.polarize.configuration.ConfigType;
 import com.github.redhatqe.polarize.configuration.XMLConfig;
-import com.github.redhatqe.polarize.exceptions.MappingError;
-import com.github.redhatqe.polarize.exceptions.RequirementAnnotationException;
-import com.github.redhatqe.polarize.exceptions.XMLDescriptionError;
-import com.github.redhatqe.polarize.exceptions.XMLUnmarshallError;
+import com.github.redhatqe.polarize.exceptions.*;
 import com.github.redhatqe.polarize.importer.ImporterRequest;
 import com.github.redhatqe.polarize.importer.xunit.*;
 import com.github.redhatqe.polarize.importer.xunit.Error;
@@ -185,25 +182,32 @@ public class XUnitReporter implements IReporter {
                 if (n.size() == 0)
                     return;
                 JsonNode root = n.get("root");
-                if (root.get("status").textValue().equals("passed")) {
-                    logger.info("XUnit importer was successful");
-                    logger.info(root.get("testrun-url").textValue());
-                } else {
-                    // Figure out which one failed
-                    if (root.has("import-results")) {
-                        JsonNode results = root.get("import-results");
-                        results.elements().forEachRemaining(element -> {
-                            if (element.has("status") && !element.get("status").textValue().equals("passed")) {
-                                if (element.has("suite-name")) {
-                                    String suite = element.get("suite-name").textValue();
-                                    logger.info(suite + " failed to be updated");
-                                    XUnitReporter.failedSuites.add(suite);
-                                }
-                            }
-                        });
+                Boolean passed = false;
+                try {
+                    passed = root.get("status").textValue().equals("passed");
+                    if (passed) {
+                        logger.info("XUnit importer was successful");
+                        logger.info(root.get("testrun-url").textValue());
                     }
-                    else
-                        logger.error(root.get("message").asText());
+                    else {
+                        // Figure out which one failed
+                        if (root.has("import-results")) {
+                            JsonNode results = root.get("import-results");
+                            results.elements().forEachRemaining(element -> {
+                                if (element.has("status") && !element.get("status").textValue().equals("passed")) {
+                                    if (element.has("suite-name")) {
+                                        String suite = element.get("suite-name").textValue();
+                                        logger.info(suite + " failed to be updated");
+                                        XUnitReporter.failedSuites.add(suite);
+                                    }
+                                }
+                            });
+                        }
+                        else
+                            logger.error(root.get("message").asText());
+                    }
+                } catch (NullPointerException npe) {
+                    logger.error("Unknown format of message from bus");
                 }
             }
         };
@@ -304,11 +308,12 @@ public class XUnitReporter implements IReporter {
 
             // Load the mapping file
             String project = XUnitReporter.cfg.getProject();
-            String path = XUnitReporter.cfg.getMapping().getPath();
+            String path = XUnitReporter.config.getMappingPath();
             File fpath = new File(path);
             if (!fpath.exists()) {
-                XUnitReporter.logger.error(String.format("Could not find mapping file %s", path));
-                throw new MappingError();
+                String err = String.format("Could not find mapping file %s", path);
+                XUnitReporter.logger.error(err);
+                throw new MappingError(err);
             }
             String qual = String.format("%s.%s", classname, methname);
             Map<String, Map<String, IdParams>> mapping = FileHelper.loadMapping(fpath);
@@ -552,11 +557,30 @@ public class XUnitReporter implements IReporter {
                 .defaultsTo(defaultSelector);
 
         OptionSet opts = parser.parse(args);
-        File xml = new File(opts.valueOf(xunitOpt));
+        String xunit = opts.valueOf(xunitOpt);
+        File xml = new File(xunit);
         String url = opts.valueOf(urlOpt);
         String pw = opts.valueOf(pwOpt);
         String user = opts.valueOf(userOpt);
         String selector = opts.valueOf(selectorOpt);
+
+        if (!selector.contains("'")) {
+            String[] tokens = selector.split("=");
+            if (tokens.length != 2)
+                throw new InvalidArgument("--selector must be in form of name=val");
+            String name = tokens[0];
+            String val = tokens[1];
+            selector = String.format("%s='%s'", name, val);
+            logger.info("Modified selector to " + selector);
+        }
+
+        if (xunit.startsWith("http")) {
+            Optional<File> body = ImporterRequest.get(xunit, user, pw, "/tmp/testng-polarion.xml");
+            if (body.isPresent())
+                xml = body.get();
+            else
+                throw new ImportRequestError(String.format("Could not download %s", xml.toString()));
+        }
 
         ImporterRequest.sendImportRequest(url, user, pw, xml, selector, XUnitReporter.xunitMessageHandler());
     }

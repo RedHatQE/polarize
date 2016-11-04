@@ -14,7 +14,6 @@ String pomPath = "${project.projectDir}/build/tmp/pom.xml"
 String mvnPom = "${project.projectDir}/build/tmp/${project.name}-${project.version}.pom"
 String arcDir = "${project.projectDir}/artifacts/com/github/redhatqe/polarize/polarize/${project.version}"
 String arcPom = "${arcDir}/${project.name}-${project.version}.pom"
-//File arcPomFile = file(arcPom)
 File arcPomFile = makeSigningPomFile(arcDir)
 sourceCompatibility = 1.8
 targetCompatibility = 1.8
@@ -105,6 +104,7 @@ artifacts {
     archives jar
     archives sourceJar
     archives javadocJar
+    archives shadowJar
     if (arcPomFile.exists()) {
         pom arcPomFile
     }
@@ -114,12 +114,10 @@ artifacts {
 // We need to sign the POM
 task signPom(type: Sign) {
     sign arcPomFile
-    //println "========> in signPom: ${configurations.pom}"
 }
 
 task signJars (type : Sign, dependsOn: [jar, javadocJar, sourceJar]) {
     sign configurations.archives
-    //println "========> in signJars: ${configurations.archives}"
 }
 
 if (arcPomFile.exists()) {
@@ -150,7 +148,6 @@ def getSignatureFiles = {
 }
 
 def getPomSignature = {
-    println "In getPomSignature"
     def sPom = project.tasks.signPom.signatureFiles.collect{it}
     return sPom[0]
 }
@@ -304,6 +301,8 @@ task classPath << {
     println sourceSets.main.runtimeClasspath.asPath
 }
 
+/*
 task getPomFiles {
     println findPomFiles(arcDir)
 }
+*/

@@ -28,6 +28,8 @@ import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
+import java.nio.channels.Channels;
+import java.nio.channels.ReadableByteChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -276,6 +278,23 @@ public class ImporterRequest {
         }
 
         return maybeFile;
+    }
+
+    public static File download(String url, String output) {
+        File file = new File(output);
+        try {
+            URL rUrl = new URL(url);
+            ReadableByteChannel rbc = Channels.newChannel(rUrl.openStream());
+            FileOutputStream fos = new FileOutputStream(file);
+            fos.getChannel().transferFrom(rbc, 0, Long.MAX_VALUE);
+            fos.close();
+            rbc.close();
+        } catch (MalformedURLException e) {
+            e.printStackTrace();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        return file;
     }
 
     public static void main(String[] args) {

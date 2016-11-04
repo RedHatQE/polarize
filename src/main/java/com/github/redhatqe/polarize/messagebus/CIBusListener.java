@@ -181,7 +181,7 @@ public class CIBusListener {
     }
 
     /**
-     * Returns a Supplier usable for a CompleteableFuture object
+     * Returns a Supplier usable for a CompletableFuture object
      *
      * @return ObjectNode that is the parsed message
      */
@@ -189,6 +189,7 @@ public class CIBusListener {
         return () -> {
             ObjectNode root = null;
             CIBusListener bl = new CIBusListener();
+            bl.logger.info(String.format("Using selector of %s", selector));
             Optional<Tuple<Connection, Message>> maybeConn = bl.waitForMessage(selector);
             if (!maybeConn.isPresent()) {
                 bl.logger.error("No Connection object found");
@@ -219,7 +220,7 @@ public class CIBusListener {
     }
 
     /**
-     * Does 2 things: launches tapIntoMessageBus from a Fork/Join pool thread and the main thread waits for user to quit
+     * Does 2 things: launches waitForMessage from a Fork/Join pool thread and the main thread waits for user to quit
      *
      * Takes one argument: a string that will be used as the JMS Selector
      *
