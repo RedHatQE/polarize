@@ -211,5 +211,6 @@ public class XMLConfig {
 
     public static void main(String[] args) {
         XMLConfig xml = new XMLConfig(null);
+
     }
 }

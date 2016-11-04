@@ -2,13 +2,14 @@ package com.github.redhatqe.polarize.configuration;
 
 import com.github.redhatqe.polarize.IJAXBHelper;
 import com.github.redhatqe.polarize.JAXBHelper;
+import com.github.redhatqe.polarize.Utility;
 import com.github.redhatqe.polarize.exceptions.ConfigurationError;
 import com.github.redhatqe.polarize.exceptions.InvalidArgument;
 import com.github.redhatqe.polarize.exceptions.XMLUnmarshallError;
 import com.github.redhatqe.polarize.exceptions.XSDValidationError;
 
-import com.github.redhatqe.polarize.importer.xunit.Property;
-import com.github.redhatqe.polarize.importer.xunit.Testsuites;
+import com.github.redhatqe.polarize.importer.ImporterRequest;
+import com.github.redhatqe.polarize.importer.xunit.*;
 import com.github.redhatqe.polarize.utils.Tuple;
 import joptsimple.OptionParser;
 import joptsimple.OptionSet;
@@ -22,7 +23,6 @@ import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -37,6 +37,7 @@ public class Configurator implements IJAXBHelper {
     public String configPath;
 
     private String testrunTitle;
+    private String testrunID;
     private String project;
     private String testcasePrefix;
     private String testcaseSuffix;
@@ -63,6 +64,8 @@ public class Configurator implements IJAXBHelper {
 
     public String tcPath;
     public List<ServerType> servers;
+    private String groupId;
+    private String projectName;
 
     private Map<String, Tuple<Getter<String>, Setter<String>>> sOptToAccessors = new HashMap<>();
     private Map<String, Tuple<Getter<Boolean>, Setter<Boolean>>> bOptToAccessors = new HashMap<>();
@@ -72,6 +75,7 @@ public class Configurator implements IJAXBHelper {
     private Map<String, OptionSpec<Integer>> iSpecs = new HashMap<>();
     private Map<String, String> testsuiteProps = new HashMap<>();
     private List<Property> customProps;
+    private List<PropertyType> tsProperties = new ArrayList<>();
 
     private OptionSet opts;
 
@@ -94,6 +98,7 @@ public class Configurator implements IJAXBHelper {
 
     private void configureParser() {
         sOptToAccessors.put(Opts.TESTRUN_TITLE, new Tuple<>(this::getTestrunTitle, this::setTestrunTitle));
+        sOptToAccessors.put(Opts.TESTRUN_ID, new Tuple<>(this::getTestrunID, this::setTestrunID));
         sOptToAccessors.put(Opts.PROJECT, new Tuple<>(this::getProject, this::setProject));
         sOptToAccessors.put(Opts.TESTCASE_PREFIX, new Tuple<>(this::getTestcasePrefix, this::setTestcasePrefix));
         sOptToAccessors.put(Opts.TESTCASE_SUFFIX, new Tuple<>(this::getTestcaseSuffix, this::setTestcaseSuffix));
@@ -108,6 +113,8 @@ public class Configurator implements IJAXBHelper {
         sOptToAccessors.put(Opts.XUNIT_SELECTOR_VAL, new Tuple<>(this::getXunitSelectorVal, this::setXunitSelectorVal));
         sOptToAccessors.put(Opts.NEW_XUNIT, new Tuple<>(this::getNewXunit, this::setNewXunit));
         sOptToAccessors.put(Opts.CURRENT_XUNIT, new Tuple<>(this::getCurrentXunit, this::setCurrentXunit));
+        sOptToAccessors.put(Opts.PROJECT_NAME, new Tuple<>(this::getProjectName, this::setProjectName));
+        sOptToAccessors.put(Opts.GROUP_ID, new Tuple<>(this::getGroupId, this::setGroupId));
 
         bOptToAccessors.put(Opts.TC_IMPORTER_ENABLED, new Tuple<>(this::getTestcaseImporterEnabled,
                 this::setTestcaseImporterEnabled));
@@ -151,7 +158,7 @@ public class Configurator implements IJAXBHelper {
             String opt = es.getKey();
             OptionSpec<String> spec = this.sSpecs.get(opt);
             if (this.opts.has(spec)) {
-                String val = (String) opts.valueOf(opt);
+                String val = opts.valueOf(spec);
                 Setter<String> s = es.getValue().second;
                 s.set(val);
             }
@@ -181,7 +188,9 @@ public class Configurator implements IJAXBHelper {
         }
         this.setConfigType();
         this.setServers(opts);
+        this.editConfig = opts.has(this.bSpecs.get(Opts.EDIT_CONFIG));
 
+        // Get all the --property options
         List<String> properties = opts.valuesOf(this.sSpecs.get(Opts.TR_PROPERTY));
         customProps = properties.stream()
                 .map(this::parseProperty)
@@ -244,7 +253,7 @@ public class Configurator implements IJAXBHelper {
                     this.testsuiteProps.put(keyname, n);
                     break;
                 default:
-                    this.logger.error("Unknown property name %s", name);
+                    logger.error(String.format("Unknown property name %s", name));
                     break;
             }
         }
@@ -269,8 +278,13 @@ public class Configurator implements IJAXBHelper {
                     if (trFinish != null)
                         p.setVal(trFinish.toString());
                     break;
+                case "template-id":
+                    String template = this.getTemplateId();
+                    if (!template.equals(""))
+                        p.setVal(template);
+                    break;
                 default:
-                    this.logger.error("Unknown property name %s", name);
+                    logger.error("Unknown property name %s", name);
             }
         }
     }
@@ -308,44 +322,138 @@ public class Configurator implements IJAXBHelper {
         this.setCustomProperties(customProps);
 
         List<PropertyType> tsProps = imp.getTestSuite().getProperty();
-        this.setTestRunProperties(tsProps);
-
+        List<PropertyType> fromConfig = new ArrayList<>();
         if (this.opts.has(iSpecs.get(Opts.XUNIT_IMPORTER_TIMEOUT)))
             imp.getTimeout().setMillis(this.getXunitTimeout().toString());
         if (this.opts.has(bSpecs.get(Opts.XUNIT_IMPORTER_ENABLED)))
             imp.setEnabled(this.getXunitImporterEnabled());
+        //if (this.opts.has(sSpecs.get(Opts.TESTRUN_TITLE)))
+        this.setTestRunTitleFromConfig(imp, fromConfig);
+        this.setTestRunIDFromConfig(imp, fromConfig);
+        if (this.opts.has(sSpecs.get(Opts.TEMPLATE_ID)))
+            this.setTemplateIDFromConfig(imp, fromConfig);
+        if (this.opts.has(bSpecs.get(Opts.TR_DRY_RUN)))
+            this.setTestRunProperty(bSpecs.get(Opts.TR_DRY_RUN), Opts.TR_DRY_RUN, fromConfig);
+        if (this.opts.has(bSpecs.get(Opts.TR_INCLUDE_SKIPPED)))
+            this.setTestRunProperty(bSpecs.get(Opts.TR_INCLUDE_SKIPPED), Opts.TR_INCLUDE_SKIPPED, fromConfig);
+        if (this.opts.has(bSpecs.get(Opts.TR_SET_FINISHED)))
+            this.setTestRunProperty(bSpecs.get(Opts.TR_SET_FINISHED), Opts.TR_SET_FINISHED, fromConfig);
 
-        if (this.opts.has(sSpecs.get(Opts.TESTRUN_TITLE))) {
-            TestrunType tr = imp.getTestrun();
-            tr.setTitle(this.getTestrunTitle());
-            imp.setTestrun(tr);
+        // CLI config overrides XML
+        Set<String> pts = new HashSet<>();
+        for (PropertyType pt: fromConfig) {
+            pts.add(pt.getName());
         }
-
-        if (this.opts.has(sSpecs.get(Opts.TEMPLATE_ID))) {
-            TemplateIdType tid = imp.getTemplateId();
-            tid.setId(this.getTemplateId());
-            imp.setTemplateId(tid);
+        for (PropertyType pt: tsProps) {
+            if (!pts.contains(pt.getName()))
+                fromConfig.add(pt);
         }
-
+        this.setTestRunProperties(fromConfig);
+        this.tsProperties = fromConfig;
         this.setSelectorName(imp, Opts.XUNIT_SELECTOR_NAME, Opts.XUNIT_SELECTOR_VAL);
     }
 
+    private <T> void setTestRunProperty(OptionSpec<T> opt, String propName, List<PropertyType> added) {
+        T val = this.opts.valueOf(opt);
+        PropertyType pt = new PropertyType();
+        pt.setName(propName);
+        pt.setVal(val.toString());
+        added.add(pt);
+
+        // This is pretty ugly and hacky.  Might be better to do this in the getter
+        switch(propName) {
+            case "dry-run":
+                this.setTestrunDryRun((Boolean) val);
+                break;
+            case "include-skipped":
+                this.setTestrunIncludeSkipped((Boolean) val);
+                break;
+            case "set-testrun-finished":
+                this.setTestrunSetFinished((Boolean) val);
+                break;
+            default:
+                logger.error(String.format("Unknown property %s", propName));
+        }
+    }
+
+    /**
+     * FIXME: This is ugly too.  Move this into the constructor or getter
+     *
+     * @param imp
+     * @param added
+     */
+    private void setTemplateIDFromConfig(ImporterType imp, List<PropertyType> added) {
+        String templateId = this.opts.valueOf(sSpecs.get(Opts.TEMPLATE_ID));
+        this.setTemplateId(templateId);
+        TemplateIdType tid = imp.getTemplateId();
+        tid.setId(this.getTemplateId());
+        imp.setTemplateId(tid);
+        PropertyType pt = new PropertyType();
+        pt.setName("template-id");
+        pt.setVal(templateId);
+        added.add(pt);
+    }
+
+    /**
+     * FIXME: This is ugly and hacky.  Should probably be doing this either in the constructor or the getter
+     *
+     * @param imp
+     * @param added
+     */
+    private void setTestRunTitleFromConfig(ImporterType imp, List<PropertyType> added) {
+        TestrunType tr = imp.getTestrun();
+        String title = this.getTestrunTitle();
+
+        tr.setTitle(title);
+        imp.setTestrun(tr);
+        PropertyType pt = new PropertyType();
+        pt.setName("testrun-title");
+        pt.setVal(this.getTestrunTitle());
+        added.add(pt);
+    }
+
+    private void setTestRunIDFromConfig(ImporterType imp, List<PropertyType> added) {
+        TestrunType tr = imp.getTestrun();
+        String title = this.getTestrunID();
+
+        tr.setTitle(title);
+        imp.setTestrun(tr);
+        PropertyType pt = new PropertyType();
+        pt.setName("testrun-id");
+        pt.setVal(title);
+        added.add(pt);
+    }
+
     private void setSelectorName(ImporterType imp, String name, String val) {
+        SelectorType st = imp.getSelector();
         if (sSpecs.containsKey(name) && this.opts.has(sSpecs.get(name))) {
-            SelectorType st = imp.getSelector();
+            String selname = this.opts.valueOf(sSpecs.get(name));
+            st.setName(selname);
             if (imp.getType().equals("xunit"))
-                st.setName(this.getXunitSelectorName());
+                this.setXunitSelectorName(selname);
             else
-                st.setName(this.getTcSelectorName());
+                this.setTcSelectorName(selname);
             imp.setSelector(st);
+        }
+        else {
+            String n = (imp.getType().equals("xunit")) ? this.getXunitSelectorName() : this.getTcSelectorName();
+            st.setName(n);
         }
 
         if (sSpecs.containsKey(val) && this.opts.has(sSpecs.get(val))) {
-            SelectorType st = imp.getSelector();
             String sval = this.opts.valueOf(this.sSpecs.get(val));
             st.setVal(sval);
             imp.setSelector(st);
+            if (imp.getType().equals("testcase"))
+                this.setTcSelectorVal(sval);
+            else
+                this.setXunitSelectorVal(sval);
         }
+        else {
+            String v = (imp.getType().equals("testcase")) ? this.getTcSelectorVal() : this.getXunitSelectorVal();
+            st.setVal(v);
+        }
+
     }
 
 
@@ -410,6 +518,7 @@ public class Configurator implements IJAXBHelper {
 
     private class Opts {
         static final String TESTRUN_TITLE = "testrun-title";
+        static final String TESTRUN_ID = "testrun-id";
         static final String PROJECT = "project";
         static final String TESTCASE_PREFIX = "testcase-prefix";
         static final String TESTCASE_SUFFIX = "testcase-suffix";
@@ -424,9 +533,9 @@ public class Configurator implements IJAXBHelper {
 
         static final String TC_IMPORTER_ENABLED = "testcase-importer-enabled";
         static final String XUNIT_IMPORTER_ENABLED = "xunit-importer-enabled";
-        static final String TR_DRY_RUN = "testrun-dry-run";
-        static final String TR_SET_FINISHED = "testrun-set-finished";
-        static final String TR_INCLUDE_SKIPPED = "testrun-include-skipped";
+        static final String TR_DRY_RUN = "dry-run";
+        static final String TR_SET_FINISHED = "set-testrun-finished";
+        static final String TR_INCLUDE_SKIPPED = "include-skipped";
 
         static final String TC_IMPORTER_TIMEOUT = "testcase-importer-timeout";
         static final String XUNIT_IMPORTER_TIMEOUT = "xunit-importer-timeout";
@@ -434,6 +543,8 @@ public class Configurator implements IJAXBHelper {
         static final String NEW_XUNIT = "new-xunit";
         static final String CURRENT_XUNIT = "current-xunit";
         static final String EDIT_CONFIG = "edit-config";
+        static final String PROJECT_NAME = "project-name";
+        static final String GROUP_ID = "group-id";
 
         // This option takes the form of name,user,pw,url.  If any are missing, leave it empty. name is required
         // --server polarion,ci-user,&$Err,http://some/url
@@ -451,7 +562,8 @@ public class Configurator implements IJAXBHelper {
         RESPONSE("polarion-response"),
         TESTRUN_TITLE("polarion-testrun-title"),
         TESTRUN_ID("polarion-testrun-id"),
-        TEMPLATE_ID("polarion-template-id");
+        TEMPLATE_ID("polarion-template-id"),
+        CUSTOM("polarion-custom");
 
         public final String value;
         TestsuiteProps(String val) {
@@ -483,6 +595,8 @@ public class Configurator implements IJAXBHelper {
                 default:
                     if (s.contains("polarion-response"))
                         return RESPONSE;
+                    else if (s.contains("custom"))
+                        return CUSTOM;
                     else
                         throw new java.lang.IllegalArgumentException(String.format("No enum constant for %s", s));
             }
@@ -497,30 +611,117 @@ public class Configurator implements IJAXBHelper {
         Path pdir = dir.toPath();
         Path parent = pdir.getParent();
         Path backupDir = Paths.get(parent.toString(), "backup");
-        if (!backupDir.toFile().exists())
-            backupDir.toFile().mkdirs();
+        if (!backupDir.toFile().exists()) {
+            Boolean success = backupDir.toFile().mkdirs();
+            System.out.println(String.format("Creation of %s was successful: %s", backupDir.toString(),
+                    success.toString()));
+        }
 
-        // Create a timestamped file xml-config-<timestamp>.xml in backup from xml-config.xml
-        LocalDateTime now = LocalDateTime.now();
-        String timestamp = "xml-config-%s-%s-%d-%d-%d-%d.xml";
-        timestamp = String.format(timestamp, now.getMonth().toString(), now.getDayOfMonth(), now.getYear(),
-                now.getHour(), now.getMinute(), now.getSecond());
+        String timestamp = Utility.makeTimeStamp() + ".xml";
         Path backup = Paths.get(backupDir.toString(), timestamp);
         if (backup.toFile().exists())
             logger.error("%s already exists.  Overwriting", backup.toString());
         try {
             Files.copy(pdir, backup);
+            logger.info("Original xml-config.xml was backed up as %s", backup);
         } catch (IOException e) {
             e.printStackTrace();
         }
     }
 
+    private void setTestPropsFromXML(com.github.redhatqe.polarize.importer.xunit.Property p) {
+        TestsuiteProps prop = TestsuiteProps.fromString(p.getName());
+        switch (prop) {
+            case DRY_RUN:
+                Boolean dryrun = this.getTestrunDryRun();
+                if (dryrun != null)
+                    p.setValue(dryrun.toString());
+                break;
+            case TEMPLATE_ID:
+                String id = this.getTemplateId();
+                if (id != null)
+                    p.setValue(id);
+                break;
+            case TESTRUN_FINISHED:
+                Boolean finished = this.getTestrunSetFinished();
+                if (finished != null)
+                    p.setValue(this.getTestrunSetFinished().toString());
+                break;
+            case USER:
+                logger.warn("Need to add user to config");
+                break;
+            case PROJECT:
+                String project = this.getProject();
+                if (project != null)
+                    p.setValue(project);
+                break;
+            case INCLUDE_SKIPPED:
+                Boolean include = this.getTestrunIncludeSkipped();
+                if (include != null)
+                    p.setValue(include.toString());
+                break;
+            case RESPONSE:
+                String selname = this.getXunitSelectorName();
+                String selval = this.getXunitSelectorVal();
+                if (selname != null && selval != null) {
+                    p.setValue(selval);
+                    p.setName("polarion-response-" + selname);
+                }
+                break;
+            case TESTRUN_ID:
+                String tid = this.getTestrunID();
+                if (tid != null && !tid.equals(""))
+                    p.setValue(tid);
+                break;
+            case TESTRUN_TITLE:
+                String title = this.getTestrunTitle();
+                if (title != null && !title.equals(""))
+                    p.setValue(title);
+                break;
+            case CUSTOM:
+                break;
+            default:
+                // That means we have a custom field
+                break;
+        }
+    }
+
+    /**
+     * Check if a PropertyType in tsProperties matches any in the XML, overriding if they match adding if not
+     *
+     * @param props list of Property from the testsuite XML
+     */
+    private void matchProps(List<com.github.redhatqe.polarize.importer.xunit.Property> props) {
+        List<com.github.redhatqe.polarize.importer.xunit.Property> added = new ArrayList<>();
+        for(PropertyType pt: this.tsProperties) {
+            Boolean matched = false;
+            for(com.github.redhatqe.polarize.importer.xunit.Property p: props) {
+                if (p.getName().contains(pt.getName())) {
+                    p.setValue(pt.getVal());
+                    matched = true;
+                    break;
+                }
+            }
+            if (!matched) {
+                com.github.redhatqe.polarize.importer.xunit.Property unmatched =
+                        new com.github.redhatqe.polarize.importer.xunit.Property();
+                unmatched.setName("polarion-" + pt.getName());
+                unmatched.setValue(pt.getVal());
+                added.add(unmatched);
+            }
+        }
+        props.addAll(added);
+    }
+
     /**
      * Given an existing XML file for the Testsuite, edit it according to the params
+     *
      * @param tsPath
      */
     public void editTestSuite(String tsPath, String newpath) {
         File xunit = new File(tsPath);
+        if (tsPath.startsWith("http"))
+            xunit = ImporterRequest.download(tsPath, "/tmp/tmp-polarion.xml");
         if (!xunit.exists())
             throw new InvalidArgument(tsPath + " does not exist");
         JAXBHelper jaxb = new JAXBHelper();
@@ -531,70 +732,18 @@ public class Configurator implements IJAXBHelper {
 
         Testsuites suites = ts.get();
         List<com.github.redhatqe.polarize.importer.xunit.Property> props = suites.getProperties().getProperty();
-        // first, modify all props with same name
-        props.forEach(p -> {
-            String name = p.getName();
-            TestsuiteProps prop = TestsuiteProps.fromString(name);
-            switch (prop) {
-                case DRY_RUN:
-                    Boolean dryrun = this.getTestrunDryRun();
-                    if (dryrun != null)
-                        p.setValue(dryrun.toString());
-                    break;
-                case TEMPLATE_ID:
-                    String id = this.getTemplateId();
-                    if (id != null)
-                        p.setValue(id);
-                    break;
-                case TESTRUN_FINISHED:
-                    Boolean finished = this.getTestrunSetFinished();
-                    if (finished != null)
-                        p.setValue(this.getTestrunSetFinished().toString());
-                    break;
-                case USER:
-                    this.logger.error("Need to add user to config");
-                    break;
-                case PROJECT:
-                    String project = this.getProject();
-                    if (project != null)
-                        p.setValue(project);
-                    break;
-                case INCLUDE_SKIPPED:
-                    Boolean include = this.getTestrunIncludeSkipped();
-                    if (include != null)
-                        p.setValue(include.toString());
-                    break;
-                case RESPONSE:
-                    String selname = this.getXunitSelectorName();
-                    String selval = this.getXunitSelectorVal();
-                    if (selname != null && selval != null) {
-                        p.setValue(selval);
-                        p.setName("polarion-reponse-" + selname);
-                    }
-                    break;
-                case TESTRUN_ID:
-                    this.logger.error("Need to add testrun-id to config");
-                    break;
-                case TESTRUN_TITLE:
-                    String title = this.getTestrunTitle();
-                    if (title != null)
-                        p.setValue(title);
-                    break;
-                default:
-                    // That means we have a custom field
-                    break;
-            }
-        });
+        this.matchProps(props);
+        props.forEach(this::setTestPropsFromXML);
+        props.removeIf(p -> p.getValue().equals(""));
+
         List<Property> newprops = new ArrayList<>();
         for(Property p: this.customProps) {
             boolean matched = false;
             for(Property p2: props) {
                 matched = p.getName().equals(p2.getName());
-                boolean found = false;
                 if (matched) {
                     String val = p2.getValue();
                     p.setValue(val);
-                    String name = p.getName();
                     break;
                 }
             }
@@ -616,25 +765,52 @@ public class Configurator implements IJAXBHelper {
         Configurator cfg = new Configurator();
         cfg.parse(args);
         String path = cfg.configPath;
-        String testng = cfg.config.getXunitImporterFilePath();
+        String testng;
+        OptionSpec<String> xunit = cfg.sSpecs.get(Opts.CURRENT_XUNIT);
+        if (cfg.opts.has(xunit))
+            testng = cfg.opts.valueOf(xunit);
+        else
+            testng = cfg.config.getXunitImporterFilePath();
         String newXunit = cfg.getNewXunit();
         cfg.editTestSuite(testng, newXunit);
 
-        if (cfg.getEditConfig()) {
+        Boolean edit = cfg.getEditConfig();
+        if (edit) {
             Configurator.rotator(path);
             Configurator.writeOut(path, cfg.cfg);
         }
+        logger.info("Done configuring the config file");
+    }
+
+    public String getTestrunID() {
+        if (this.testrunID == null) {
+            this.testrunID = this.config.xunit.getTestrun().getId();
+            if (this.testrunID.equals("{project-name}"))
+                this.testrunID = Utility.makeTimeStamp(this.cfg.getProjectName().getName(), "");
+        }
+        return testrunID;
+    }
+
+    public void setTestrunID(String id) {
+        this.testrunID = id;
     }
 
     public String getTestrunTitle() {
-        return testrunTitle;
+        if (this.testrunTitle == null) {
+            this.testrunTitle = "";
+        }
+        return this.testrunTitle;
     }
 
     public void setTestrunTitle(String testrunTitle) {
         this.testrunTitle = testrunTitle;
     }
 
+
+
     public String getProject() {
+        if (this.project == null)
+            this.project = this.cfg.getProject();
         return project;
     }
 
@@ -643,6 +819,8 @@ public class Configurator implements IJAXBHelper {
     }
 
     public String getTestcasePrefix() {
+        if (this.testcasePrefix == null)
+            this.testcasePrefix = this.config.testcase.getTitle().getPrefix();
         return testcasePrefix;
     }
 
@@ -651,6 +829,8 @@ public class Configurator implements IJAXBHelper {
     }
 
     public String getTestcaseSuffix() {
+        if (this.testcaseSuffix == null)
+            this.testcaseSuffix = this.config.testcase.getTitle().getSuffix();
         return testcaseSuffix;
     }
 
@@ -658,7 +838,18 @@ public class Configurator implements IJAXBHelper {
         this.testcaseSuffix = testcaseSuffix;
     }
 
+    private String searchCustomFields(String field) {
+        String value = "";
+        for(PropertyType pt: this.config.getCustomFields()) {
+            if (pt.getName().equals(field))
+                value = pt.getVal();
+        }
+        return value;
+    }
+
     public String getPlannedin() {
+        if (this.plannedin == null)
+            this.plannedin = this.searchCustomFields("plannedin");
         return plannedin;
     }
 
@@ -667,6 +858,8 @@ public class Configurator implements IJAXBHelper {
     }
 
     public String getJenkinsjobs() {
+        if (this.jenkinsjobs == null)
+            this.jenkinsjobs = this.searchCustomFields("jenkinsjobs");
         return jenkinsjobs;
     }
 
@@ -675,6 +868,8 @@ public class Configurator implements IJAXBHelper {
     }
 
     public String getNotes() {
+        if (this.notes == null)
+            this.notes = this.searchCustomFields("notes");
         return notes;
     }
 
@@ -691,6 +886,8 @@ public class Configurator implements IJAXBHelper {
     }
 
     public Boolean getTestcaseImporterEnabled() {
+        if (this.testcaseImporterEnabled == null)
+            this.testcaseImporterEnabled = this.config.testcase.isEnabled();
         return testcaseImporterEnabled;
     }
 
@@ -699,6 +896,8 @@ public class Configurator implements IJAXBHelper {
     }
 
     public Boolean getXunitImporterEnabled() {
+        if (this.xunitImporterEnabled == null)
+            this.xunitImporterEnabled = this.config.xunit.isEnabled();
         return xunitImporterEnabled;
     }
 
@@ -706,7 +905,20 @@ public class Configurator implements IJAXBHelper {
         this.xunitImporterEnabled = xunitImporterEnabled;
     }
 
+    private Boolean searchTestSuiteProps(String field) {
+        Boolean val = null;
+        for(PropertyType pt: this.config.xunit.getTestSuite().getProperty()) {
+            if (pt.getName().equals(field))
+                val = Boolean.valueOf(pt.getVal());
+        }
+        return val;
+    }
+
     public Boolean getTestrunDryRun() {
+        if (this.testrunDryRun == null) {
+            Boolean val = this.searchTestSuiteProps("dry-run");
+            this.testrunDryRun = (val != null) ? val : false;
+        }
         return testrunDryRun;
     }
 
@@ -715,6 +927,10 @@ public class Configurator implements IJAXBHelper {
     }
 
     public Boolean getTestrunSetFinished() {
+        if (this.testrunSetFinished == null) {
+            Boolean val = this.searchTestSuiteProps("set-testrun-finished");
+            this.testrunSetFinished = (val != null) ? val : true;
+        }
         return testrunSetFinished;
     }
 
@@ -723,6 +939,10 @@ public class Configurator implements IJAXBHelper {
     }
 
     public Boolean getTestrunIncludeSkipped() {
+        if (this.testrunIncludeSkipped == null) {
+            Boolean val = this.searchTestSuiteProps("include-skipped");
+            this.testrunIncludeSkipped = (val != null) ? val : true;
+        }
         return testrunIncludeSkipped;
     }
 
@@ -731,6 +951,8 @@ public class Configurator implements IJAXBHelper {
     }
 
     public Integer getTestcaseTimeout() {
+        if (this.testcaseTimeout == null)
+            this.testcaseTimeout = Integer.valueOf(this.config.testcase.getTimeout().getMillis());
         return testcaseTimeout;
     }
 
@@ -739,6 +961,8 @@ public class Configurator implements IJAXBHelper {
     }
 
     public Integer getXunitTimeout() {
+        if (this.xunitTimeout == null)
+            this.xunitTimeout = Integer.valueOf(this.config.xunit.getTimeout().getMillis());
         return xunitTimeout;
     }
 
@@ -747,6 +971,8 @@ public class Configurator implements IJAXBHelper {
     }
 
     public String getTcSelectorName() {
+        if (this.tcSelectorName == null)
+            this.tcSelectorName = this.config.testcase.getSelector().getName();
         return tcSelectorName;
     }
 
@@ -755,6 +981,8 @@ public class Configurator implements IJAXBHelper {
     }
 
     public String getTcSelectorVal() {
+        if (this.tcSelectorVal == null)
+            this.tcSelectorVal = this.config.testcase.getSelector().getVal();
         return tcSelectorVal;
     }
 
@@ -763,6 +991,8 @@ public class Configurator implements IJAXBHelper {
     }
 
     public String getXunitSelectorName() {
+        if (this.xunitSelectorName == null)
+            this.xunitSelectorName = this.config.xunit.getSelector().getName();
         return xunitSelectorName;
     }
 
@@ -771,6 +1001,8 @@ public class Configurator implements IJAXBHelper {
     }
 
     public String getXunitSelectorVal() {
+        if (this.xunitSelectorVal == null)
+            this.xunitSelectorVal = this.config.xunit.getSelector().getVal();
         return xunitSelectorVal;
     }
 
@@ -779,6 +1011,8 @@ public class Configurator implements IJAXBHelper {
     }
 
     public String getNewXunit() {
+        if (this.newXunit == null)
+            this.newXunit = "";
         return newXunit;
     }
 
@@ -787,6 +1021,8 @@ public class Configurator implements IJAXBHelper {
     }
 
     public String getCurrentXunit() {
+        if (this.currentXunit == null)
+            this.currentXunit = this.config.xunit.getFile().getPath();
         return currentXunit;
     }
 
@@ -795,11 +1031,35 @@ public class Configurator implements IJAXBHelper {
     }
 
     public Boolean getEditConfig() {
+        if (this.editConfig == null)
+            this.editConfig = false;
         return editConfig;
     }
 
     public void setEditConfig(Boolean editConfig) {
         this.editConfig = editConfig;
+    }
+
+    /**
+     * This is a CLI only arg
+     * @return
+     */
+    public String getGroupId() {
+        return groupId;
+    }
+
+    public void setGroupId(String groupId) {
+        this.groupId = groupId;
+    }
+
+    public String getProjectName() {
+        if (this.projectName == null)
+            this.projectName = this.cfg.getProjectName().getName();
+        return projectName;
+    }
+
+    public void setProjectName(String projectName) {
+        this.projectName = projectName;
     }
 
     @Override
