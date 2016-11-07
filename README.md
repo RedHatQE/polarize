@@ -293,6 +293,7 @@ Given the above annotations, and xml-config.xml as shown earlier, polarize will 
     - If this file also does not exist, generate an xml description file from the given annotation data
       - Pass this generated XML file to the WorkItem importer for it to create a Requirement/TestCase
       - Take the return response and look for the Polarion ID.  Edit this value into the xml description file
+      - From the information in the XML and annotation, edit the mapping.json file 
 - Once the xml file is ready, we know the mapping between test method and Polarion Requirement and TestCase ID
 - When the test run is done and the junit report is created, post process the result file
 
@@ -360,11 +361,85 @@ but the XUnit importer.
 
 ### Listening to CI Bus messages
 
-**TODO** explain how to use the CIBusListener class and the JMS selector
+Because the importers (XUnit and TestCase) send replies back as a message on the CI Bus, it is necessary to listen 
+for these messages.  The xml-config.xml file contains entries like this:
+
+```xml
+    <importer type="testcase">
+      <!-- ellided entries  -->
+      <selector name="rhsm_qe" val="testcase_importer"/><!-- Creates the JMS selector -->
+      <!-- ellided entries -->
+    </importer>
+```
+
+The \<selector\> element contains 2 attributes named name and val.  The JMS selector used to filter out all the messages
+on the bus uses the format "{name}='{val}'".  There are selector elements for both the testcase and xunit importers.
+
+For command line usage of the XUnit Importer, one can override the config file settings by using the --selector option.
+It should take an argument like --selector "name='val'".  For example:
+
+```bash
+java -cp ./polarize-0.5.4-all.jar com.github.redhatqe.polarize.junitreporter.XUnitReporter --selector "rhsm_qe='my_tag'"
+```
+
+#### Embedding in a java project
+
+**TODO** Show how to use the CIMessageBusListener in a java project and as a standalone tool
+
+#### Message Status
+
+In the case of the XUnitReporter, the JSON message will look like this on success:
+
+```json
+{
+  "testrun-url" : "https://mypolarion.server.com/polarion/#/project/RHEL6/testrun?id=RHEL6%202016-11-04%2001-31-39-498",
+  "import-results" : [ {
+    "suite-name" : "CLI: BashCompletion Tests",
+    "status" : "passed"
+  } ],
+  "status" : "passed",
+  "log-url" : "http://my.logstash.server/polarion/RHEL6/20161104-013138.523.log"
+}
+```
+
+### Editing the config file or a xunit result file
+
+There is a configurator class which can be used to edit settings in the xml-config.xml file, or in a given xunit result 
+file.  The former is handy when you need to edit the xml-config.xml file for long term changes, and the latter is nice 
+to have when you only need to edit an existing xunit result file.
+
+This shows an example of modifying an existing xunit result file with other information and storing it in a new file 
+/tmp/modified-testng-polarion.xml
+
+```bash
+java -cp ./polarize-0.5.4-SNAPSHOT-all.jar com.github.redhatqe.polarize.configuration.Configurator \
+--current-xunit /home/stoner/Projects/rhsm-qe/test-output/testng-polarion.xml \
+--new-xunit /tmp/modified-polarion.xml \
+--testrun-id "Personal Testrun 1" \
+--include-skipped true \
+--property notes="A personal test run"
+```
+
+Here's an example of where you might want to change the xml-config settings for a longer term purpose
+
+```
+java -cp ./polarize-0.5.4-SNAPSHOT-all.jar com.github.redhatqe.polarize.configuration.Configurator \
+--edit-config \
+--project RedHatEnterpriseLinux7 \
+--template-id "sean toner master template test"
+```
+
+By using the --edit-config option, this will overwrite the existing xml-config.xml file and backup the original to the 
+~/.polarize/backup directory as a timestamped file.
 
 ### POST to the importers
 
-**TODO** explain how to use the ImporterReqest class to issue the POST calls that will send to the correct endpoint
+polarize can be used as a standalone tool to make an importer request, or it can be embedded in another java project.  
+There is no curl call for the POST'ing of the XML to the endpoint.  Here's an example of manually sending an XUnit 
+request using the XUnitReporter class
+
+**TODO** Give examples of how to run the XUnit and TestCase importers as a standalone tool, and how to embed in another 
+java project
 
 # Using polarize with clojure or other dynamic JVM languages
 
@@ -474,11 +549,6 @@ This limitation can be overcome if you specify a custom xmlDesc in the annotatio
 then you must supply a (unique) file system path.  If no file exists, polarize will generate it there.  When it needs to
 get the Polarion ID, it will read in this file (which is why the path must be unique for each method).
 
-Another limitation is that polarize has to do a lot of work to get the unique ID.  It runs a simple algorithm to map 
-testmethod name to path-to-xml-file.  But then polarize has to read this xml file in, use JAXB to marshall this into a 
-Testcase object, and read in the ID.  That's a lot of IO and marshalling (which can be really slow).  For teams with
-thousands of tests, that might become a performance limitation.
-
-One possible solution to mitigate this would be to write the mapping to a single file.  In essence, it would be a very
-primitive key-value database.  In fact, a sophisticated solution might bundle a small database with polarize.  While
-that might be overkill, it would provide some interesting querying capabilities.
+The system is also somewhat fragile in the sense if the mapping.json file ever gets edited or lost.  This can be 
+mitigated somewhat in the future by allowing a regeneration of the mapping.json file by looking through all the XML 
+description files.  It's also somewhat mitigated due to this file being checked into git.
