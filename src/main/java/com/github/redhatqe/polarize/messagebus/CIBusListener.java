@@ -31,17 +31,53 @@ public class CIBusListener {
     Configurator configurator;
     XMLConfig polarizeConfig;
     private Logger logger;
-
-    public CIBusListener(String configpath) {
-        this.configurator = new Configurator(configpath);
-        this.polarizeConfig = this.configurator.config;
-        this.logger = LoggerFactory.getLogger(CIBusListener.class);
-    }
+    public String topic;
+    public String clientID;
+    public String configpath = "";
+    public MessageListener listener;
 
     public CIBusListener() {
         this.configurator = new Configurator();
         this.polarizeConfig = this.configurator.config;
         this.logger = LoggerFactory.getLogger(CIBusListener.class);
+        this.topic = "CI";
+        this.clientID = "Polarize";
+        this.listener = this.createListener();
+    }
+
+    public CIBusListener(String configpath) {
+        this();
+        this.configurator = new Configurator(configpath);
+    }
+
+    /**
+     * Creates a default listener for MapMessage types
+     * @return
+     */
+    public MessageListener createListener() {
+        ObjectMapper mapper = new ObjectMapper();
+        ObjectNode root = mapper.createObjectNode();
+        return msg -> {
+            try {
+                Enumeration props = msg.getPropertyNames();
+                while(props.hasMoreElements()) {
+                    Object p = props.nextElement();
+                    this.logger.info(String.format("%s: %s", p.toString(), msg.getStringProperty(p.toString())));
+                }
+                if (msg instanceof MapMessage) {
+                    MapMessage mm = (MapMessage) msg;
+                    Enumeration names = mm.getMapNames();
+                    while(names.hasMoreElements()) {
+                        String p = (String) names.nextElement();
+                        String field = mm.getStringProperty(p);
+                        root.set(field, mapper.convertValue(mm.getObject(field), JsonNode.class));
+                    }
+                }
+            }
+            catch (JMSException e) {
+                System.err.println("Error reading message");
+            }
+        };
     }
 
     public Optional<Tuple<Connection, Message>> waitForMessage(String selector) {
@@ -57,11 +93,11 @@ public class CIBusListener {
             factory.setUserName(user);
             factory.setPassword(pw);
             connection = factory.createConnection();
-            connection.setClientID("polarize");
+            connection.setClientID(this.clientID);
             connection.setExceptionListener(exc -> this.logger.error(exc.getMessage()));
 
             Session session = connection.createSession(false, Session.AUTO_ACKNOWLEDGE);
-            Topic dest = session.createTopic("CI");
+            Topic dest = session.createTopic(this.topic);
 
             if (selector == null || selector.equals(""))
                 throw new ConfigurationError("Must supply a value for the selector");
@@ -110,27 +146,7 @@ public class CIBusListener {
             consumer = session.createConsumer(dest, selector);
 
             // FIXME: We need to have some way to know when we see our message.
-            consumer.setMessageListener(msg -> {
-                try {
-                    Enumeration props = msg.getPropertyNames();
-                    while(props.hasMoreElements()) {
-                        Object p = props.nextElement();
-                        this.logger.info(String.format("%s: %s", p.toString(), msg.getStringProperty(p.toString())));
-                    }
-                    if (msg instanceof MapMessage) {
-                        MapMessage mm = (MapMessage) msg;
-                        Enumeration names = mm.getMapNames();
-                        while(names.hasMoreElements()) {
-                            String p = (String) names.nextElement();
-                            String field = mm.getStringProperty(p);
-                            root.set(field, mapper.convertValue(mm.getObject(field), JsonNode.class));
-                        }
-                    }
-                }
-                catch (JMSException e) {
-                    System.err.println("Error reading message");
-                }
-            });
+            consumer.setMessageListener(this.listener);
 
             connection.start();
         } catch (JMSException e) {
