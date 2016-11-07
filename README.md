@@ -12,13 +12,13 @@ polarize has several goals:
 Writing Requirements and TestCases in Polarion by hand is very time consuming.  Being able to auto-generate a Polarion 
 TestCase or Requirement given metadata that already exists in an external format is more ideal. Furthermore, it is 
 better to have a single source of truth (the source code) and have this reflected in Polarion, rather than try to 
-maintain and keep synchronized two sets of data (annotations in the source code, and TestCase/Requirements in Polarion).
+maintain and keep synchronized two sets of data and somehow link the Polarion ID to the test method.
 
 Due to performance limitations we are required to submit TestRun results via a batch operation.  This batch operation
-uses a modified xunit style XML file.  Generating this xunit importer compatible file is tricky for teams using TestNG
-as their framework since the junit reports it generates lacks some crucial information, like pass/fail at the testcase 
-level, or parameterized arguments.  And of course, it also does not supply the modifications needed by the XUnit 
-importer.
+uses a modified xunit style XML file which gets POST'ed to a REST service endpoint on the Polarion plugin.  Generating 
+this xunit importer compatible file is tricky for teams using TestNG as their framework since the junit reports it 
+generates lacks some crucial information, like pass/fail at the testcase level, or parameterized arguments.  And of 
+course, it also does not supply the modifications needed by the XUnit importer.
 
 ## How does it work?
 
@@ -94,6 +94,7 @@ a mapping file in a JSON format (or if this is the first time compiling with pol
 it will generate the mapping file).  Rather than do a cumbersome look up algorithm  of qualified test name to its 
 matching test definition XML file, and then loading this file to obtain the Polarion ID, the mapping file is loaded once
 into memory, and used for any look up of the qualified test method name to its matching Project ID and Polarion ID.  
+
 Note that this is a 2-level mapping of qualifiedName -\> ProjectID -\> PolarionID, since a method can and probably does 
 exist in more than one Project, it will also have one or more corresponding Polarion TestCases.  The mapping file also 
 contains an array of the names of the parameters used for this method if it is a parameterized test.  This is so that 
