@@ -201,6 +201,109 @@ The config file has some documentation for what the various settings are used fo
 
 This section will describe how to make use of polarize
 
+### Example xml-config.xml file 
+
+```xml
+<config>
+  <!-- The name of your project or team.  Can be used to replace {project-name} in the 
+  <testrun id="{project-name}"> attribute as a default -->
+  <project-name name="RHSM-QE"/>
+  <!-- The value of basedir can be used like <requirements-xml path="{basedir}/requirements"-->
+  <basedir path="/home/stoner/Projects/rhsm-qe"/>
+  <!-- <requirements-xml path="/home/stoner/Projects/rhsm-qe/requirements"/> -->
+  <requirements-xml path="{basedir}/requirements"/>
+  <!-- <testcases-xml path="/home/stoner/Projects/rhsm-qe/testcases"/> -->
+  <testcases-xml path="{basedir}/testcases"/>
+  <!-- Maps the qualified name to project -> id -->
+  <mapping path="{basedir}/mapping.json"/>
+  <author>ci-user</author>
+  <project>RHEL6</project>
+  <servers>
+    <server name="polarion"
+            url="https://path.to.your.polarion/polarion"
+            user="foo"
+            password="____________"/>
+    <server name="kerberos"
+            user="foo"
+            password="____________"/>
+    <server name="ossrh"
+            user="ossrh-user"
+            password="ossrh-pw"/>
+    <server name="broker"
+            url="tcp://your.broker:61616"/>
+  </servers>
+  <importers>
+    <importer type="testcase"><!-- settings for the testcase importer -->
+      <endpoint route="/import/testcase"/>
+      <!-- The path for where the generated xml filed used for TestCase importer will be created --> 
+      <file path="/tmp/testcases.xml"/>
+      <!-- Creates the JMS selector
+       The -->
+      <selector name="rhsm_qe" val="testcase_importer"/>
+      <!-- An optional prefix and suffix.  If none is given, the qualified name of the method is the title -->
+      <title prefix="RHSM-TC : " suffix=""/>
+      <timeout millis="300000"/><!-- time in milliseconds to wait for message reply -->
+      <enabled>false</enabled>
+    </importer>
+    <importer type="xunit"><!-- # settings for the xunit importer -->
+      <!-- id is an optional unique id for testrun. Defaults to a timestamp (uniqueness guaranteed by client)
+           title is the (possibly non-unique) name of the testrun-->
+      <template-id id=""/>
+      <testrun id="{project-name}" title=""/>
+      <endpoint route="/import/xunit"/>
+      <file path="{basedir}/test-output/testng-polarion.xml"/>
+      <!-- # the JMS selector <name>='<value>' -->
+      <selector name="rhsm_qe" val="xunit_importer"/>
+      <!-- A list of key-value pairs.  The response properties are used by the xunit importer -->
+      <test-suite>
+          <property name="dry-run" val="false"/>
+          <property name="set-testrun-finished" val="true"/>
+          <property name="include-skipped" val="false"/>
+      </test-suite>
+      <!-- These are custom fields in the Polarion TestRun -->
+      <custom-fields>
+        <property name="plannedin" val=""/><!-- The plannedin phase -->
+        <property name="jenkinsjobs" val=""/><!-- Path to the jenkins job -->
+        <property name="notes" val=""/><!-- arbitrary field -->
+      </custom-fields>
+      <timeout millis="300000"/><!-- time in milliseconds to wait for reply message -->
+      <enabled>true</enabled>
+    </importer>
+  </importers>
+</config>
+
+```
+
+### Editing the config file or a xunit result file
+
+There is a configurator class which can be used to edit settings in the xml-config.xml file, or in a given xunit result 
+file.  The former is handy when you need to edit the xml-config.xml file for long term changes, and the latter is nice 
+to have when you only need to edit an existing xunit result file.
+
+This shows an example of modifying an existing xunit result file with other information and storing it in a new file 
+/tmp/modified-testng-polarion.xml
+
+```bash
+java -cp ./polarize-0.5.4-SNAPSHOT-all.jar com.github.redhatqe.polarize.configuration.Configurator \
+--current-xunit /home/stoner/Projects/rhsm-qe/test-output/testng-polarion.xml \
+--new-xunit /tmp/modified-polarion.xml \
+--testrun-id "Personal Testrun 1" \
+--include-skipped true \
+--property notes="A personal test run"
+```
+
+Here's an example of where you might want to change the xml-config settings for a longer term purpose
+
+```
+java -cp ./polarize-0.5.4-SNAPSHOT-all.jar com.github.redhatqe.polarize.configuration.Configurator \
+--edit-config \
+--project RedHatEnterpriseLinux7 \
+--template-id "sean toner master template test"
+```
+
+By using the --edit-config option, this will overwrite the existing xml-config.xml file and backup the original to the 
+~/.polarize/backup directory as a timestamped file.
+
 ### Annotations for Testcase definitions
 
 The polarize project uses 2 new custom annotation types.  The @TestDefinition annotation is used for all the metadata
@@ -247,12 +350,6 @@ public class TestReq {
               testtype=@TestType(testtype= DefTypes.TestTypes.NONFUNCTIONAL,  // Defaults to FUNCTIONAL
                                  subtype1= DefTypes.Subtypes.COMPLIANCE,      // Defaults to EMPTY (see note)
                                  subtype2= DefTypes.Subtypes.EMPTY),          // Defaults to EMPTY (see note)
-              reqs={@Requirement(id="",            // if empty, look for class Requirement.  If no class requirement
-                                                   // look for xmlDesc.  If none, that means request one.
-                                 project=Project.RedHatEnterpriseLinux7,
-                                 description="This description will override class level",
-                                 xmlDesc="/tmp/path/to/xml/description/testUpgradeNegative.xml",
-                                 feature="/tmp/path/to/a/gherkin/file/requirements.feature")},
               setup="Description of any preconditions that must be established for test case to run",
               teardown="The methods to clean up after a test method")
     @Test(groups={"simple"},
@@ -403,35 +500,7 @@ In the case of the XUnitReporter, the JSON message will look like this on succes
 }
 ```
 
-### Editing the config file or a xunit result file
 
-There is a configurator class which can be used to edit settings in the xml-config.xml file, or in a given xunit result 
-file.  The former is handy when you need to edit the xml-config.xml file for long term changes, and the latter is nice 
-to have when you only need to edit an existing xunit result file.
-
-This shows an example of modifying an existing xunit result file with other information and storing it in a new file 
-/tmp/modified-testng-polarion.xml
-
-```bash
-java -cp ./polarize-0.5.4-SNAPSHOT-all.jar com.github.redhatqe.polarize.configuration.Configurator \
---current-xunit /home/stoner/Projects/rhsm-qe/test-output/testng-polarion.xml \
---new-xunit /tmp/modified-polarion.xml \
---testrun-id "Personal Testrun 1" \
---include-skipped true \
---property notes="A personal test run"
-```
-
-Here's an example of where you might want to change the xml-config settings for a longer term purpose
-
-```
-java -cp ./polarize-0.5.4-SNAPSHOT-all.jar com.github.redhatqe.polarize.configuration.Configurator \
---edit-config \
---project RedHatEnterpriseLinux7 \
---template-id "sean toner master template test"
-```
-
-By using the --edit-config option, this will overwrite the existing xml-config.xml file and backup the original to the 
-~/.polarize/backup directory as a timestamped file.
 
 ### POST to the importers
 
