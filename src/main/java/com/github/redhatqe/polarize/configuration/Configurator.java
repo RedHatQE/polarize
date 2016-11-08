@@ -1,5 +1,6 @@
 package com.github.redhatqe.polarize.configuration;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.redhatqe.polarize.IJAXBHelper;
 import com.github.redhatqe.polarize.JAXBHelper;
 import com.github.redhatqe.polarize.Utility;
@@ -17,6 +18,7 @@ import joptsimple.OptionSpec;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
 import java.net.URL;
@@ -159,6 +161,8 @@ public class Configurator implements IJAXBHelper {
             OptionSpec<String> spec = this.sSpecs.get(opt);
             if (this.opts.has(spec)) {
                 String val = opts.valueOf(spec);
+                if (val.contains("&quot;"))
+                    val = val.replace("&quot;", "");
                 Setter<String> s = es.getValue().second;
                 s.set(val);
             }
@@ -196,6 +200,7 @@ public class Configurator implements IJAXBHelper {
                 .map(this::parseProperty)
                 .collect(Collectors.toList());
     }
+
 
     private void setServers(OptionSet opts) {
         OptionSpec<String> serverSpec = this.sSpecs.get(Opts.SERVER);
@@ -466,7 +471,12 @@ public class Configurator implements IJAXBHelper {
         st.setName(tokens[0]);
         st.setUser(tokens[1]);
         st.setPassword(tokens[2]);
-        st.setUrl(tokens[3]);
+        try {
+            st.setUrl(tokens[3]);
+        }
+        catch (ArrayIndexOutOfBoundsException oob) {
+
+        }
         return st;
     }
 
@@ -478,6 +488,10 @@ public class Configurator implements IJAXBHelper {
         String[] tokens = cust.split("=");
         if (tokens.length != 2)
             throw new InvalidArgument("--property must be in key=value form");
+        if (tokens[0].contains(" "))
+                throw new InvalidArgument("--property in name=val can not have space in name");
+        if (tokens[1].contains("\""))
+            tokens[1] = tokens[1].replace("\"", "");
         Property prop = new Property();
         prop.setName(String.format("polarion-custom-%s", tokens[0]));
         prop.setValue(tokens[1]);
@@ -514,43 +528,6 @@ public class Configurator implements IJAXBHelper {
         File config = new File(path);
         JAXBHelper jaxb = new JAXBHelper();
         IJAXBHelper.marshaller(cfg, config, jaxb.getXSDFromResource(ConfigType.class));
-    }
-
-    private class Opts {
-        static final String TESTRUN_TITLE = "testrun-title";
-        static final String TESTRUN_ID = "testrun-id";
-        static final String PROJECT = "project";
-        static final String TESTCASE_PREFIX = "testcase-prefix";
-        static final String TESTCASE_SUFFIX = "testcase-suffix";
-        static final String PLANNEDIN= "plannedin";
-        static final String JENKINSJOBS= "jenkinsjobs";
-        static final String NOTES ="notes";
-        static final String TEMPLATE_ID = "template-id";
-        static final String TC_SELECTOR_NAME = "testcase-selector-name";
-        static final String TC_SELECTOR_VAL = "testcase-selector-val";
-        static final String XUNIT_SELECTOR_NAME = "xunit-selector-name";
-        static final String XUNIT_SELECTOR_VAL = "xunit-selector-val";
-
-        static final String TC_IMPORTER_ENABLED = "testcase-importer-enabled";
-        static final String XUNIT_IMPORTER_ENABLED = "xunit-importer-enabled";
-        static final String TR_DRY_RUN = "dry-run";
-        static final String TR_SET_FINISHED = "set-testrun-finished";
-        static final String TR_INCLUDE_SKIPPED = "include-skipped";
-
-        static final String TC_IMPORTER_TIMEOUT = "testcase-importer-timeout";
-        static final String XUNIT_IMPORTER_TIMEOUT = "xunit-importer-timeout";
-        static final String TR_PROPERTY = "property";
-        static final String NEW_XUNIT = "new-xunit";
-        static final String CURRENT_XUNIT = "current-xunit";
-        static final String EDIT_CONFIG = "edit-config";
-        static final String PROJECT_NAME = "project-name";
-        static final String GROUP_ID = "group-id";
-
-        // This option takes the form of name,user,pw,url.  If any are missing, leave it empty. name is required
-        // --server polarion,ci-user,&$Err,http://some/url
-        // --server kerb,stoner,myP@ss,
-        // --server ossrh,stoner,ossrh-p@ss,
-        static final String SERVER = "server";
     }
 
     private enum TestsuiteProps {
@@ -754,6 +731,14 @@ public class Configurator implements IJAXBHelper {
 
         File newxunit = new File(newpath);
         IJAXBHelper.marshaller(suites ,newxunit, jaxb.getXSDFromResource(Testsuites.class));
+
+        ObjectMapper mapper = new ObjectMapper();
+        try {
+            mapper.writer().withDefaultPrettyPrinter().writeValue(new File("/tmp/testsuites.json"), suites);
+            mapper.writer().withDefaultPrettyPrinter().writeValue(new File("/tmp/config.json"), this.cfg);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 
     /**
@@ -782,9 +767,40 @@ public class Configurator implements IJAXBHelper {
         logger.info("Done configuring the config file");
     }
 
+    public static void parseJson(String jsonPath) {
+        Configurator cfg = new Configurator();
+        Opts opts = new Opts();
+        File json = new File(jsonPath);
+        StringBuffer sb = new StringBuffer();
+        try {
+            BufferedReader rdr = Files.newBufferedReader(json.toPath());
+            rdr.lines().forEach(l -> sb.append(l).append("\n"));
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        String[] newArgs = opts.parse(sb.toString());
+        cfg.parse(newArgs);
+
+        OptionSpec<String> xunit = cfg.sSpecs.get(Opts.CURRENT_XUNIT);
+        String testng;
+        if (xunit != null && cfg.opts.has(xunit))
+            testng = cfg.opts.valueOf(xunit);
+        else
+            testng = cfg.config.getXunitImporterFilePath();
+        cfg.editTestSuite(testng, "/tmp/modified-from-json.xml");
+    }
+
+    public String sanitize(String in) {
+        if (in.contains("&quot;"))
+            return in.replace("&quot;", "");
+        if (in.contains("\""))
+            return in.replace("\"", "");
+        return in;
+    }
+
     public String getTestrunID() {
         if (this.testrunID == null) {
-            this.testrunID = this.config.xunit.getTestrun().getId();
+            this.testrunID = this.sanitize(this.config.xunit.getTestrun().getId());
             if (this.testrunID.equals("{project-name}"))
                 this.testrunID = Utility.makeTimeStamp(this.cfg.getProjectName().getName(), "");
         }
@@ -792,7 +808,7 @@ public class Configurator implements IJAXBHelper {
     }
 
     public void setTestrunID(String id) {
-        this.testrunID = id;
+        this.testrunID = this.sanitize(id);
     }
 
     public String getTestrunTitle() {
@@ -803,19 +819,17 @@ public class Configurator implements IJAXBHelper {
     }
 
     public void setTestrunTitle(String testrunTitle) {
-        this.testrunTitle = testrunTitle;
+        this.testrunTitle = this.sanitize(testrunTitle);
     }
-
-
 
     public String getProject() {
         if (this.project == null)
-            this.project = this.cfg.getProject();
+            this.project = this.sanitize(this.cfg.getProject());
         return project;
     }
 
     public void setProject(String project) {
-        this.project = project;
+        this.project = this.sanitize(project);
     }
 
     public String getTestcasePrefix() {
@@ -825,7 +839,7 @@ public class Configurator implements IJAXBHelper {
     }
 
     public void setTestcasePrefix(String testcasePrefix) {
-        this.testcasePrefix = testcasePrefix;
+        this.testcasePrefix = this.sanitize(testcasePrefix);
     }
 
     public String getTestcaseSuffix() {
@@ -835,26 +849,26 @@ public class Configurator implements IJAXBHelper {
     }
 
     public void setTestcaseSuffix(String testcaseSuffix) {
-        this.testcaseSuffix = testcaseSuffix;
+        this.testcaseSuffix = this.sanitize(testcaseSuffix);
     }
 
     private String searchCustomFields(String field) {
         String value = "";
         for(PropertyType pt: this.config.getCustomFields()) {
             if (pt.getName().equals(field))
-                value = pt.getVal();
+                value = this.sanitize(pt.getVal());
         }
         return value;
     }
 
     public String getPlannedin() {
         if (this.plannedin == null)
-            this.plannedin = this.searchCustomFields("plannedin");
+            this.plannedin = this.sanitize(this.searchCustomFields("plannedin"));
         return plannedin;
     }
 
     public void setPlannedin(String plannedin) {
-        this.plannedin = plannedin;
+        this.plannedin = this.sanitize(plannedin);
     }
 
     public String getJenkinsjobs() {
@@ -864,17 +878,17 @@ public class Configurator implements IJAXBHelper {
     }
 
     public void setJenkinsjobs(String jenkinsjobs) {
-        this.jenkinsjobs = jenkinsjobs;
+        this.jenkinsjobs = this.sanitize(jenkinsjobs);
     }
 
     public String getNotes() {
         if (this.notes == null)
-            this.notes = this.searchCustomFields("notes");
+            this.notes = this.sanitize(this.searchCustomFields("notes"));
         return notes;
     }
 
     public void setNotes(String notes) {
-        this.notes = notes;
+        this.notes = this.sanitize(notes);
     }
 
     public String getTemplateId() {
@@ -882,7 +896,7 @@ public class Configurator implements IJAXBHelper {
     }
 
     public void setTemplateId(String templateId) {
-        this.templateId = templateId;
+        this.templateId = this.sanitize(templateId);
     }
 
     public Boolean getTestcaseImporterEnabled() {
@@ -972,32 +986,32 @@ public class Configurator implements IJAXBHelper {
 
     public String getTcSelectorName() {
         if (this.tcSelectorName == null)
-            this.tcSelectorName = this.config.testcase.getSelector().getName();
+            this.tcSelectorName = this.sanitize(this.config.testcase.getSelector().getName());
         return tcSelectorName;
     }
 
     public void setTcSelectorName(String tcSelectorName) {
-        this.tcSelectorName = tcSelectorName;
+        this.tcSelectorName = this.sanitize(tcSelectorName);
     }
 
     public String getTcSelectorVal() {
         if (this.tcSelectorVal == null)
-            this.tcSelectorVal = this.config.testcase.getSelector().getVal();
+            this.tcSelectorVal = this.sanitize(this.config.testcase.getSelector().getVal());
         return tcSelectorVal;
     }
 
     public void setTcSelectorVal(String tcSelectorVal) {
-        this.tcSelectorVal = tcSelectorVal;
+        this.tcSelectorVal = this.sanitize(tcSelectorVal);
     }
 
     public String getXunitSelectorName() {
         if (this.xunitSelectorName == null)
-            this.xunitSelectorName = this.config.xunit.getSelector().getName();
+            this.xunitSelectorName = this.sanitize(this.config.xunit.getSelector().getName());
         return xunitSelectorName;
     }
 
     public void setXunitSelectorName(String xunitSelectorName) {
-        this.xunitSelectorName = xunitSelectorName;
+        this.xunitSelectorName = this.sanitize(xunitSelectorName);
     }
 
     public String getXunitSelectorVal() {
@@ -1007,7 +1021,7 @@ public class Configurator implements IJAXBHelper {
     }
 
     public void setXunitSelectorVal(String xunitSelectorVal) {
-        this.xunitSelectorVal = xunitSelectorVal;
+        this.xunitSelectorVal = this.sanitize(xunitSelectorVal);
     }
 
     public String getNewXunit() {
@@ -1017,17 +1031,17 @@ public class Configurator implements IJAXBHelper {
     }
 
     public void setNewXunit(String newXunit) {
-        this.newXunit = newXunit;
+        this.newXunit = this.sanitize(newXunit);
     }
 
     public String getCurrentXunit() {
         if (this.currentXunit == null)
-            this.currentXunit = this.config.xunit.getFile().getPath();
+            this.currentXunit = this.sanitize(this.config.xunit.getFile().getPath());
         return currentXunit;
     }
 
     public void setCurrentXunit(String currentXunit) {
-        this.currentXunit = currentXunit;
+        this.currentXunit = this.sanitize(currentXunit);
     }
 
     public Boolean getEditConfig() {
