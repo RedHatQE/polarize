@@ -759,6 +759,8 @@ public class Configurator implements IJAXBHelper {
         String newXunit = cfg.getNewXunit();
         cfg.editTestSuite(testng, newXunit);
 
+        Configurator.parseJson("/home/stoner/.polarize/config.json");
+
         Boolean edit = cfg.getEditConfig();
         if (edit) {
             Configurator.rotator(path);

@@ -94,22 +94,6 @@ public class Opts {
 
         }
 
-        public Boolean getEnabled() {
-            return enabled;
-        }
-
-        public void setEnabled(Boolean enabled) {
-            this.enabled = enabled;
-        }
-
-        public Integer getTimeout() {
-            return timeout;
-        }
-
-        public void setTimeout(Integer timeout) {
-            this.timeout = timeout;
-        }
-
         public String getFile() {
             return file;
         }
@@ -117,29 +101,10 @@ public class Opts {
         public void setFile(String file) {
             this.file = file;
         }
-
-        public String getSelectorName() {
-            return selectorName;
-        }
-
-        public void setSelectorName(String selectorName) {
-            this.selectorName = selectorName;
-        }
-
-        public String getSelectorVal() {
-            return selectorVal;
-        }
-
-        public void setSelectorVal(String selectorVal) {
-            this.selectorVal = selectorVal;
-        }
     }
 
     public class XUnit extends Importer {
         private String newXunit;
-        public XUnit() {
-            super();
-        }
 
         public XUnit(JsonNode node) {
             super();
@@ -176,10 +141,6 @@ public class Opts {
                         break;
                 }
             }
-        }
-
-        public String getNewXunit() {
-            return newXunit;
         }
 
         public void setNewXunit(String newXunit) {
@@ -252,22 +213,10 @@ public class Opts {
             }
         }
 
-        public TestCaseImporter() {
-            super();
-        }
-
-        public String getPrefix() {
-            return prefix;
-        }
-
         public void setPrefix(String prefix) {
             if (!prefix.equals(""))
                 argMap.put(Opts.TESTCASE_PREFIX, prefix);
             this.prefix = prefix;
-        }
-
-        public String getSuffix() {
-            return suffix;
         }
 
         public void setSuffix(String suffix) {
@@ -352,10 +301,6 @@ public class Opts {
             }
         }
 
-        public String getTemplateId() {
-            return templateId;
-        }
-
         public void setTemplateId(String templateId) {
             if (!templateId.equals(""))
                 argMap.put(Opts.TEMPLATE_ID, templateId);
@@ -382,26 +327,14 @@ public class Opts {
             this.id = id;
         }
 
-        public Boolean getDryRun() {
-            return dryRun;
-        }
-
         public void setDryRun(Boolean dryRun) {
             argMap.put(Opts.TR_DRY_RUN, Boolean.toString(dryRun));
             this.dryRun = dryRun;
         }
 
-        public Boolean getSetFinished() {
-            return setFinished;
-        }
-
         public void setSetFinished(Boolean setFinished) {
             argMap.put(Opts.TR_SET_FINISHED, Boolean.toString(setFinished));
             this.setFinished = setFinished;
-        }
-
-        public Boolean getIncludeSkipped() {
-            return includeSkipped;
         }
 
         public void setIncludeSkipped(Boolean includeSkipped) {
