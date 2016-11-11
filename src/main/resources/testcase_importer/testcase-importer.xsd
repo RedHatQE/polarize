@@ -9,18 +9,19 @@
         <xs:element maxOccurs="unbounded" ref="testcase"/>
       </xs:sequence>
       <xs:attribute name="project-id" use="required"/>
-      <xs:attribute name="user-id" use="required"/>
+      <xs:attribute name="document-relative-path"/>
     </xs:complexType>
   </xs:element>
   <xs:element name="testcase">
     <xs:complexType>
-      <xs:sequence>
-        <xs:element ref="title"/>
-        <xs:element ref="description"/>
-        <xs:element minOccurs="0" ref="test-steps"/>
-        <xs:element minOccurs="0" ref="custom-fields"/>
-      </xs:sequence>
-      <xs:attribute name="id" use="required"/>
+      <xs:all>
+        <xs:element ref="title" minOccurs="0"/>
+        <xs:element ref="description" minOccurs="0"/>
+        <xs:element ref="test-steps" minOccurs="0"/>
+        <xs:element ref="custom-fields" minOccurs="0"/>
+        <xs:element ref="linked-work-items" minOccurs="0"/>
+      </xs:all>
+      <xs:attribute name="id"/>
       <xs:attribute name="assignee-id"/>
       <xs:attribute name="due-date"/>
       <xs:attribute name="initial-estimate"/>
@@ -47,7 +48,7 @@
 	  <xs:sequence minOccurs="0" maxOccurs="unbounded">
 		<xs:element ref="parameter" />
       </xs:sequence>
-      <xs:attribute name="id"/>
+      <xs:attribute name="id" use="required"/>
     </xs:complexType>
   </xs:element>
   <xs:element name="parameter">
@@ -78,6 +79,21 @@
           <xs:attribute name="content"/>
         </xs:extension>
       </xs:simpleContent>
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="linked-work-items">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element maxOccurs="unbounded" ref="linked-work-item"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="linked-work-item">
+    <xs:complexType>
+	  <xs:attribute name="workitem-id" use="required"/>
+	  <xs:attribute name="role-id" use="required"/>
+	  <xs:attribute name="suspect" default="false"/>
+	  <xs:attribute name="revision"/>
     </xs:complexType>
   </xs:element>
 

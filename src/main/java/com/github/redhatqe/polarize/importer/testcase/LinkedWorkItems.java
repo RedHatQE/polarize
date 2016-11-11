@@ -27,7 +27,7 @@ import javax.xml.bind.annotation.XmlType;
  *   &lt;complexContent>
  *     &lt;restriction base="{http://www.w3.org/2001/XMLSchema}anyType">
  *       &lt;sequence>
- *         &lt;element ref="{}test-step-column" maxOccurs="unbounded"/>
+ *         &lt;element ref="{}linked-work-item" maxOccurs="unbounded"/>
  *       &lt;/sequence>
  *     &lt;/restriction>
  *   &lt;/complexContent>
@@ -38,41 +38,41 @@ import javax.xml.bind.annotation.XmlType;
  */
 @XmlAccessorType(XmlAccessType.FIELD)
 @XmlType(name = "", propOrder = {
-    "testStepColumn"
+    "linkedWorkItem"
 })
-@XmlRootElement(name = "test-step")
-public class TestStep {
+@XmlRootElement(name = "linked-work-items")
+public class LinkedWorkItems {
 
-    @XmlElement(name = "test-step-column", required = true)
-    protected List<TestStepColumn> testStepColumn;
+    @XmlElement(name = "linked-work-item", required = true)
+    protected List<LinkedWorkItem> linkedWorkItem;
 
     /**
-     * Gets the value of the testStepColumn property.
+     * Gets the value of the linkedWorkItem property.
      * 
      * <p>
      * This accessor method returns a reference to the live list,
      * not a snapshot. Therefore any modification you make to the
      * returned list will be present inside the JAXB object.
-     * This is why there is not a <CODE>set</CODE> method for the testStepColumn property.
+     * This is why there is not a <CODE>set</CODE> method for the linkedWorkItem property.
      * 
      * <p>
      * For example, to add a new item, do as follows:
      * <pre>
-     *    getTestStepColumn().add(newItem);
+     *    getLinkedWorkItem().add(newItem);
      * </pre>
      * 
      * 
      * <p>
      * Objects of the following type(s) are allowed in the list
-     * {@link TestStepColumn }
+     * {@link LinkedWorkItem }
      * 
      * 
      */
-    public List<TestStepColumn> getTestStepColumn() {
-        if (testStepColumn == null) {
-            testStepColumn = new ArrayList<TestStepColumn>();
+    public List<LinkedWorkItem> getLinkedWorkItem() {
+        if (linkedWorkItem == null) {
+            linkedWorkItem = new ArrayList<LinkedWorkItem>();
         }
-        return this.testStepColumn;
+        return this.linkedWorkItem;
     }
 
 }
