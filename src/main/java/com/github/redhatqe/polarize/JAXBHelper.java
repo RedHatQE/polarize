@@ -6,7 +6,6 @@ import com.github.redhatqe.polarize.importer.xunit.Testsuites;
 import com.github.redhatqe.polarize.importer.testcase.Testcase;
 import com.github.redhatqe.polarize.importer.testcase.Testcases;
 
-import javax.xml.bind.JAXB;
 import java.net.URL;
 
 

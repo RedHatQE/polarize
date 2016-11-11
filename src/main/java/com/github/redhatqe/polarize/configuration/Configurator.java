@@ -695,9 +695,18 @@ public class Configurator implements IJAXBHelper {
      *
      * @param tsPath
      */
-    public void editTestSuite(String tsPath, String newpath) {
+    public void editTestSuite(String tsPath, String newpath) throws IOException {
         File xunit = new File(tsPath);
-        if (tsPath.startsWith("http"))
+        if (tsPath.startsWith("https")) {
+            String user = this.config.kerb.getUser();
+            String pw = this.config.kerb.getPassword();
+            Optional<File> maybeXunit = ImporterRequest.get(tsPath, user, pw, newpath);
+            if (maybeXunit.isPresent())
+                xunit = maybeXunit.get();
+            else
+                throw new IOException("Could not download " + tsPath);
+        }
+        else if (tsPath.startsWith("http"))
             xunit = ImporterRequest.download(tsPath, "/tmp/tmp-polarion.xml");
         if (!xunit.exists())
             throw new InvalidArgument(tsPath + " does not exist");
@@ -746,7 +755,7 @@ public class Configurator implements IJAXBHelper {
      *
      * @param args
      */
-    public static void main(String[] args) {
+    public static void main(String[] args) throws IOException {
         Configurator cfg = new Configurator();
         cfg.parse(args);
         String path = cfg.configPath;
@@ -758,8 +767,9 @@ public class Configurator implements IJAXBHelper {
             testng = cfg.config.getXunitImporterFilePath();
         String newXunit = cfg.getNewXunit();
         cfg.editTestSuite(testng, newXunit);
+        Configurator.logger.info("Temporary xml config created in " + newXunit);
 
-        Configurator.parseJson("/home/stoner/.polarize/config.json");
+        //Configurator.parseJson("/home/stoner/.polarize/config.json");
 
         Boolean edit = cfg.getEditConfig();
         if (edit) {
@@ -769,10 +779,9 @@ public class Configurator implements IJAXBHelper {
         logger.info("Done configuring the config file");
     }
 
-    public static void parseJson(String jsonPath) {
+    public static void parseJson(File json, String newXML) {
         Configurator cfg = new Configurator();
         Opts opts = new Opts();
-        File json = new File(jsonPath);
         StringBuffer sb = new StringBuffer();
         try {
             BufferedReader rdr = Files.newBufferedReader(json.toPath());
@@ -789,7 +798,30 @@ public class Configurator implements IJAXBHelper {
             testng = cfg.opts.valueOf(xunit);
         else
             testng = cfg.config.getXunitImporterFilePath();
-        cfg.editTestSuite(testng, "/tmp/modified-from-json.xml");
+        try {
+            cfg.editTestSuite(testng, newXML);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public static void parseJson(String jsonBody, String newXML) {
+        Configurator cfg = new Configurator();
+        Opts opts = new Opts();
+        String[] newArgs = opts.parse(jsonBody);
+        cfg.parse(newArgs);
+
+        OptionSpec<String> xunit = cfg.sSpecs.get(Opts.CURRENT_XUNIT);
+        String testng;
+        if (xunit != null && cfg.opts.has(xunit))
+            testng = cfg.opts.valueOf(xunit);
+        else
+            testng = cfg.config.getXunitImporterFilePath();
+        try {
+            cfg.editTestSuite(testng, newXML);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 
     public String sanitize(String in) {
