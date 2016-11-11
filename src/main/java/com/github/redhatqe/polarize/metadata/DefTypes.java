@@ -60,6 +60,9 @@ public enum DefTypes {
         }
     }
 
+    /**
+     * These are the custom fields for the TestCase WorkItem type (you will see these in the Polarion GUI)
+     */
     public enum Custom implements ToString {
         CASEAUTOMATION,
         CASEIMPORTANCE,
@@ -79,5 +82,19 @@ public enum DefTypes {
 
     public enum Severity implements ToString {
         MUSTHAVE, SHOULDHAVE, NICETOHAVE, WILLNOTHAVE
+    }
+
+    /**
+     * Taken from Polarion GUI on a WorkItem under Linked Work Items and if you select "role" drop down
+     */
+    public enum Role implements  ToString {
+        RELATES_TO,
+        HAS_PARENT,
+        DUPLICATES,
+        VERIFIES,
+        IS_RELATED_TO,
+        IS_PARENT_OF,
+        IS_DUPLICATED_BY,
+        TRIGGERS
     }
 }

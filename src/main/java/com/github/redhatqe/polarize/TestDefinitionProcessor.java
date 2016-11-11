@@ -67,6 +67,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
     private XMLConfig config;
     private ConfigType cfg;
     public List<Meta<TestDefinition>> badAnnotations = new ArrayList<>();
+    public static Map<String, WarningInfo> warnings = new HashMap<>();
 
     /**
      * Recursive function that will get the fully qualified name of a method.
@@ -154,6 +155,17 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         return parameters;
     }
 
+    /**
+     * Checks that the length of the projectID and testCaseID are equal
+     *
+     * If a user specifies 2 projectID, then they can not rely on the default behavior of testCaseID since the
+     * default for testCaseID is a single {""}.  If 2 or more projectID are specified, there must be an equal
+     * number specified in the testCaseID.  This also works conversely.  If there are multiple testCaseID, then
+     * the same number of projectID must be specified.
+     *
+     * @param meta
+     * @param name
+     */
     public void validateProjectToTestCase(TestDefinition meta, String name) {
         int plength = meta.projectID().length;
         int tclength = meta.testCaseID().length;
@@ -178,6 +190,16 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         }
     }
 
+    /**
+     * Find all methods annotated with multiple @TestDefinition and return a List of matching Meta\<TestDefinition\>
+     *
+     * The Element object will provide access to the raw TestDefinition data.  This annotation contains all
+     * we need to create the Meta object which has all the metadata we need.  This method will find annotations with
+     * multiple @TestDefinition applied to the method.
+     *
+     * @param elements
+     * @return
+     */
     private List<Meta<TestDefinition>>
     makeMetaFromTestDefinitions(List<? extends Element> elements){
         List<Meta<TestDefinition>> metas = new ArrayList<>();
@@ -207,6 +229,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         return metas;
     }
 
+    // FIXME: I think this should be removed in favor of the Meta functions
     private Meta<TestDefinition>
     createMeta(TestDefinition r, List<Parameter> params, Project project, Element e, String testID, Boolean badAnn) {
         Meta<TestDefinition> m = new Meta<>();
@@ -326,9 +349,24 @@ public class TestDefinitionProcessor extends AbstractProcessor {
             logger.info("Did not update the mapping file");
         }
 
+        this.printWarnings(warnings);
         this.tcMap = new HashMap<>();
         this.mappingFile = new HashMap<>();
         return true;
+    }
+
+    private void printWarnings(Map<String, WarningInfo> warns) {
+        if (this.tcMap.isEmpty()) {
+            String warnMsg = warnings.entrySet().stream()
+                    .map(es -> {
+                        String meth = es.getKey();
+                        WarningInfo wi = es.getValue();
+                        String msg = String.format("In %s- %s : %s", meth, wi.project, wi.wt.message());
+                        return msg;
+                    })
+                    .reduce("", (acc, n) -> String.format("%s%s\n", acc, n));
+            logger.warn(warnMsg);
+        }
     }
 
     private static void addBadFunction(String qualName, String project, List<String> badFuncs) {
@@ -450,7 +488,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
             return Optional.empty();
         }
         tests.setProjectId(projectID);
-        tests.setUserId(author);
+        //tests.setUserId(author);
         tests.getTestcase().addAll(testMap.get(projectID));
 
         ResponseProperties respProp = tests.getResponseProperties();
@@ -470,6 +508,19 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         return Optional.of(projectID);
     }
 
+    /**
+     * Sends an import request for each project
+     *
+     * @param testcaseMap
+     * @param selectorName
+     * @param selectorValue
+     * @param author
+     * @param url
+     * @param user
+     * @param pw
+     * @param tests
+     * @return
+     */
     public static List<Optional<ObjectNode>>
     tcImportRequest(Map<String, List<Testcase>> testcaseMap, String selectorName, String selectorValue, String author,
                     String url, String user, String pw, Testcases tests) {
@@ -945,9 +996,28 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         else
             tc.setTitle(def.title());
 
+        TestDefinitionProcessor.setLinkedWorkItems(tc, def);
         tc.setId(TestDefinitionProcessor.getPolarionIDFromDef(def, meta.project));
         tc.setCustomFields(custom);
         return tc;
+    }
+
+    private static void setLinkedWorkItems(Testcase tc, TestDefinition ann) {
+        LinkedItem[] li = ann.linkedWorkItems();
+        LinkedWorkItems lwi = tc.getLinkedWorkItems();
+        if (lwi == null)
+            lwi = new LinkedWorkItems();
+        List<LinkedWorkItem> links = lwi.getLinkedWorkItem();
+        links.addAll(Arrays.stream(li)
+                .map(wi -> {
+                    LinkedWorkItem tcLwi = new LinkedWorkItem();
+                    tcLwi.setWorkitemId(wi.workitemId());
+                    tcLwi.setRoleId(wi.role().toString());
+                    return tcLwi;
+                })
+                .collect(Collectors.toList()));
+        if (links.size() > 0)
+            tc.setLinkedWorkItems(lwi);
     }
 
     /**
@@ -1018,8 +1088,14 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         if (maybeMapFileID.isPresent() && !maybeMapFileID.get().equals("")) {
             String mapId = maybeMapFileID.get();
             logger.info(String.format("%s id is %s", meta.qualifiedName, maybeMapFileID.get()));
-            if (meta.polarionID.equals(maybeMapFileID.get()))
-                return tc;
+            // If this testmethod is in the mapping file for this project and it's not set to update, return
+            if (meta.polarionID.equals(maybeMapFileID.get())) {
+                if (!def.update())
+                    return tc;
+                else
+                    logger.info(String.format("%s is in the mapping file, but an update will be performed",
+                            meta.qualifiedName));
+            }
             else if (meta.polarionID.equals("")) {
                 logger.warn("For %s, in project %s, the testCaseID is an empty string even though the corresponding " +
                         "XML description file is present and has ID = %s", meta.qualifiedName, meta.project, mapId);
@@ -1074,6 +1150,16 @@ public class TestDefinitionProcessor extends AbstractProcessor {
             String id = maybeIDXml.orElseGet(() -> maybePolarionID.orElse(""));
             if (!id.equals(""))
                 TestDefinitionProcessor.addToMapFile(mapFile, meta, id);
+        }
+
+        if (def.update()) {
+            if (xmlIdExists || idExists) {
+                String msg = WarningInfo.WarningType.UpdateButIDExists.message();
+                WarningInfo.WarningType wt = WarningInfo.WarningType.UpdateButIDExists;
+                WarningInfo wi = new WarningInfo(msg, meta.qualifiedName, meta.project, wt);
+                warnings.put(meta.qualifiedName, wi);
+            }
+            importRequest = true;
         }
 
         if (importRequest) {
@@ -1131,7 +1217,8 @@ public class TestDefinitionProcessor extends AbstractProcessor {
                                                         String idForProject = pToI.get(project).id;
                                                         Boolean idIsEmpty = idForProject.equals("");
                                                         if (!idIsEmpty) {
-                                                            logger.debug("Id for %s is in mapping file", idForProject);
+                                                            String msg = "Id for %s is in mapping file";
+                                                            logger.debug(msg, idForProject);
                                                             m.polarionID = idForProject;
                                                         }
                                                     }

@@ -86,7 +86,7 @@ public class TestDefAdapter {
     public static TestDefAdapter create(TestDefinition def) {
         TestDefAdapter adap = new TestDefAdapter();
         adap.assignee = def.assignee();
-        adap.author = def.author();
+        //adap.author = def.author();
         adap.automation = def.automation();
         adap.component = def.component();
         adap.description = def.description();

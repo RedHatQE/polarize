@@ -40,11 +40,12 @@ public @interface TestDefinition {
     DefTypes.Project[] projectID();     // An array (actually set) of projects this definition applies to
 
     String[] testCaseID() default {""};
-    String author() default "CI User";
+    //String[] documentPath() default "";   // Used to link the generated TestCase to a document
     String title() default "";          // If you don't use the default, must specify the xmlDesc path
     String description() default "";    // Must have description but may come from @Test
     String setup() default "";
     String teardown() default "";
+    LinkedItem[] linkedWorkItems() default {};
 
     DefTypes.Importance importance() default DefTypes.Importance.HIGH;
     DefTypes.PosNeg posneg() default DefTypes.PosNeg.POSITIVE;
@@ -56,8 +57,8 @@ public @interface TestDefinition {
     // FIXME: In the TestCase importer, teststeps is actually just a string which seems wrong
     TestStep[] teststeps() default {};
 
-    // TODO: Currently, there is no Requirements importer, so this is actually not used.  In fact, there is not even
-    // a way currently to link to other existing WorkItems.  When a Requirement importer is created, get rid of default
+    // TODO: Currently, there is no Requirements importer, so this is actually not used.  When a Requirement importer
+    // is created, get rid of default
     Requirement[] reqs() default {};
 
     // Rarely used
