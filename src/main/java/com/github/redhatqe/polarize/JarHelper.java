@@ -100,9 +100,17 @@ public class JarHelper implements IJarHelper {
                 Reflector refl = jh.loadClasses(classes);
                 refl.methToProjectDef = refl.makeMethToProjectMeta();
                 refl.processTestDefs();
+
+                if (refl.methToProjectDef.size() > 0) {
+                    File mapPath = new File(refl.config.getMappingPath());
+                    Map<String, Map<String, IdParams>> tmap;
+                    tmap = TestDefinitionProcessor.printSortedMappingFile(refl.mappingFile);
+                    refl.mappingFile = TestDefinitionProcessor.createMappingFile(mapPath, refl.methToProjectDef, tmap);
+                }
+
                 refl.testcasesImporterRequest();
-                String tcpath = refl.config.getTestcasesXMLPath();
-                TestDefinitionProcessor.updateMappingFile(refl.mappingFile, refl.methToProjectDef, tcpath);
+                File mapPath = new File(refl.config.getMappingPath());
+                TestDefinitionProcessor.writeMapFile(mapPath, refl.mappingFile);
 
                 refl.testDefAdapters = refl.testDefs.stream()
                         .map(m -> {
@@ -114,13 +122,6 @@ public class JarHelper implements IJarHelper {
                         })
                         .collect(Collectors.toList());
                 List<Meta<TestDefAdapter>> sorted = Reflector.sortTestDefs(refl.testDefAdapters);
-
-                if (refl.methToProjectDef.size() > 0) {
-                    File mapPath = new File(refl.config.getMappingPath());
-                    Map<String, Map<String, IdParams>> tmap;
-                    tmap = TestDefinitionProcessor.printSortedMappingFile(refl.mappingFile);
-                    TestDefinitionProcessor.createMappingFile(mapPath, refl.methToProjectDef, tmap);
-                }
 
                 String jsonDefs = gson.toJson(sorted, metaType);
                 System.out.println(jsonDefs);

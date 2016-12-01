@@ -17,16 +17,16 @@ public class WarningInfo {
     }
 
     public enum WarningType {
-        EmptyAnnotationButIDExists,    // The annotation testCaseID is "", but it exists in the XML
-        UpdateButIDExists;             // update was set to true, but the ID exists
+        EmptyAnnotationButXMLIDExists,    // The annotation testCaseID is "", but it exists in the XML
+        UpdateButXMLIdExists;             // update was set to true, but the ID exists
 
         public String message() {
             String msg = "";
             switch(this) {
-                case EmptyAnnotationButIDExists:
+                case EmptyAnnotationButXMLIDExists:
                     msg = "The annotation testCaseID is empty, but it exists in the XML";
                     break;
-                case UpdateButIDExists:
+                case UpdateButXMLIdExists:
                     msg = "The update field was set to true in annotation, but the ID exists. Did you really" +
                             " change any fields in your annotation?";
                     break;
