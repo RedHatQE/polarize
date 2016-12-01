@@ -24,6 +24,7 @@ public class XMLConfig {
     public Map<String, String> customFields = new HashMap<>();
     public Map<String, String> testRunProps = new HashMap<>();
     public ServerType polarion;
+    public ServerType polarionDevel;
     public ServerType kerb;
     public ServerType ossrh;
     public ServerType broker;
@@ -85,6 +86,9 @@ public class XMLConfig {
             switch(st.getName()) {
                 case "polarion":
                     this.polarion = st;
+                    break;
+                case "polarion-devel":
+                    this.polarionDevel = st;
                     break;
                 case "kerberos":
                     this.kerb = st;

@@ -53,6 +53,12 @@ public class Configurator implements IJAXBHelper {
     private String xunitSelectorVal;
     private String newXunit;
     private String currentXunit;
+    private String groupId;
+    private String projectName;
+    private String baseDir;
+    private String mappingFile;
+    private String tcPath;
+    private String reqPath;
 
     private Boolean testcaseImporterEnabled;
     private Boolean xunitImporterEnabled;
@@ -64,10 +70,7 @@ public class Configurator implements IJAXBHelper {
     private Integer testcaseTimeout;
     private Integer xunitTimeout;
 
-    public String tcPath;
     public List<ServerType> servers;
-    private String groupId;
-    private String projectName;
 
     private Map<String, Tuple<Getter<String>, Setter<String>>> sOptToAccessors = new HashMap<>();
     private Map<String, Tuple<Getter<Boolean>, Setter<Boolean>>> bOptToAccessors = new HashMap<>();
@@ -117,6 +120,10 @@ public class Configurator implements IJAXBHelper {
         sOptToAccessors.put(Opts.CURRENT_XUNIT, new Tuple<>(this::getCurrentXunit, this::setCurrentXunit));
         sOptToAccessors.put(Opts.PROJECT_NAME, new Tuple<>(this::getProjectName, this::setProjectName));
         sOptToAccessors.put(Opts.GROUP_ID, new Tuple<>(this::getGroupId, this::setGroupId));
+        sOptToAccessors.put(Opts.BASE_DIR, new Tuple<>(this::getBaseDir, this::setBaseDir));
+        sOptToAccessors.put(Opts.MAPPING, new Tuple<>(this::getMappingFile, this::setMappingFile));
+        sOptToAccessors.put(Opts.TC_XML_PATH, new Tuple<>(this::getTcPath, this::setTcPath));
+        sOptToAccessors.put(Opts.REQ_XML_PATH, new Tuple<>(this::getReqPath, this::setReqPath));
 
         bOptToAccessors.put(Opts.TC_IMPORTER_ENABLED, new Tuple<>(this::getTestcaseImporterEnabled,
                 this::setTestcaseImporterEnabled));
@@ -289,7 +296,7 @@ public class Configurator implements IJAXBHelper {
                         p.setVal(template);
                     break;
                 default:
-                    logger.error("Unknown property name %s", name);
+                    logger.error(String.format("Unknown property name %s", name));
             }
         }
     }
@@ -594,13 +601,13 @@ public class Configurator implements IJAXBHelper {
                     success.toString()));
         }
 
-        String timestamp = Utility.makeTimeStamp() + ".xml";
+        String timestamp = Utility.makeTimeStamp("xml-config", ".xml");
         Path backup = Paths.get(backupDir.toString(), timestamp);
         if (backup.toFile().exists())
             logger.error("%s already exists.  Overwriting", backup.toString());
         try {
             Files.copy(pdir, backup);
-            logger.info("Original xml-config.xml was backed up as %s", backup);
+            logger.info(String.format("Original xml-config.xml was backed up as %s", backup));
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -756,6 +763,8 @@ public class Configurator implements IJAXBHelper {
      * @param args
      */
     public static void main(String[] args) throws IOException {
+        String arglist = Arrays.stream(args).reduce("", (acc, n) -> acc = acc + " " + n);
+        logger.info(String.format("Calling main with %s", arglist));
         Configurator cfg = new Configurator();
         cfg.parse(args);
         String path = cfg.configPath;
@@ -765,16 +774,17 @@ public class Configurator implements IJAXBHelper {
             testng = cfg.opts.valueOf(xunit);
         else
             testng = cfg.config.getXunitImporterFilePath();
-        String newXunit = cfg.getNewXunit();
-        cfg.editTestSuite(testng, newXunit);
-        Configurator.logger.info("Temporary xml config created in " + newXunit);
-
         //Configurator.parseJson("/home/stoner/.polarize/config.json");
 
         Boolean edit = cfg.getEditConfig();
         if (edit) {
             Configurator.rotator(path);
             Configurator.writeOut(path, cfg.cfg);
+        }
+        else {
+            String newXunit = cfg.getNewXunit();
+            Configurator.logger.info("New xunit created in " + newXunit);
+            cfg.editTestSuite(testng, newXunit);
         }
         logger.info("Done configuring the config file");
     }
@@ -832,6 +842,12 @@ public class Configurator implements IJAXBHelper {
         return in;
     }
 
+    private Optional<ImporterType> getImporterType(String type) {
+        return this.cfg.getImporters().getImporter().stream()
+                .filter(i -> i.getType().equals(type))
+                .findFirst();
+    }
+
     public String getTestrunID() {
         if (this.testrunID == null) {
             this.testrunID = this.sanitize(this.config.xunit.getTestrun().getId());
@@ -854,6 +870,9 @@ public class Configurator implements IJAXBHelper {
 
     public void setTestrunTitle(String testrunTitle) {
         this.testrunTitle = this.sanitize(testrunTitle);
+        Optional<ImporterType> xunitOpt = this.getImporterType("xunit");
+        if (xunitOpt.isPresent())
+            xunitOpt.get().getTestrun().setTitle(this.testrunTitle);
     }
 
     public String getProject() {
@@ -864,6 +883,7 @@ public class Configurator implements IJAXBHelper {
 
     public void setProject(String project) {
         this.project = this.sanitize(project);
+        this.cfg.setProject(this.project);
     }
 
     public String getTestcasePrefix() {
@@ -874,6 +894,9 @@ public class Configurator implements IJAXBHelper {
 
     public void setTestcasePrefix(String testcasePrefix) {
         this.testcasePrefix = this.sanitize(testcasePrefix);
+        Optional<ImporterType> xunitM = this.getImporterType("xunit");
+        if (xunitM.isPresent())
+            xunitM.get().getTitle().setPrefix(this.testcasePrefix);
     }
 
     public String getTestcaseSuffix() {
@@ -884,6 +907,9 @@ public class Configurator implements IJAXBHelper {
 
     public void setTestcaseSuffix(String testcaseSuffix) {
         this.testcaseSuffix = this.sanitize(testcaseSuffix);
+        Optional<ImporterType> xunitM = this.getImporterType("xunit");
+        if (xunitM.isPresent())
+            xunitM.get().getTitle().setSuffix(this.testcaseSuffix);
     }
 
     private String searchCustomFields(String field) {
@@ -1108,6 +1134,53 @@ public class Configurator implements IJAXBHelper {
 
     public void setProjectName(String projectName) {
         this.projectName = projectName;
+        ProjectNameType pnt = this.cfg.getProjectName();
+        pnt.setName(this.projectName);
+    }
+
+    public String getBaseDir() {
+        if (this.baseDir == null)
+            this.baseDir = this.config.getBasedir();
+        return baseDir;
+    }
+
+    public void setBaseDir(String baseDir) {
+        this.baseDir = baseDir;
+        BasedirType bdt = this.cfg.getBasedir();
+        bdt.setPath(this.baseDir);
+    }
+
+    public String getMappingFile() {
+        if (this.mappingFile == null)
+            this.mappingFile = this.cfg.getMapping().getPath();
+        return mappingFile;
+    }
+
+    public void setMappingFile(String mappingFile) {
+        this.mappingFile = mappingFile;
+        this.cfg.getMapping().setPath(mappingFile);
+    }
+
+    public String getTcPath() {
+        if (this.tcPath == null)
+            this.tcPath = this.cfg.getTestcasesXml().getPath();
+        return tcPath;
+    }
+
+    public void setTcPath(String tcPath) {
+        this.tcPath = tcPath;
+        this.cfg.getTestcasesXml().setPath(tcPath);
+    }
+
+    public String getReqPath() {
+        if (this.reqPath == null)
+            this.reqPath = this.cfg.getRequirementsXml().getPath();
+        return reqPath;
+    }
+
+    public void setReqPath(String reqPath) {
+        this.reqPath = reqPath;
+        this.cfg.getRequirementsXml().setPath(reqPath);
     }
 
     @Override

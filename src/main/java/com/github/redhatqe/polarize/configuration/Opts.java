@@ -45,6 +45,8 @@ public class Opts {
     public static final String SERVER = "server";
     public static final String BASE_DIR = "base-dir";
     public static final String MAPPING = "mapping";
+    public static final String TC_XML_PATH = "testcases-xml";
+    public static final String REQ_XML_PATH = "requirements-xml";
     public static final String AUTHOR = "author";
 
     public static final String fmt = "--%s %s";
