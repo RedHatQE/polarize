@@ -68,18 +68,23 @@ Here's an example of an annotation generated XML file:
 From the following annotation:
 
 ```java
-    @TestDefinition(author="stoner",               // defaults to CI User
-              projectID=Project.PLATTP,            // required
-              testCaseID="PLATTP-9520",            // if empty or null, make request to WorkItem Importer tool
-              importance=DefTypes.Importance.HIGH, // defaults to high  if not given
-              posneg=DefTypes.PosNeg.NEGATIVE,     // defaults to positive if not given
-              level= DefTypes.Level.COMPONENT,     // defaults to component if not given
-              // If testtype is FUNCTIONAL, subtype1 and 2 must be of type EMPTY.
-              testtype=@TestType(testtype= DefTypes.TestTypes.NONFUNCTIONAL,  // Defaults to FUNCTIONAL
-                                 subtype1= DefTypes.Subtypes.COMPLIANCE,      // Defaults to EMPTY (see note)
-                                 subtype2= DefTypes.Subtypes.EMPTY),          // Defaults to EMPTY (see note)
-              setup="Description of any preconditions that must be established for test case to run",
-              teardown="The methods to clean up after a test method")
+    @TestDefinition(projectID=Project.PLATTP,      // required
+                  testCaseID="PLATTP-9520",            // if empty or null, make request to WorkItem Importer tool
+                  importance=DefTypes.Importance.HIGH, // defaults to high  if not given
+                  posneg=PosNeg.NEGATIVE,              // defaults to positive if not given
+                  level= DefTypes.Level.COMPONENT,     // defaults to component if not given
+                  linkedWorkItems={@LinkedItem(workitemId="PLATTP-10348",         // Required
+                          project=Project.PLATTP,                                 // Required. What Project to go under
+                          role=DefTypes.Role.VERIFIES)},                          // Required. Role type
+                  // If testtype is FUNCTIONAL, subtype1 and 2 must be of type EMPTY.
+                  testtype=@TestType(testtype= DefTypes.TestTypes.NONFUNCTIONAL,  // Defaults to FUNCTIONAL
+                                     subtype1= DefTypes.Subtypes.COMPLIANCE,      // Defaults to EMPTY (see note)
+                                     subtype2= DefTypes.Subtypes.EMPTY),          // Defaults to EMPTY (see note)
+                  setup="Description of any preconditions that must be established for test case to run",
+                  tags="tier1 some_description",
+                  teardown="The methods to clean up after a test method",
+                  update=true,
+                  automation=DefTypes.Automation.AUTOMATED)  // if not given this defaults to AUTOMATED)
     @Test(groups={"simple"},
           description="Test for reporter code",
           dataProvider="simpleProvider")
@@ -223,6 +228,10 @@ This section will describe how to make use of polarize
             url="https://path.to.your.polarion/polarion"
             user="foo"
             password="____________"/>
+    <server name="polarion-devel"
+            url="https://path.to.your.polarion-devel/polarion"
+            user="foo"
+            password="____________"/>
     <server name="kerberos"
             user="foo"
             password="____________"/>
@@ -340,18 +349,23 @@ public class TestReq {
               description="TestCase for a dummy test method",
               title="A not necessarily unique title",  // defaults to class.methodName
               reqs={})
-    @TestDefinition(author="stoner",               // defaults to CI User
-              projectID=Project.PLATTP,            // required
-              testCaseID="PLATTP-9520",            // if empty or null, make request to WorkItem Importer tool
-              importance=DefTypes.Importance.HIGH, // defaults to high  if not given
-              posneg=DefTypes.PosNeg.NEGATIVE,     // defaults to positive if not given
-              level= DefTypes.Level.COMPONENT,     // defaults to component if not given
-              // If testtype is FUNCTIONAL, subtype1 and 2 must be of type EMPTY.
-              testtype=@TestType(testtype= DefTypes.TestTypes.NONFUNCTIONAL,  // Defaults to FUNCTIONAL
-                                 subtype1= DefTypes.Subtypes.COMPLIANCE,      // Defaults to EMPTY (see note)
-                                 subtype2= DefTypes.Subtypes.EMPTY),          // Defaults to EMPTY (see note)
-              setup="Description of any preconditions that must be established for test case to run",
-              teardown="The methods to clean up after a test method")
+        @TestDefinition(projectID=Project.PLATTP,      // required
+                  testCaseID="PLATTP-9520",            // if empty or null, make request to WorkItem Importer tool
+                  importance=DefTypes.Importance.HIGH, // defaults to high  if not given
+                  posneg=PosNeg.NEGATIVE,              // defaults to positive if not given
+                  level= DefTypes.Level.COMPONENT,     // defaults to component if not given
+                  linkedWorkItems={@LinkedItem(workitemId="PLATTP-10348",         // Required
+                          project=Project.PLATTP,                                 // Required. What Project to go under
+                          role=DefTypes.Role.VERIFIES)},                          // Required. Role type
+                  // If testtype is FUNCTIONAL, subtype1 and 2 must be of type EMPTY.
+                  testtype=@TestType(testtype= DefTypes.TestTypes.NONFUNCTIONAL,  // Defaults to FUNCTIONAL
+                                     subtype1= DefTypes.Subtypes.COMPLIANCE,      // Defaults to EMPTY (see note)
+                                     subtype2= DefTypes.Subtypes.EMPTY),          // Defaults to EMPTY (see note)
+                  setup="Description of any preconditions that must be established for test case to run",
+                  tags="tier1 some_description",
+                  teardown="The methods to clean up after a test method",
+                  update=true,
+                  automation=DefTypes.Automation.AUTOMATED)  // if not given this defaults to AUTOMATED)
     @Test(groups={"simple"},
           description="Test for reporter code",
           dataProvider="simpleProvider")
@@ -577,10 +591,10 @@ Feature: Generate XML from annotated class
       - /some/link/to/share  # optional
 
   Scenario: Annotated class generates valid XML
-    Given The class is annotated with @Polarion
-      And The Polarion annotation has author
-      And The Polarion annotation has projectId
-      And The Polarion annotation has sub-annotation Requirement
+    Given The class is annotated with @TestDefinition
+      And The TestDefinition annotation has author
+      And The TestDefinition annotation has projectId
+      And The TestDefinition annotation has sub-annotation Requirement
       And The field for xmlDesc is an empty string in the Annotation
      Then XML suitable for the WorkItem importer will be generated
 ```
@@ -607,7 +621,11 @@ will look for a feature file based on the following path:
 requirements.xml.path/<project>/<class>/<methodName>.feature
 ```
 
-# Limitations
+# Limitations and known TODOs
+
+Here is a compilation of known limitations and TODO's.  Keep these in mind when using polarize
+
+## Unique method names
 
 One limitation of polarize is that it assumes that there are no overloaded testmethods.  This is because polarize maps
 the qualified name of a test method to a file on the system.  If you have an overloaded method (a method with the same
@@ -615,10 +633,74 @@ name but different type signature) then there will no longer be a one-to-one map
 file.  Note that this does not apply to data driven tests.  It is perfectly fine to have a test method with data driven
 parameters.
 
-This limitation can be overcome if you specify a custom xmlDesc in the annotations.  If you do have overloaded methods, 
-then you must supply a (unique) file system path.  If no file exists, polarize will generate it there.  When it needs to
-get the Polarion ID, it will read in this file (which is why the path must be unique for each method).
+## Setting your own title and xml path
+
+The following annotation fields do not yet currently work:
+
+- title
+- xmlDesc
+
+These fields were included as a possible workaround (that still needs to be fully implemented ) for the limitation of 
+a unique method name.  By specifying a custom title and xmlDesc in the annotations, polarize would use those as the 
+means to map the test method to the Polarion ID.  If you do have overloaded methods, then you must supply a (unique) 
+file system path.  If no file exists, polarize will generate it there.  When it needs to get the Polarion ID, it will 
+read in this file (which is why the path must be unique for each method).  This is the reason that the title and xmlDesc
+do not yet work, because some additional work still needs to be put into place.
+
+## Fragility of mismatched testcase IDs
 
 The system is also somewhat fragile in the sense if the mapping.json file ever gets edited or lost.  This can be 
 mitigated somewhat in the future by allowing a regeneration of the mapping.json file by looking through all the XML 
 description files.  It's also somewhat mitigated due to this file being checked into git.
+
+Another quirk is that there are 8 possible states to check for the existence of a testcase ID:
+
+| annotation  | xml      | mapping   | Action(s)                                   | Name      |
+|:-----------:|:--------:|:---------:|---------------------------------------------|-----------|
+| 0           | 0        | 0         | Make import request                         | NONE
+| 0           | 0        | 1         | Edit the XML file, add to badFunction       | MAP
+| 0           | 1        | 0         | Edit the Mapping file, add to badFunction   | XML
+| 0           | 1        | 1         | Verify equality, add to badFunction         | XML_MAP
+| 1           | 0        | 0         | Edit the XML and mapping file               | ANN
+| 1           | 0        | 1         | Verify equality, edit the XML               | ANN_MAP
+| 1           | 1        | 0         | Verify equality, add to mapping             | ANN_XML
+| 1           | 1        | 1         | Verify equality                             | ALL
+
+Notice in the table above under the Action(s) column something that says "add to badFunction".  This means that the ID 
+existed in either the XML file or the mapping file, but not in the annotation.  Ideally, this information should always
+be put into the source annotation, but it is not possible to rewrite code in an annotation process (you can generate new 
+code based on an annotation, but you can't edit existing code).  
+
+To help ease the problem where the ID might exist in the XML or mapping file, but not in the annotation, everytime the 
+code is compiled or the JarHelper main is called, a file /tmp/bad-functions.txt is created which will list the bad 
+functions like this:
+
+```
+~/P/testpolarize ❯❯❯ cat /tmp/bad-functions.txt                                                                                                           master ✱
+For com.github.redhatqe.rhsm.testpolarize.TestReq.testBadProjectToTestCaseID, in project PLATTP, the testCaseID is an empty string even though the corresponding XML file is present and has ID = PLATTP-10202
+For com.github.redhatqe.rhsm.testpolarize.TestReq.testUpgrade, in project PLATTP, the testCaseID is an empty string even though the corresponding XML file is present and has ID = PLATTP-10068
+For com.github.redhatqe.rhsm.testpolarize.TestReq.testError, in project PLATTP, the testCaseID is an empty string even though the corresponding XML file is present and has ID = PLATTP-10203
+For com.github.redhatqe.rhsm.testpolarize.TestPolarize.testMethod, in project PLATTP, the testCaseID is an empty string even though the corresponding XML file is present and has ID = PLATTP-10069
+```
+
+## What to do if there is a mismatch?
+
+Also, there's the thorny problem of what to do if the testcase ID's don't match in one or more the above entities.  For 
+example, what if someone accidentally edits an annotation so that it no longer matches what is in the XML or in the 
+mapping file?  One of the entities should be the authoritative source, but which one?  An argument could be made for 
+why any of the 3 should be the authoritative version.  However, polarize has made the choice to make the annotation as 
+the authoritative source.
+
+But even then, what to do if there is a mismatch?  If the annotations says a testmethod maps to RHEL6-23456, but the 
+(matching) XML definition for that method maps to RHEL6-23457, what to do?  Currently, there is not a query mechanism 
+in place, so we can not yet query the two ID's and see which one to pick.  In this case, automation can not and should
+not automatically resolve these conflicts anymore than git merge can automatically resolve source conflicts.  A human 
+must intervene.  However, polarize will at least fail on the compile if there is a mismatch on the "verify equality"
+check so that this intervention can take place.
+
+## Setting the update field
+
+Over time, you might want to update one or more fields of the annotation to update the matching TestCase definition in 
+Polarion.  You can set a field called update=true and edit any of the fields to do so.  The problem is that if you later
+forget to unset the update field, every time the code is compiled, it will make a new import request.  This is a waste 
+of resources and a burden on the polarion server.
