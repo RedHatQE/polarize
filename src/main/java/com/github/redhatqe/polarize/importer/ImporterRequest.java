@@ -84,14 +84,18 @@ public class ImporterRequest {
      * @return
      */
     public static CloseableHttpResponse post(String url, File importerFile , String user, String pw) {
+        CloseableHttpResponse response = null;
+        if (!importerFile.exists()) {
+            logger.error(String.format("%s did not exist", importerFile.toString()));
+            return response;
+        }
         try {
             String text = Files.lines(importerFile.toPath()).reduce("", (acc, c) -> acc + c + "\n");
-            ImporterRequest.logger.info(String.format("Sending this file to importer:\n%s", text));
+            ImporterRequest.logger.info(String.format("Sending %s to importer:\n%s", importerFile.toString(), text));
         } catch (IOException e) {
             e.printStackTrace();
         }
 
-        CloseableHttpResponse response = null;
         CredentialsProvider provider = new BasicCredentialsProvider();
         UsernamePasswordCredentials credentials = new UsernamePasswordCredentials(user, pw);
         provider.setCredentials(AuthScope.ANY, credentials);

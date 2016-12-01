@@ -207,8 +207,9 @@ public class Reflector {
 
 
     public void processTestDefs() {
+        File mapPath = new File(this.config.getMappingPath());
         this.testDefs.forEach(td -> TestDefinitionProcessor.processTC(td, this.mappingFile, this.testCaseToMeta,
-                this.tcPath, this.tcMap));
+                this.tcPath, this.tcMap, this.methToProjectDef, mapPath));
     }
 
     Map<String, Map<String, Meta<TestDefinition>>> makeMethToProjectMeta() {

@@ -83,10 +83,24 @@ public class FileHelper implements IFileHelper {
         return qual;
     }
 
-    public static Optional<Path> getXmlPath(String base, String qualname, String projID) {
+    /**
+     * FIXME: this assumes the path is based on the class.method name but ignores if xmlPath is used in annotation
+     *
+     * Creates an xml path for a test method.  The path generated will take the form:</br>
+     * /{base}/{projID}/{qualname}
+     * </p>
+     * Normally, the base will come from the config file, extra will come from the class.methodName, and project will
+     * be determined based on some other factor like the project in a Meta object.
+     *
+     * @param base From the config file \<testcases-xml path={}\>
+     * @param extra a string representing an extra set of paths concatenated to base
+     * @param projID the project
+     * @return
+     */
+    public static Optional<Path> getXmlPath(String base, String extra, String projID) {
         Path path = null;
         try {
-            QualifiedName qual = FileHelper.getClassMethodFromDottedString(qualname);
+            QualifiedName qual = FileHelper.getClassMethodFromDottedString(extra);
             Meta<TestDefinition> meta = new Meta<>();
             meta.project = projID;
             meta.className = qual.className;
@@ -117,6 +131,17 @@ public class FileHelper implements IFileHelper {
         }
     }
 
+    /**
+     * From the path pointing to a mapping.json file, create a Map from it
+     *
+     * The key to the Map is the unique name of a method (usually its fully qualified name), and the value is a Map
+     * of the form Project -> IdParams.  This second map is needed because one test method is often used across multiple
+     * projects.
+     *
+     *
+     * @param fpath path to a mapping.json file
+     * @return an in-memory map of unique methodname -> project -> IdParams
+     */
     public static Map<String, Map<String, IdParams>> loadMapping(File fpath) {
         ObjectMapper mapper = new ObjectMapper();
 
