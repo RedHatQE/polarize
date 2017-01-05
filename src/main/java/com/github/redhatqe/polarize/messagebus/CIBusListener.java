@@ -27,13 +27,11 @@ import java.util.function.Supplier;
  * A Class that provides functionality to listen to the CI Message Bus
  */
 public class CIBusListener {
-    //Map<String, String> polarizeConfig;
     Configurator configurator;
     XMLConfig polarizeConfig;
     private Logger logger;
     public String topic;
     public String clientID;
-    public String configpath = "";
     public MessageListener listener;
 
     public CIBusListener() {
@@ -43,11 +41,6 @@ public class CIBusListener {
         this.topic = "CI";
         this.clientID = "Polarize";
         this.listener = this.createListener();
-    }
-
-    public CIBusListener(String configpath) {
-        this();
-        this.configurator = new Configurator(configpath);
     }
 
     /**
@@ -136,7 +129,6 @@ public class CIBusListener {
             connection.setClientID("polarize");
             connection.setExceptionListener(exc -> this.logger.error(exc.getMessage()));
 
-            // FIXME: need to understand how transactions affect session
             Session session = connection.createSession(false, Session.AUTO_ACKNOWLEDGE);
             Topic dest = session.createTopic("CI");
 
@@ -198,6 +190,11 @@ public class CIBusListener {
 
     /**
      * Returns a Supplier usable for a CompletableFuture object
+     *
+     * Normally, this function will be run in a thread from the fork/join pool since this method will block in the
+     * bl.waitForMessage.  However, this function doesn't actually _do_ anything, as it returns a Supplier.  The
+     * thread it is running on will actually call the Supplier and thus block, however, the main thread from which
+     * getCIMessage itself is called will continue as normal.
      *
      * @return ObjectNode that is the parsed message
      */

@@ -32,19 +32,8 @@ public class Meta<T> {
 
     }
 
-    public Meta(Meta<T> orig) {
-        this.qualifiedName = orig.qualifiedName;
-        this.methName = orig.methName;
-        this.className = orig.className;
-        this.packName = orig.packName;
-        this.project = orig.project;
-        this.polarionID = orig.polarionID;
-        this.annotation = orig.annotation;
-    }
-
-
-    public static <O, R> Meta<R> copy(Meta<O> orig) {
-        Meta<R> meta = new Meta<>();
+    public static <O> Meta<O> copy(Meta<O> orig) {
+        Meta<O> meta = new Meta<>();
         meta.qualifiedName = orig.qualifiedName;
         meta.methName = orig.methName;
         meta.className = orig.className;

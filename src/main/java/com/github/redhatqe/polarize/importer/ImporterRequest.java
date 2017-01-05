@@ -42,7 +42,6 @@ import java.util.concurrent.ExecutionException;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 /**
  * Created by stoner on 8/31/16.
@@ -231,6 +230,15 @@ public class ImporterRequest {
         return maybeNode;
     }
 
+    /**
+     * A Basic get function that can be used to download something from a URL on an https site
+     *
+     * @param url url of the location
+     * @param user user to authenticate as
+     * @param pw password for given user
+     * @param path path to store body of file
+     * @return an Optional File to stored data
+     */
     public static Optional<File> get(String url, String user, String pw, String path) {
         CloseableHttpResponse response;
         CredentialsProvider provider = new BasicCredentialsProvider();
@@ -284,6 +292,13 @@ public class ImporterRequest {
         return maybeFile;
     }
 
+    /**
+     * A simple method to download a file from a URL (no https, use get for https site)
+     *
+     * @param url
+     * @param output
+     * @return
+     */
     public static File download(String url, String output) {
         File file = new File(output);
         try {
@@ -303,8 +318,7 @@ public class ImporterRequest {
 
     public static void main(String[] args) {
         // Get a file from jenkins
-        String url = "https://rhsm-jenkins.rhev-ci-vms.eng.rdu2.redhat.com/view/Scratch/job/stoner-pong-test/" +
-                "lastSuccessfulBuild/artifact/test-output/testng-results.xml";
+        String url = args[3];
 
         String user = args[0];
         String pw = args[1];

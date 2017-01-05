@@ -243,6 +243,16 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         return m;
     }
 
+    /**
+     * Creates a list of Meta of type TestDefinition from every method annoted with @TestDefinition
+     *
+     * This function is called at compile time by the process() function.  For every method which is annotated with the
+     * TestDefinition, it will be included in the argument <i>elements</i>.  From this, the actual annotation object
+     * can be retrieved.
+     *
+     * @param elements A list of Element from all methods which have been annotated by TestDefinition
+     * @return list of Meta of type TestDefinition
+     */
     private List<Meta<TestDefinition>>
     makeMetaFromTestDefinition(List<? extends Element> elements){
         List<Meta<TestDefinition>> metas = new ArrayList<>();
@@ -274,12 +284,16 @@ public class TestDefinitionProcessor extends AbstractProcessor {
 
 
     /**
+     * The function which creates all the XML definition files based on source annotations
+     *
      * The TestDefinitionProcessor actually needs to look for three annotation types:
      * <ul>
      *   <li>{@link TestDefinition}: to get TestDefinition WorkItem information</li>
      *   <li>{@link Requirement}: to get Requirement WorkItem information</li>
      *   <li>{@link Test}: to get the existing description</li>
      * </ul>
+     *
+     * This function is called implicitly by the compiler and should not be called from user code.
      *
      * @param set passed from compiler
      * @param roundEnvironment passed from compiler
@@ -319,19 +333,15 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         Map<String, String> methToDescription = this.getTestAnnotations(roundEnvironment);
         this.methNameToTestNGDescription.putAll(methToDescription);
 
-        // FIXME: Put this back when the CI Ops team has a Requirement importer
-        /*List<ReqType> reqList = this.processAllRequirements();
-          if (reqList == null)
-            return false;
-         */
         List<Testcase> tests = this.processAllTC();
 
         /* testcases holds all the methods that need a new or updated Polarion TestCase */
         logger.info("Updating testcases that had no testcaseId...");
         this.tcImportRequest();
-        //TestDefinitionProcessor.updateMappingFile(this.mappingFile, this.methToProjectDef, this.tcPath,
-        //        new File(this.config.getMappingPath()));
+        TestDefinitionProcessor.updateMappingFile(this.mappingFile, this.methToProjectDef, this.tcPath,
+                new File(this.config.getMappingPath()));
 
+        /* Generate the mapping file now that all the XML files should have been generated */
         if (this.methToProjectDef.size() > 0) {
             this.mappingFile = this.createMappingFile(mapPath);
             try {
@@ -412,7 +422,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
 
                 if (badFn)
                     TestDefinitionProcessor.addBadFunction(meta.qualifiedName, project, badFunctions);
-                TestDefinitionProcessor.addToMapFile(mapFile, meta, id, methMap, tcpath, mapPath);
+                TestDefinitionProcessor.addToMapFile(mapFile, meta, id, mapPath);
             });
         });
         TestDefinitionProcessor.writeBadFunctionText(badFunctions);
@@ -463,8 +473,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
      * @return
      */
     private Optional<String> initTestcases(String selectorName, String selectorValue, String pID, File testXml) {
-        String author = this.cfg.getAuthor();
-        return TestDefinitionProcessor.initTestcases(selectorName, selectorValue, pID, author, testXml, this.tcMap,
+        return TestDefinitionProcessor.initTestcases(selectorName, selectorValue, pID, testXml, this.tcMap,
                 this.testcases);
     }
 
@@ -474,15 +483,18 @@ public class TestDefinitionProcessor extends AbstractProcessor {
      * @param selectorName name part of selector
      * @param selectorValue value part of selector (eg <name>='<value>')
      * @param projectID project ID of the Testcases object
-     * @param author author for the Testcases
      * @param testcaseXml File to where the Testcases object will be marshalled to
      * @param testMap a map of methodName to Testcase list
      * @param tests the Testcases object that will be initialized
      * @return an optional of the Testcases project
      */
     private static Optional<String>
-    initTestcases(String selectorName, String selectorValue, String projectID, String author, File testcaseXml,
-                  Map<String, List<Testcase>> testMap, Testcases tests) {
+    initTestcases(String selectorName,
+                  String selectorValue,
+                  String projectID,
+                  File testcaseXml,
+                  Map<String, List<Testcase>> testMap,
+                  Testcases tests) {
         if (!testMap.containsKey(projectID)) {
             logger.error("ProjectType ID does not exist within Testcase Map");
             return Optional.empty();
@@ -517,7 +529,6 @@ public class TestDefinitionProcessor extends AbstractProcessor {
      * @param testcaseMap
      * @param selectorName
      * @param selectorValue
-     * @param author
      * @param url
      * @param user
      * @param pw
@@ -525,8 +536,13 @@ public class TestDefinitionProcessor extends AbstractProcessor {
      * @return
      */
     public static List<Optional<ObjectNode>>
-    tcImportRequest(Map<String, List<Testcase>> testcaseMap, String selectorName, String selectorValue, String author,
-                    String url, String user, String pw, Testcases tests) {
+    tcImportRequest(Map<String, List<Testcase>> testcaseMap,
+                    String selectorName,
+                    String selectorValue,
+                    String url,
+                    String user,
+                    String pw,
+                    Testcases tests) {
         List<Optional<ObjectNode>> maybeNodes = new ArrayList<>();
         if (testcaseMap.isEmpty())
             return maybeNodes;
@@ -535,7 +551,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         for(String project: testcaseMap.keySet()) {
             String path = String.format("/tmp/testcases-%s.xml", project);
             File testXml = new File(path);
-            if (!TestDefinitionProcessor.initTestcases(selectorName, selectorValue, project, author, testXml,
+            if (!TestDefinitionProcessor.initTestcases(selectorName, selectorValue, project, testXml,
                     testcaseMap, tests).isPresent())
                 maybeNodes.add(Optional.empty());
             else {
@@ -649,7 +665,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
                             logger.error("Setting the id for the XML on the Testcase failed");
                             throw new XMLEditError();
                         }
-                        IJAXBHelper.marshaller(tc, xmlFile, jaxb.getXSDFromResource(Testcase.class));
+                        createTestCaseXML(tc, xmlFile);
                     }
                 }
                 else {
@@ -967,15 +983,6 @@ public class TestDefinitionProcessor extends AbstractProcessor {
     }
 
     /**
-     * If the title field of the annotation is used, we need to remove all spaces and create a fake class/package
-     * @param orig
-     * @return
-     */
-    private String sanitizeTitle(String orig) {
-        return null;
-    }
-
-    /**
      * Creates and initializes a Testcase object
      *
      * This function is mainly used to setup a Testcase object to be used for a Testcase importer request
@@ -1056,8 +1063,6 @@ public class TestDefinitionProcessor extends AbstractProcessor {
     public static void addToMapFile(Map<String, Map<String, IdParams>> mapFile,
                                     Meta<TestDefinition> meta,
                                     String id,
-                                    Map<String, Map<String, Meta<TestDefinition>>> methToProj,
-                                    String xmlPath,
                                     File mapPath) {
         // TODO: The ID exists in the XML file, but not in the annotation.  Set the mapping file with this info
         String msg = "TestCase id is known, but does not exist in mapping file.  Editing map: %s -> {%s: %s}";
@@ -1117,9 +1122,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         Optional<File> path = meta.getFileFromMeta(xmlPath);
         path.ifPresent(file -> IJAXBHelper.marshaller(tc, file, jaxb.getXSDFromResource(Testcase.class)));
         if (!path.isPresent()) {
-            File xml = FileHelper.makeXmlPath(xmlPath, meta).toFile();
-            IFileHelper.makeDirs(xml.toPath());
-            IJAXBHelper.marshaller(tc, xml, jaxb.getXSDFromResource(Testcase.class));
+            createTestCaseXML(tc, FileHelper.makeXmlPath(xmlPath, meta).toFile());
         }
     }
 
@@ -1153,15 +1156,17 @@ public class TestDefinitionProcessor extends AbstractProcessor {
      * | 1           | 1        | 0         | Verify equality, add to mapping             | ANN_XML
      * | 1           | 1        | 1         | Verify equality                             | ALL
      *
-     * @param meta
-     * @param testCasePath
-     * @param mapFile
+     * @param meta A Meta of type TestDefinition which holds the annotation information for the method
+     * @param testCasePath A path to look up the XML definition for the method
+     * @param mapFile A Map of qualified method -> project -> Polarion ID
+     * @param tc the XML representation of the TestCase
+     * @param mapPath Path to the mapping.json file (which is the persistent representation of mapFile)
+     * @return true if an Import request needs to be made, false otherwise
      */
     private static Boolean
     processIdEntities(Meta<TestDefinition> meta,
                       String testCasePath,
                       Map<String, Map<String, IdParams>> mapFile,
-                      Map<String, Map<String, Meta<TestDefinition>>> methToProj,
                       Testcase tc,
                       File mapPath) {
         List<String> badFuncs = new ArrayList<>();
@@ -1180,6 +1185,8 @@ public class TestDefinitionProcessor extends AbstractProcessor {
 
         int idval = (idExists ? 1 << 2 : 0) | (xmlIdExists ? 1 << 1 : 0) | (mapIdExists ? 1 : 0);
         IDType idtype = IDType.fromNumber(idval);
+        if (idtype == null)
+            throw new MappingError("Error in IDType.fromNumber()");
 
         String msg = "For %s, in project %s, the testCaseID is an empty string even though the " +
                      "corresponding %s is present and has ID = %s";
@@ -1198,7 +1205,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
                 badFuncs.add(String.format(msg, qual, project, "Map file", mapId));
                 break;
             case XML:
-                addToMapFile(mapFile, meta, xmlId, methToProj, testCasePath, mapPath);
+                addToMapFile(mapFile, meta, xmlId, mapPath);
                 badFuncs.add(String.format(msg, qual, project, "XML file", xmlId));
                 break;
             case XML_MAP:
@@ -1211,7 +1218,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
                 break;
             case ANN:
                 editXML(meta, testCasePath, annId, tc);
-                addToMapFile(mapFile, meta, annId, methToProj, testCasePath, mapPath);
+                addToMapFile(mapFile, meta, annId, mapPath);
                 break;
             case ANN_MAP:
                 String[] annMapIds = {annId, mapId};
@@ -1229,7 +1236,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
                     String err = String.format(fmt, annId, xmlId, pqual);
                     throw new MismatchError(err);
                 }
-                addToMapFile(mapFile, meta, annId, methToProj, testCasePath, mapPath);
+                addToMapFile(mapFile, meta, annId, mapPath);
                 break;
             case ALL:
                 String[] all = {annId, xmlId, mapId};
@@ -1261,7 +1268,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
      */
     private Testcase processTC(Meta<TestDefinition> meta) throws MismatchError {
         return TestDefinitionProcessor.processTC(meta, this.mappingFile, this.testCaseToMeta, this.tcPath, this.tcMap,
-                this.methToProjectDef, new File(this.config.getMappingPath()));
+                new File(this.config.getMappingPath()));
     }
 
     /**
@@ -1279,12 +1286,11 @@ public class TestDefinitionProcessor extends AbstractProcessor {
                                      Map<Testcase, Meta<TestDefinition>> tcToMeta,
                                      String testCasePath,
                                      Map<String, List<Testcase>> testCaseMap,
-                                     Map<String, Map<String, Meta<TestDefinition>>> methToProj,
                                      File mapPath) {
         Testcase tc = TestDefinitionProcessor.initImporterTestcase(meta, null);
         tcToMeta.put(tc, meta);
 
-        Boolean importRequest = processIdEntities(meta, testCasePath, mapFile, methToProj, tc, mapPath);
+        Boolean importRequest = processIdEntities(meta, testCasePath, mapFile, tc, mapPath);
         if (importRequest) {
             String projId = meta.project;
             if (testCaseMap.containsKey(projId))
@@ -1450,9 +1456,5 @@ public class TestDefinitionProcessor extends AbstractProcessor {
 
     private void errorMsg(Element elem, String msg, Object... args) {
         this.msgr.printMessage(Diagnostic.Kind.ERROR, String.format(msg, args), elem);
-    }
-
-    private File createGraph() {
-        return null;
     }
 }

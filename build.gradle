@@ -187,10 +187,6 @@ publishing {
             }
 
             pom.withXml {
-                //println "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
-                //println "Configuring the pom"
-                //println "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
-
                 asNode().appendNode('name', archivesBaseName)
                 asNode().appendNode('description', 'Annotations to supply metadata for testcase management')
                 asNode().appendNode('url', projectURL)
@@ -212,13 +208,8 @@ publishing {
                 licenseNode.appendNode('url', 'http://www.apache.org/license/LICENSE-2.0.txt')
                 licenseNode.appendNode('distribution', 'repo')
 
-                //println asString().toString()
                 writeTo (project.ext.pomFile)
                 File pomFile = new File(pomPath)
-                //println "======================================="
-                //println "After writing to pom"
-                //println "======================================="
-                //println pomFile.text
             }
         }
 
@@ -229,10 +220,6 @@ publishing {
             artifact javadocJar
 
             pom.withXml {
-                //println "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
-                //println "Configuring the pom"
-                //println "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
-
                 asNode().appendNode('name', archivesBaseName)
                 asNode().appendNode('description', 'Annotations to supply metadata for testcase management')
                 asNode().appendNode('url', projectURL)

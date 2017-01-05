@@ -85,7 +85,7 @@ public class Configurator implements IJAXBHelper {
     private OptionSet opts;
 
     private void init(XMLConfig cfg) {
-        this.configPath = java.lang.System.getProperty("user.home") + "/.polarize/xml-config.xml";
+        this.configPath = cfg.configPath.toString();
         this.config = cfg;
         this.cfg = this.config.config;
         this.parser = new OptionParser();
@@ -765,7 +765,12 @@ public class Configurator implements IJAXBHelper {
     public static void main(String[] args) throws IOException {
         String arglist = Arrays.stream(args).reduce("", (acc, n) -> acc = acc + " " + n);
         logger.info(String.format("Calling main with %s", arglist));
-        Configurator cfg = new Configurator();
+        String configFilePath = null;
+        if (!args[0].startsWith("-")) {
+            configFilePath = args[0];
+            args = Arrays.copyOfRange(args, 1, args.length);
+        }
+        Configurator cfg = configFilePath == null ? new Configurator() : new Configurator(configFilePath);
         cfg.parse(args);
         String path = cfg.configPath;
         String testng;

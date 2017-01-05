@@ -52,6 +52,12 @@ public class XUnitReporter implements IReporter {
             new File(System.getProperty("user.home") + "/.polarize/reporter.properties");
     private static List<String> failedSuites = new ArrayList<>();
 
+    public final static String templateId = "polarion-testrun-template-id";
+    public final static String testrunId = "polarion-testrun-id";
+    public final static String testrunTitle = "polarion-testrun-title";
+    public final static String polarionCustom = "polarion-custom";
+    public final static String polarionResponse = "polarion-response";
+
     public static Properties getProperties() {
         Properties props = new Properties();
         Map<String, String> envs = System.getenv();
@@ -271,7 +277,6 @@ public class XUnitReporter implements IReporter {
     private static List<Testcase> getMethodInfo(ISuite suite, List<Testcase> testcases) {
         List<IInvokedMethod> invoked = suite.getAllInvokedMethods();
         for(IInvokedMethod meth: invoked) {
-            // FIXME: Need to figure out if this was a non @Test method
             ITestNGMethod fn = meth.getTestMethod();
             if (!fn.isTest()) {
                 XUnitReporter.logger.info(String.format("Skipping non-test method %s", fn.getMethodName()));
@@ -301,6 +306,13 @@ public class XUnitReporter implements IReporter {
             // Look up in the XML description file the qualifiedName to get the Polarion ID
             File xmlDesc = XUnitReporter.getXMLDescFile(classname, methname);
             String id = XUnitReporter.getPolarionIDFromXML(TestDefinition.class, xmlDesc);
+            if (id.equals("")) {
+                // FIXME: Could look in the mapping.json file but this is already handled in processTC(), so the only
+                // way this should happen is if somehow the import request failed, or this method had a xmlDesc
+                String missing = String.format("Could not find Polarion ID for %s.%s", classname, methname);
+                logger.error(missing);
+                continue;
+            }
             Property polarionID = XUnitReporter.createProperty("polarion-testcase-id", id);
             tcProps.add(polarionID);
 
@@ -361,15 +373,16 @@ public class XUnitReporter implements IReporter {
                 config.testRunProps.get("include-skipped"));
         properties.add(includeSkipped);
 
-        Configurator cfg = XUnitReporter.createConditionalProperty("polarion-response", responseName, properties);
+        Configurator cfg = XUnitReporter.createConditionalProperty(XUnitReporter.polarionResponse, responseName,
+                                                                   properties);
         cfg.set();
-        cfg = XUnitReporter.createConditionalProperty("polarion-custom", null, properties);
+        cfg = XUnitReporter.createConditionalProperty(XUnitReporter.polarionCustom, null, properties);
         cfg.set();
-        cfg = XUnitReporter.createConditionalProperty("polarion-testrun-title", null, properties);
+        cfg = XUnitReporter.createConditionalProperty(XUnitReporter.testrunTitle, null, properties);
         cfg.set();
-        cfg = XUnitReporter.createConditionalProperty("polarion-testrun-id", null, properties);
+        cfg = XUnitReporter.createConditionalProperty(XUnitReporter.testrunId, null, properties);
         cfg.set();
-        cfg = XUnitReporter.createConditionalProperty("polarion-template-id", null, properties);
+        cfg = XUnitReporter.createConditionalProperty(XUnitReporter.templateId, null, properties);
         cfg.set();
 
         tsuites.setProperties(props);
@@ -411,7 +424,7 @@ public class XUnitReporter implements IReporter {
         prop.setName(name);
 
         switch(name) {
-            case "polarion-template-id":
+            case XUnitReporter.templateId:
                 cfg = () -> {
                     if (config.xunit.getTemplateId().getId().equals(""))
                         return;
@@ -419,7 +432,7 @@ public class XUnitReporter implements IReporter {
                     properties.add(prop);
                 };
                 break;
-            case "polarion-testrun-title":
+            case XUnitReporter.testrunTitle:
                 cfg = () -> {
                     if (config.xunit.getTestrun().getTitle().equals(""))
                         return;
@@ -427,7 +440,7 @@ public class XUnitReporter implements IReporter {
                     properties.add(prop);
                 };
                 break;
-            case "polarion-testrun-id":
+            case XUnitReporter.testrunId:
                 cfg = () -> {
                     if (config.xunit.getTestrun().getId().equals(""))
                         return;
@@ -435,22 +448,22 @@ public class XUnitReporter implements IReporter {
                     properties.add(prop);
                 };
                 break;
-            case "polarion-response":
+            case XUnitReporter.polarionResponse:
                 cfg = () -> {
                     if (config.xunit.getSelector().getVal().equals(""))
                         return;
-                    prop.setName("polarion-response-" + value);
+                    prop.setName(XUnitReporter.polarionResponse + "-" + value);
                     prop.setValue(config.xunit.getSelector().getVal());
                     properties.add(prop);
                 };
                 break;
-            case "polarion-custom":
+            case XUnitReporter.polarionCustom:
                 cfg = () -> {
                     Map<String, String> customFields = config.customFields;
                     if (customFields.isEmpty())
                         return;
                     customFields.entrySet().forEach(entry -> {
-                        String key = "polarion-custom-" + entry.getKey();
+                        String key = XUnitReporter.polarionCustom + "-" + entry.getKey();
                         String val = entry.getValue();
                         if (!val.equals("")) {
                             Property p = new Property();

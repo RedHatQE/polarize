@@ -7,8 +7,6 @@ import java.nio.file.FileAlreadyExistsException;
 import java.util.ArrayList;
 import java.util.List;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.redhatqe.polarize.metadata.Meta;
 import com.github.redhatqe.polarize.metadata.TestDefAdapter;
 import com.github.redhatqe.polarize.metadata.TestDefinition;
@@ -21,7 +19,6 @@ import com.google.gson.Gson;
 
 import java.lang.reflect.Type;
 import java.util.Map;
-import java.util.TreeMap;
 import java.util.stream.Collectors;
 
 /**
@@ -30,13 +27,13 @@ import java.util.stream.Collectors;
  * Takes a jar file from the classpath,
  */
 public class JarHelper implements IJarHelper {
-    List<URL> jarPaths;
-    String paths;
+    final List<URL> jarPaths;
+    final String paths;
 
     public JarHelper(String paths) {
         this.jarPaths = IJarHelper.convertToUrl(paths);
         this.paths = this.jarPaths.stream()
-                .map( u -> u.getFile() )
+                .map(URL::getFile)
                 .reduce("", (i, c) -> c + "," + i);
         System.out.println("In constructor: " + this.paths);
     }

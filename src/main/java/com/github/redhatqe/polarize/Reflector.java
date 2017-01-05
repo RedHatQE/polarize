@@ -2,8 +2,6 @@ package com.github.redhatqe.polarize;
 
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.github.redhatqe.polarize.configuration.XMLConfig;
-import com.github.redhatqe.polarize.exceptions.MismatchError;
-import com.github.redhatqe.polarize.importer.ImporterRequest;
 import com.github.redhatqe.polarize.importer.testcase.Testcase;
 import com.github.redhatqe.polarize.importer.testcase.Testcases;
 import com.github.redhatqe.polarize.metadata.*;
@@ -12,10 +10,7 @@ import java.io.File;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
-import java.nio.file.Path;
 import java.util.*;
-import java.util.concurrent.ExecutionException;
-import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -59,11 +54,6 @@ public class Reflector {
         mappingFile = FileHelper.loadMapping(new File(config.config.getMapping().getPath()));
         tcPath = config.config.getTestcasesXml().getPath();
         tcPath = config.getTestcasesXMLPath();
-    }
-
-
-    private void showMap() {
-        this.testsToClasses.entrySet().forEach((es) -> System.out.println(es.getKey() + "=" + es.getValue()));
     }
 
     private <T> List<Meta<TestDefinition>> getTestDefsMetaData(Class<T> c) {
@@ -209,7 +199,7 @@ public class Reflector {
     public void processTestDefs() {
         File mapPath = new File(this.config.getMappingPath());
         this.testDefs.forEach(td -> TestDefinitionProcessor.processTC(td, this.mappingFile, this.testCaseToMeta,
-                this.tcPath, this.tcMap, this.methToProjectDef, mapPath));
+                this.tcPath, this.tcMap, mapPath));
     }
 
     Map<String, Map<String, Meta<TestDefinition>>> makeMethToProjectMeta() {
@@ -251,10 +241,9 @@ public class Reflector {
 
         String sName = this.config.testcase.getSelector().getName();
         String sVal = this.config.testcase.getSelector().getVal();
-        String author = this.config.config.getAuthor();
         String user = this.config.polarion.getUser();
         String pw = this.config.polarion.getPassword();
         String url = this.config.polarion.getUrl() + this.config.testcase.getEndpoint().getRoute();
-        return TestDefinitionProcessor.tcImportRequest(this.tcMap, sName, sVal, author, url, user, pw, this.testcases);
+        return TestDefinitionProcessor.tcImportRequest(this.tcMap, sName, sVal, url, user, pw, this.testcases);
     }
 }

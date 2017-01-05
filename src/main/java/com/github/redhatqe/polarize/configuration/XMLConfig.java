@@ -28,6 +28,7 @@ public class XMLConfig {
     public ServerType kerb;
     public ServerType ossrh;
     public ServerType broker;
+    public ServerType orientdb;
     public ImporterType xunit;
     public ImporterType testcase;
     public Logger logger = LoggerFactory.getLogger(XMLConfig.class);
@@ -99,8 +100,11 @@ public class XMLConfig {
                 case "broker":
                     this.broker = st;
                     break;
+                case "orientdb":
+                    this.orientdb = st;
+                    break;
                 default:
-                    this.logger.error("Unknown server type: %s", st.getName());
+                    this.logger.error(String.format("Unknown server type: %s", st.getName()));
             }
         }
     }
