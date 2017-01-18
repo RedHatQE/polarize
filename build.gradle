@@ -29,6 +29,7 @@ task wrapper(type: Wrapper) {
 
 repositories {
     mavenCentral()
+    mavenLocal()
     jcenter()
 }
 
