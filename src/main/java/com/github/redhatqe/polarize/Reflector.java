@@ -18,9 +18,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.testng.annotations.Test;
 
-import javax.jms.JMSException;
 
-import static com.github.redhatqe.polarize.metadata.DefTypes.Custom.*;
 
 /**
  * Created by stoner on 3/9/16.
@@ -44,6 +42,7 @@ public class Reflector {
     public Map<String,
                Map<String, Meta<TestDefinition>>> methToProjectDef;
     private Testcases testcases = new Testcases();
+    public Map<String, String> methodToDesc = new HashMap<>();
 
     public Reflector() {
         config = new XMLConfig(null);
@@ -155,12 +154,29 @@ public class Reflector {
                             String provider = ann.dataProvider();
                             Boolean isProvider = !provider.isEmpty();
                             Boolean enabled = ann.enabled();
+                            String[] groups = ann.groups();
+                            String[] dependsOnGroups = ann.dependsOnGroups();
+                            String[] dependsOnMethods = ann.dependsOnMethods();
                             //return className + "." + m.getName();
-                            return new MetaData(methName, className, desc, enabled, isProvider, provider);
+                            return new MetaData( methName, className, desc, enabled, isProvider, provider
+                                               , groups, dependsOnGroups, dependsOnMethods);
                         })
                         .filter(e -> !e.className.isEmpty() && !e.methodName.isEmpty())
                         .collect(Collectors.toList());
         return classMethods;
+    }
+
+    public static String findDescription(String qualname, List<MetaData> md) {
+        Optional<MetaData> methodMD = md.stream()
+                .filter(m -> {
+                    String fqpn = String.format("%s.%s", m.className, m.methodName);
+                    return qualname.equals(fqpn);
+                })
+                .findFirst();
+        if (methodMD.isPresent())
+            return methodMD.get().description;
+        else
+            return "This is an automated test: " + qualname;
     }
 
     public <T> void getAnnotations(Class<T> c) {
@@ -170,6 +186,17 @@ public class Reflector {
         }
         else
             this.methods.addAll(classMethods);
+
+        this.methodToDesc = this.methods.stream()
+                .reduce(new HashMap<String, String>(), // the identity value (or accumulator)
+                        (accum, n) -> {
+                            accum.put(n.className + "." + n.methodName, n.description);
+                            return accum;
+                        },
+                        (partial, next) -> {
+                            partial.putAll(next);
+                            return partial;
+                        });
 
         this.testDefs.addAll(this.getTestDefMetaData(c));
         this.testDefs.addAll(this.getTestDefsMetaData(c));
@@ -195,11 +222,12 @@ public class Reflector {
     }
 
 
-
     public void processTestDefs() {
         File mapPath = new File(this.config.getMappingPath());
-        this.testDefs.forEach(td -> TestDefinitionProcessor.processTC(td, this.mappingFile, this.testCaseToMeta,
-                this.tcPath, this.tcMap, mapPath));
+        this.testDefs.forEach(td ->
+                TestDefinitionProcessor
+                        .processTC(td, this.mappingFile, this.testCaseToMeta, this.tcPath, this.tcMap, mapPath,
+                                   this.methodToDesc));
     }
 
     Map<String, Map<String, Meta<TestDefinition>>> makeMethToProjectMeta() {

@@ -84,6 +84,8 @@ public class JarHelper implements IJarHelper {
 
         Gson gson = new GsonBuilder().setPrettyPrinting().create();
         Type metaType = new TypeToken<List<Meta<TestDefAdapter>>>() {}.getType();
+        Type tToC = new TypeToken<Map<String, List<MetaData>>>() {}.getType();
+        Type testT = new TypeToken<List<MetaData>>(){}.getType();
 
         JarHelper jh = new JarHelper(jarPathsOpt);
         try {
@@ -121,30 +123,38 @@ public class JarHelper implements IJarHelper {
                 List<Meta<TestDefAdapter>> sorted = Reflector.sortTestDefs(refl.testDefAdapters);
 
                 String jsonDefs = gson.toJson(sorted, metaType);
-                System.out.println(jsonDefs);
+                String tToCDefs = gson.toJson(refl.testsToClasses, tToC);
+                String testng = gson.toJson(refl.methods, testT);
 
-                File file = new File(output);
-                if (file.exists()) {
-                    boolean deleted = file.delete();
-                    if (!deleted) {
-                        throw new FileAlreadyExistsException("Could not delete old file");
-                    }
-                } else {
-                    file.createNewFile();
-                }
+                makeFile(tToCDefs, "/tmp/tests-reflected.json");
+                makeFile(jsonDefs, output);
+                makeFile(testng, "/tmp/testng-reflected.json");
 
-                FileWriter fw = new FileWriter(file);
-                BufferedWriter bw = new BufferedWriter(fw);
-
-                try {
-                    bw.write(jsonDefs);
-                    bw.close();
-                } catch (IOException ex) {
-                    System.err.println(ex.getMessage());
-                }
             }
         } catch (IOException e) {
             e.printStackTrace();
+        }
+    }
+
+    static private void makeFile(String json, String filename) {
+        File file = new File(filename);
+
+        try {
+            if (file.exists()) {
+                boolean deleted = file.delete();
+                if (!deleted) {
+                    throw new FileAlreadyExistsException("Could not delete old file");
+                }
+            } else {
+                file.createNewFile();
+            }
+
+            FileWriter fw = new FileWriter(file);
+            BufferedWriter bw = new BufferedWriter(fw);
+            bw.write(json);
+            bw.close();
+        } catch (IOException ex) {
+            System.err.println(ex.getMessage());
         }
     }
 }
