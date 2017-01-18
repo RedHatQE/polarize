@@ -303,7 +303,7 @@ public class XUnitReporter implements IReporter {
                     new com.github.redhatqe.polarize.importer.xunit.Properties();
             List<Property> tcProps = props.getProperty();
 
-            // Look up in the XML description file the qualifiedName to get the Polarion ID
+            /* Look up in the XML description file the qualifiedName to get the Polarion ID
             File xmlDesc = XUnitReporter.getXMLDescFile(classname, methname);
             String id = XUnitReporter.getPolarionIDFromXML(TestDefinition.class, xmlDesc);
             if (id.equals("")) {
@@ -313,8 +313,7 @@ public class XUnitReporter implements IReporter {
                 logger.error(missing);
                 continue;
             }
-            Property polarionID = XUnitReporter.createProperty("polarion-testcase-id", id);
-            tcProps.add(polarionID);
+            */
 
             XUnitReporter.getStatus(result, testcase);
 
@@ -330,8 +329,17 @@ public class XUnitReporter implements IReporter {
             String qual = String.format("%s.%s", classname, methname);
             Map<String, Map<String, IdParams>> mapping = FileHelper.loadMapping(fpath);
             Map<String, IdParams> inner = mapping.get(qual);
+            if (!inner.containsKey(project)) {
+                String err = String.format("Project %s does not exist for %s in mapping file", project, qual);
+                logger.error(err);
+                throw new MappingError(err);
+            }
             IdParams ip = inner.get(project);
+            String id = ip.getId();
             List<String> args = ip.getParameters();
+
+            Property polarionID = XUnitReporter.createProperty("polarion-testcase-id", id);
+            tcProps.add(polarionID);
 
             // Get all the iteration data
             Object[] params = result.getParameters();
