@@ -1146,6 +1146,11 @@ public class Configurator implements IJAXBHelper {
     public String getBaseDir() {
         if (this.baseDir == null)
             this.baseDir = this.config.getBasedir();
+        // Assume current working directory
+        if (this.baseDir.equals("")) {
+            this.baseDir = System.getProperty("user.dir");
+            logger.warn("The base-dir was an empty string.  Assuming current directory of " + this.baseDir);
+        }
         return baseDir;
     }
 
