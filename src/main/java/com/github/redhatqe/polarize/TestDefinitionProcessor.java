@@ -268,7 +268,6 @@ public class TestDefinitionProcessor extends AbstractProcessor {
                 String testID = "";
                 if (i < def.testCaseID().length) {
                     testID = def.testCaseID()[i];
-                    i++;
                 }
                 else
                     badAnn = true;
@@ -344,11 +343,6 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         /* Generate the mapping file now that all the XML files should have been generated */
         if (this.methToProjectDef.size() > 0) {
             this.mappingFile = this.createMappingFile(mapPath);
-            try {
-                Files.lines(Paths.get(mapPath.toString())).forEach(System.out::println);
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
         }
         else {
             logger.info("Did not update the mapping file");
@@ -1268,7 +1262,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
      */
     private Testcase processTC(Meta<TestDefinition> meta) throws MismatchError {
         return TestDefinitionProcessor.processTC(meta, this.mappingFile, this.testCaseToMeta, this.tcPath, this.tcMap,
-                new File(this.config.getMappingPath()));
+                new File(this.config.getMappingPath()), this.methNameToTestNGDescription);
     }
 
     /**
@@ -1286,8 +1280,9 @@ public class TestDefinitionProcessor extends AbstractProcessor {
                                      Map<Testcase, Meta<TestDefinition>> tcToMeta,
                                      String testCasePath,
                                      Map<String, List<Testcase>> testCaseMap,
-                                     File mapPath) {
-        Testcase tc = TestDefinitionProcessor.initImporterTestcase(meta, null);
+                                     File mapPath,
+                                     Map<String, String> methToDesc) {
+        Testcase tc = TestDefinitionProcessor.initImporterTestcase(meta, methToDesc);
         tcToMeta.put(tc, meta);
 
         Boolean importRequest = processIdEntities(meta, testCasePath, mapFile, tc, mapPath);
@@ -1331,12 +1326,14 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         // Iterate through the map of qualifiedMethod -> ProjectID -> Meta<TestDefinition>
         Map<String, Map<String, IdParams>> mpid = methToProjMeta.entrySet().stream()
                 .reduce(collected,
+                        // Function that gets the inner map in methToProjMeta
                         (accum, entry) -> {
                             String methName = entry.getKey();
                             Map<String, Meta<TestDefinition>> methToDef = entry.getValue();
                             HashMap<String, IdParams> accumulator = new HashMap<>();
                             Map<String, IdParams> methToProject = methToDef.entrySet().stream()
-                                    .reduce(accumulator,
+                                    .reduce(accumulator,  // our "identity" value is the accumulator
+                                            // Gets the map of String -> Meta<TestDefinition> inside methToProjMeta
                                             (acc, n) -> {
                                                 String project = n.getKey();
                                                 Meta<TestDefinition> m = n.getValue();
@@ -1418,7 +1415,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
                     ps = String.format("[ %s ]", ps.substring(0, ps.length() - 2));
                 else
                     ps = "[ ]";
-                System.out.println(String.format(fmt, key, project, id, ps));
+                //System.out.println(String.format(fmt, key, project, id, ps));
             }
         }
         return sorted;
