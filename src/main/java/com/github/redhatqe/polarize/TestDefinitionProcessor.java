@@ -536,7 +536,8 @@ public class TestDefinitionProcessor extends AbstractProcessor {
                     String url,
                     String user,
                     String pw,
-                    Testcases tests) {
+                    Testcases tests,
+                    String tcPath) {
         List<Optional<ObjectNode>> maybeNodes = new ArrayList<>();
         if (testcaseMap.isEmpty())
             return maybeNodes;
@@ -551,7 +552,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
             else {
                 try {
                     Consumer<Optional<ObjectNode>> hdlr;
-                    hdlr = TestDefinitionProcessor.testcaseImportHandler(path, project, tests);
+                    hdlr = TestDefinitionProcessor.testcaseImportHandler(tcPath, project, tests);
                     maybeNodes.add(ImporterRequest.sendImportRequest(url, user, pw, testXml, selector, hdlr));
                 } catch (InterruptedException e) {
                     e.printStackTrace();

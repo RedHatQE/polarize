@@ -272,6 +272,7 @@ public class Reflector {
         String user = this.config.polarion.getUser();
         String pw = this.config.polarion.getPassword();
         String url = this.config.polarion.getUrl() + this.config.testcase.getEndpoint().getRoute();
-        return TestDefinitionProcessor.tcImportRequest(this.tcMap, sName, sVal, url, user, pw, this.testcases);
+        return TestDefinitionProcessor.tcImportRequest(this.tcMap, sName, sVal, url, user, pw, this.testcases,
+                                                       this.tcPath);
     }
 }

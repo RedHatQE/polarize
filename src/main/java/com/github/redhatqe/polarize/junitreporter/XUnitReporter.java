@@ -28,6 +28,7 @@ import org.testng.xml.XmlSuite;
 import javax.jms.JMSException;
 
 import java.io.*;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
@@ -57,6 +58,7 @@ public class XUnitReporter implements IReporter {
     public final static String testrunTitle = "polarion-testrun-title";
     public final static String polarionCustom = "polarion-custom";
     public final static String polarionResponse = "polarion-response";
+    private File bad = new File("/tmp/bad-tests.txt");
 
     public static Properties getProperties() {
         Properties props = new Properties();
@@ -111,6 +113,14 @@ public class XUnitReporter implements IReporter {
         Testsuites tsuites = XUnitReporter.getTestSuiteInfo(config.xunit.getSelector().getName());
         List<Testsuite> tsuite = tsuites.getTestsuite();
 
+        if (this.bad.exists()) {
+            try {
+                Files.delete(this.bad.toPath());
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+
         // Get information for each <testsuite>
         suites.forEach(suite -> {
             String name = suite.getName();
@@ -132,7 +142,7 @@ public class XUnitReporter implements IReporter {
                         ts.setTime(Float.toString(duration));
 
                         List<Testcase> tests = ts.getTestcase();
-                        List<Testcase> after = XUnitReporter.getMethodInfo(suite, tests);
+                        List<Testcase> after = XUnitReporter.getMethodInfo(suite, tests, this.bad);
                         return ts;
                     })
                     .collect(Collectors.toList());
@@ -181,9 +191,6 @@ public class XUnitReporter implements IReporter {
             if (!node.isPresent()) {
                 logger.warn("No ObjectNode received from the Message");
             } else {
-                // TODO: figure out if the xunit import was successful.  If it wasn't, what do we do?  Retry?  Perhaps,
-                // depending on the exception type, we might be able to retry.  Finding the log when we get an exception
-                // will be very difficult
                 JsonNode n = node.get();
                 if (n.size() == 0)
                     return;
@@ -274,7 +281,7 @@ public class XUnitReporter implements IReporter {
      * @param testcases all the Testcase objects
      * @return modified list of the Testcase objects
      */
-    private static List<Testcase> getMethodInfo(ISuite suite, List<Testcase> testcases) {
+    private static List<Testcase> getMethodInfo(ISuite suite, List<Testcase> testcases, File badMethods) {
         List<IInvokedMethod> invoked = suite.getAllInvokedMethods();
         for(IInvokedMethod meth: invoked) {
             ITestNGMethod fn = meth.getTestMethod();
@@ -283,39 +290,9 @@ public class XUnitReporter implements IReporter {
                 continue;
             }
 
-            Testcase testcase = new Testcase();
-            testcases.add(testcase);
-
-            //XmlTest test = fn.getXmlTest();
-            ITestResult result = meth.getTestResult();
-            Long millis = result.getEndMillis() - result.getStartMillis();
-            testcase.setTime(millis.toString());
-
             ITestClass clz = fn.getTestClass();
             String methname = fn.getMethodName();
             String classname = clz.getName();
-
-            testcase.setName(methname);
-            testcase.setClassname(classname);
-
-            // Create the <properties> element, and all the child <property> sub-elements
-            com.github.redhatqe.polarize.importer.xunit.Properties props =
-                    new com.github.redhatqe.polarize.importer.xunit.Properties();
-            List<Property> tcProps = props.getProperty();
-
-            /* Look up in the XML description file the qualifiedName to get the Polarion ID
-            File xmlDesc = XUnitReporter.getXMLDescFile(classname, methname);
-            String id = XUnitReporter.getPolarionIDFromXML(TestDefinition.class, xmlDesc);
-            if (id.equals("")) {
-                // FIXME: Could look in the mapping.json file but this is already handled in processTC(), so the only
-                // way this should happen is if somehow the import request failed, or this method had a xmlDesc
-                String missing = String.format("Could not find Polarion ID for %s.%s", classname, methname);
-                logger.error(missing);
-                continue;
-            }
-            */
-
-            XUnitReporter.getStatus(result, testcase);
 
             // Load the mapping file
             String project = XUnitReporter.cfg.getProject();
@@ -329,11 +306,40 @@ public class XUnitReporter implements IReporter {
             String qual = String.format("%s.%s", classname, methname);
             Map<String, Map<String, IdParams>> mapping = FileHelper.loadMapping(fpath);
             Map<String, IdParams> inner = mapping.get(qual);
-            if (!inner.containsKey(project)) {
-                String err = String.format("Project %s does not exist for %s in mapping file", project, qual);
+
+            if (inner == null || !inner.containsKey(project)) {
+                String err = String.format("Project %s does not exist for %s in mapping file\n", project, qual);
                 logger.error(err);
-                throw new MappingError(err);
+                System.err.println(err);
+                //throw new MappingError(err);
+                try {
+                    FileWriter badf = new FileWriter(badMethods, true);
+                    BufferedWriter bw = new BufferedWriter(badf);
+                    bw.write(err);
+                    bw.close();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+                continue;
             }
+
+            Testcase testcase = new Testcase();
+            testcases.add(testcase);
+
+            //XmlTest test = fn.getXmlTest();
+            ITestResult result = meth.getTestResult();
+            Long millis = result.getEndMillis() - result.getStartMillis();
+            testcase.setTime(millis.toString());
+
+            testcase.setName(methname);
+            testcase.setClassname(classname);
+
+            // Create the <properties> element, and all the child <property> sub-elements
+            com.github.redhatqe.polarize.importer.xunit.Properties props =
+                    new com.github.redhatqe.polarize.importer.xunit.Properties();
+            List<Property> tcProps = props.getProperty();
+            XUnitReporter.getStatus(result, testcase);
+
             IdParams ip = inner.get(project);
             String id = ip.getId();
             List<String> args = ip.getParameters();
