@@ -13,6 +13,7 @@ import com.github.redhatqe.polarize.metadata.*;
 import com.github.redhatqe.polarize.importer.testcase.Testcase;
 import com.github.redhatqe.polarize.utils.Consumer2;
 import com.github.redhatqe.polarize.utils.Transformer;
+import com.github.redhatqe.polarize.utils.Tuple;
 import org.testng.annotations.Test;
 
 
@@ -402,7 +403,11 @@ public class TestDefinitionProcessor extends AbstractProcessor {
                 String project = es.getKey();
                 Meta<TestDefinition> meta = es.getValue();
                 String id = meta.getPolarionIDFromTestcase()
-                        .orElseGet(() -> meta.getPolarionIDFromXML(tcpath).orElse(""));
+                        .orElseGet(() -> {
+                            Tuple<String, Testcase> maybe =
+                                    meta.getPolarionIDFromXML(tcpath).orElse(new Tuple<>("", null));
+                            return maybe.first;
+                        });
                 Boolean badFn = false;
                 // Check if the mapFile has the corresponding project of this function name
                 if (!mapFile.containsKey(fnName) || !mapFile.get(fnName).containsKey(project)) {
@@ -1116,7 +1121,18 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         }
         Optional<File> path = meta.getFileFromMeta(xmlPath);
         path.ifPresent(file -> IJAXBHelper.marshaller(tc, file, jaxb.getXSDFromResource(Testcase.class)));
-        if (!path.isPresent()) {
+        if (!path.isPresent() || tc.getDescription() == null || tc.getDescription().equals("")) {
+            createTestCaseXML(tc, FileHelper.makeXmlPath(xmlPath, meta).toFile());
+        }
+    }
+
+    private static void addDescToXML(Meta<TestDefinition> meta, String xmlPath, String desc, Testcase tc) {
+        if (tc.getDescription() == null || !tc.getDescription().equals(desc)) {
+            tc.setDescription(desc);
+        }
+        Optional<File> path = meta.getFileFromMeta(xmlPath);
+        path.ifPresent(file -> IJAXBHelper.marshaller(tc, file, jaxb.getXSDFromResource(Testcase.class)));
+        if (!path.isPresent() || tc.getDescription() == null || tc.getDescription().equals("")) {
             createTestCaseXML(tc, FileHelper.makeXmlPath(xmlPath, meta).toFile());
         }
     }
@@ -1167,17 +1183,19 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         List<String> badFuncs = new ArrayList<>();
 
         Optional<String> maybePolarionID = meta.getPolarionIDFromTestcase();
-        Optional<String> maybeIDXml = meta.getPolarionIDFromXML(testCasePath);
+        Optional<Tuple<String, Testcase>> maybeIDXml = meta.getPolarionIDFromXML(testCasePath);
         Optional<String> maybeMapFileID =
                 TestDefinitionProcessor.getPolarionIDFromMapFile(meta.qualifiedName, meta.project, mapFile);
         Boolean idExists = maybePolarionID.isPresent();
         Boolean xmlIdExists = maybeIDXml.isPresent();
         Boolean mapIdExists = maybeMapFileID.isPresent();
         String annId = maybePolarionID.orElse("");
-        String xmlId = maybeIDXml.orElse("");
+        Tuple<String, Testcase> idAndTC = maybeIDXml.orElse(new Tuple<>("", null));
+        String xmlId = idAndTC.first;
         String mapId = maybeMapFileID.orElse("");
         Boolean importRequest = meta.annotation.update();
 
+        // w00t, bit tricks.  Thought I wouldn't need these again after my embedded days :)
         int idval = (idExists ? 1 << 2 : 0) | (xmlIdExists ? 1 << 1 : 0) | (mapIdExists ? 1 : 0);
         IDType idtype = IDType.fromNumber(idval);
         if (idtype == null)
@@ -1188,6 +1206,12 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         String qual = meta.qualifiedName;
         String project = meta.project;
         String pqual = meta.project + " -> " + qual;
+
+        // Check that the description field is not empty
+        if (idAndTC.second != null) {
+            String desc = tc.getDescription();
+            TestDefinitionProcessor.addDescToXML(meta, testCasePath, desc, idAndTC.second);
+        }
 
         // TODO: Instead of throwing an error on mismatch, perhaps we should auto-correct based on precedence
         // FIXME: When query ability is added, can run a check
