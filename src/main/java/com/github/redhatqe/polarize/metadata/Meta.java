@@ -5,6 +5,7 @@ import com.github.redhatqe.polarize.IJAXBHelper;
 import com.github.redhatqe.polarize.JAXBHelper;
 import com.github.redhatqe.polarize.importer.testcase.Parameter;
 import com.github.redhatqe.polarize.importer.testcase.Testcase;
+import com.github.redhatqe.polarize.utils.Tuple;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -69,8 +70,6 @@ public class Meta<T> {
     }
 
     /**
-     * FIXME: I think this should go in Meta
-     *
      * Unmarshalls an Optional of type T from the given Meta object
      *
      * From the data contained in the Meta object, function looks for the XML description file and unmarshalls it to
@@ -99,11 +98,14 @@ public class Meta<T> {
     /**
      * Unmarshalls Testcase from XML pointed at in meta, and gets the Polarion ID
      *
+     * *Note* we are returning a Tuple now to avoid extra calls to unmarshall from the XML
+     *
      * @param tcPath path to the testcases
-     * @return Optionally the String of the Polarion ID
+     * @return Optionally the String of the Polarion ID and the unmarshalled version of the Testcase
      */
-    public Optional<String> getPolarionIDFromXML(String tcPath) {
+    public Optional<Tuple<String, Testcase>> getPolarionIDFromXML(String tcPath) {
         Optional<Testcase> tc = this.getTypeFromMeta(Testcase.class, tcPath);
+        Tuple<String, Testcase> res = new Tuple<>();
 
         if (!tc.isPresent()) {
             Meta.logger.info("Unmarshalling failed.  No Testcase present...");
@@ -111,11 +113,16 @@ public class Meta<T> {
         }
         else if (tc.get().getId() == null || tc.get().getId().equals("")) {
             Meta.logger.info("No id attribute for <testcase>");
-            return Optional.empty();
+
+            res.first = "";
+            res.second = tc.get();
+            return Optional.of(res);
         }
         Testcase tcase = tc.get();
         Meta.logger.info("Polarion ID for testcase " + tcase.getTitle() + " is " + tcase.getId());
-        return Optional.of(tcase.getId());
+        res.first = tcase.getId();
+        res.second = tcase;
+        return Optional.of(res);
     }
 
     /**
