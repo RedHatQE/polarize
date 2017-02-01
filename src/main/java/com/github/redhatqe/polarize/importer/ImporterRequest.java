@@ -88,12 +88,7 @@ public class ImporterRequest {
             logger.error(String.format("%s did not exist", importerFile.toString()));
             return response;
         }
-        try {
-            String text = Files.lines(importerFile.toPath()).reduce("", (acc, c) -> acc + c + "\n");
-            ImporterRequest.logger.info(String.format("Sending %s to importer:\n%s", importerFile.toString(), text));
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+        ImporterRequest.logger.info(String.format("Sending %s to importer:\n", importerFile.toString()));
 
         CredentialsProvider provider = new BasicCredentialsProvider();
         UsernamePasswordCredentials credentials = new UsernamePasswordCredentials(user, pw);
