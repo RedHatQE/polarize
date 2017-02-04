@@ -4,7 +4,7 @@ plugins {
 }
 
 group 'com.github.redhatqe.polarize'
-version '0.5.4-SNAPSHOT'
+version '0.5.5-SNAPSHOT'
 String archivesBaseName = "polarize"
 String projectURL = 'https://github.com/RedHatQE/polarize'
 String devURL = 'git@github.com:RedHatQE/polarize.git'
@@ -111,7 +111,7 @@ artifacts {
     archives sourceJar
     archives javadocJar
     archives shadowJar
-    if (arcPomFile.exists()) {
+    if (arcPomFile != null && arcPomFile.exists()) {
         pom arcPomFile
     }
 }
@@ -119,14 +119,15 @@ artifacts {
 
 // We need to sign the POM
 task signPom(type: Sign) {
-    sign arcPomFile
+    if (arcPomFile != null)
+        sign arcPomFile
 }
 
 task signJars (type : Sign, dependsOn: [jar, javadocJar, sourceJar]) {
     sign configurations.archives
 }
 
-if (arcPomFile.exists()) {
+if (arcPomFile != null && arcPomFile.exists()) {
     task preparePublication (dependsOn : [signJars, signPom])
 } else {
     task preparePublication (dependsOn : signJars)
@@ -256,7 +257,7 @@ publishing {
 
     repositories {
         maven {
-            if (arcPomFile.exists()) {
+            if (arcPomFile != null && arcPomFile.exists()) {
                 if (project.version.contains("SNAPSHOT")) {
                     url 'https://oss.sonatype.org/content/repositories/snapshots'
                 }
@@ -289,8 +290,7 @@ task classPath << {
     println sourceSets.main.runtimeClasspath.asPath
 }
 
-/*
+
 task getPomFiles {
     println findPomFiles(arcDir)
 }
-*/
