@@ -102,16 +102,20 @@ public class XUnitReporter implements IReporter {
     }
 
     public void setTestSuiteResults(Testsuite ts, FullResult fr, ITestContext ctx) {
+        if (fr == null)
+            return;
+
         if (fr.total != fr.fails + fr.errors + fr.skips + fr.passes) {
             String e = "Total number of tests run != fails + errors + skips + passes\n";
             String v = "                       %d !=    %d +     %d +    %d +     %d\n";
             v = String.format(v, fr.total, fr.fails, fr.errors, fr.skips, fr.passes);
             System.err.println(e + v);
         }
+        int numErrors = fr.errorsByMethod.size();
+
 
         // The iterations feature of Polarion means that we don't need to specify how many times a permutation of a
         // method + args passed/failed/skipped etc.  That's why we don't directly use the fr numbers.
-        int numErrors = fr.errorsByMethod.size();
         int numFails = ctx.getFailedTests().size();
         int numSkips = ctx.getSkippedTests().size();
         int numTotal = ctx.getAllTestMethods().length;
@@ -160,6 +164,8 @@ public class XUnitReporter implements IReporter {
                         // as a Class in java
                         Testsuite ts = new Testsuite();
                         List<Testcase> tests = ts.getTestcase();
+                        if (tests == null)
+                            tests = new ArrayList<>();
 
                         String key = es.getKey();
                         ISuiteResult result = es.getValue();
@@ -181,7 +187,7 @@ public class XUnitReporter implements IReporter {
                         ts.setTime(Double.toString(duration));
 
                         // While I suppose it's possible, we should have only one or zero possible results from the map
-                        // so findFirst should return at most 1.
+                        // so findFirst should return at most 1.  When will we have zero?
                         List<Tuple<FullResult, List<Testcase>>> frList = full.entrySet().stream()
                                 .filter(e -> {
                                     String cls = e.getKey();
@@ -193,12 +199,20 @@ public class XUnitReporter implements IReporter {
                         Tuple<FullResult, List<Testcase>> tup = maybeFR.orElse(new Tuple<>());
                         FullResult fr = tup.first;
                         List<Testcase> tcs = tup.second;
-                        tests.addAll(tcs);
+                        if (tcs != null)
+                            tests.addAll(tcs);
 
                         setTestSuiteResults(ts, fr, ctx);
-                        return ts;
+                        if (fr == null) {
+                            System.out.println(String.format("Skipping test for %s", ctx.toString()));
+                            return null;  // No FullResult due to empty frList.  Will be filtered out
+                        }
+                        else
+                            return ts;
                     })
+                    .filter(Objects::nonNull)  // filter out any suites without FullResult
                     .collect(Collectors.toList());
+
             tsuite.addAll(collected);
         });
 

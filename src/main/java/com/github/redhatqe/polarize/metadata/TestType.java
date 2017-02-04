@@ -10,6 +10,6 @@ package com.github.redhatqe.polarize.metadata;
  */
 public @interface TestType {
     DefTypes.TestTypes testtype() default DefTypes.TestTypes.FUNCTIONAL;
-    DefTypes.Subtypes subtype1() default DefTypes.Subtypes.EMPTY;
+    DefTypes.Subtypes subtype1() default DefTypes.Subtypes.RELIABILITY;
     DefTypes.Subtypes subtype2() default DefTypes.Subtypes.EMPTY;
 }

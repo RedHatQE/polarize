@@ -483,11 +483,11 @@ public class TestDefinitionProcessor extends AbstractProcessor {
      * @param selectorValue value part of selector (eg <name>='<value>')
      * @param projectID project ID of the Testcases object
      * @param testcaseXml File to where the Testcases object will be marshalled to
-     * @param testMap a map of methodName to Testcase list
+     * @param testMap a map of projectID to Testcase list
      * @param tests the Testcases object that will be initialized
      * @return an optional of the Testcases project
      */
-    private static Optional<String>
+    public static Optional<String>
     initTestcases(String selectorName,
                   String selectorValue,
                   String projectID,
