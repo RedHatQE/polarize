@@ -1,11 +1,14 @@
 package com.github.redhatqe.polarize.configuration;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.BooleanNode;
 import com.fasterxml.jackson.databind.node.IntNode;
 import com.github.redhatqe.polarize.Utility;
 
+import java.io.File;
 import java.io.IOException;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -63,8 +66,127 @@ public class Opts {
     private TestCaseImporter tci;
     private XUnit xunit;
     private TestRun testrun;
-    private Props properties;
-    private Servers servers;
+    private Prop[] properties;
+    private List<Server> servers;
+
+    @JsonProperty(value="base-dir")
+    public String getBaseDir() {
+        return baseDir;
+    }
+
+    @JsonProperty(value="base-dir")
+    public void setBaseDir(String baseDir) {
+        this.baseDir = baseDir;
+    }
+
+    public String getAuthor() {
+        return author;
+    }
+
+    public void setAuthor(String author) {
+        this.author = author;
+    }
+
+    public String getMapping() {
+        return mapping;
+    }
+
+    public void setMapping(String mapping) {
+        this.mapping = mapping;
+    }
+
+    @JsonProperty(value="testcases-xml")
+    public String getTcXML() {
+        return tcXML;
+    }
+
+    @JsonProperty(value="testcases-xml")
+    public void setTcXML(String tcXML) {
+        this.tcXML = tcXML;
+    }
+
+    public String getProject() {
+        return project;
+    }
+
+    public void setProject(String project) {
+        this.project = project;
+    }
+
+    @JsonProperty(value="project-name")
+    public String getProjectName() {
+        return projectName;
+    }
+
+    @JsonProperty(value="project-name")
+    public void setProjectName(String projectName) {
+        this.projectName = projectName;
+    }
+
+    @JsonProperty(value="group-id")
+    public String getGroupId() {
+        return groupId;
+    }
+
+    @JsonProperty(value="group-id")
+    public void setGroupId(String groupId) {
+        this.groupId = groupId;
+    }
+
+    @JsonProperty(value="edit-config")
+    public Boolean getEditConfig() {
+        return editConfig;
+    }
+
+    @JsonProperty(value="edit-config")
+    public void setEditConfig(Boolean editConfig) {
+        this.editConfig = editConfig;
+    }
+
+    @JsonProperty(value="testcase")
+    public TestCaseImporter getTci() {
+        return tci;
+    }
+
+    @JsonProperty(value="testcase")
+    public void setTci(TestCaseImporter tci) {
+        this.tci = tci;
+    }
+
+    @JsonProperty(value="xunit")
+    public XUnit getXunit() {
+        return xunit;
+    }
+
+    @JsonProperty(value="xunit")
+    public void setXunit(XUnit xunit) {
+        this.xunit = xunit;
+    }
+
+    public TestRun getTestrun() {
+        return testrun;
+    }
+
+    public void setTestrun(TestRun testrun) {
+        this.testrun = testrun;
+    }
+
+    public Prop[] getProperties() {
+        return properties;
+    }
+
+    public void setProperties(Prop[] properties) {
+        this.properties = properties;
+    }
+
+    public List<Server> getServers() {
+        return servers;
+    }
+
+    public void setServers(List<Server> servers) {
+        this.servers = servers;
+    }
+
 
     public interface IArgList {
         default List<String> argList(Map<String, String> m) {
@@ -83,7 +205,7 @@ public class Opts {
         }
     }
 
-    public class Importer implements IArgList {
+    public static class Importer implements IArgList {
         protected Boolean enabled;
         protected Integer timeout;
         protected String file;
@@ -105,152 +227,164 @@ public class Opts {
         }
     }
 
-    public class XUnit extends Importer {
-        private String newXunit;
+    public static class XUnit extends Importer {
+        private String newXunit;  // path to temp Xunit result
 
-        public XUnit(JsonNode node) {
-            super();
-            Iterator<Map.Entry<String, JsonNode>> iter = node.fields();
-            while(iter.hasNext()) {
-                Map.Entry<String, JsonNode> me = iter.next();
-                String key = me.getKey();
-                JsonNode n = me.getValue();
-                String val = n.textValue();
-                String fmt = "--%s %s";
-
-                switch(key) {
-                    case "importer-enabled":
-                        this.setEnabled(Boolean.valueOf(val));
-                        break;
-                    case "file":
-                        // TODO: Add way to change the <file path=""> for testcase importer
-                        this.setFile(val);
-                        break;
-                    case "selector-name":
-                        this.setSelectorName(val);
-                        break;
-                    case "selector-val":
-                        this.setSelectorVal(val);
-                        break;
-                    case "timeout":
-                        if (n instanceof  IntNode)
-                            this.setTimeout(n.intValue());
-                        else
-                            System.err.println("timeout must evaluate to an integer (no quotes)");
-                        break;
-                    case "new":
-                        this.setNewXunit(val);
-                        break;
-                }
-            }
+        @JsonCreator
+        public XUnit(
+                @JsonProperty("new") String newXml,
+                @JsonProperty("importer-enabled") Boolean enabled,
+                @JsonProperty("timeout") Integer timeout,
+                @JsonProperty("file") String file,
+                @JsonProperty("selector-name") String selName,
+                @JsonProperty("selector-val") String selVal) {
+            this.newXunit = newXml;
+            this.enabled = enabled;
+            this.timeout = timeout;
+            this.file = file;
+            this.selectorName = selName;
+            this.selectorVal = selVal;
         }
 
+        @JsonProperty(value="new")
         public void setNewXunit(String newXunit) {
             argMap.put(Opts.NEW_XUNIT, newXunit);
             this.newXunit = newXunit;
         }
 
+        @JsonProperty(value="new")
+        public String getNewXunit() {
+            return this.newXunit;
+        }
+
+        @JsonProperty(value="importer-enabled")
         public void setEnabled(Boolean enabled) {
             argMap.put(Opts.XUNIT_IMPORTER_ENABLED, Boolean.toString(enabled));
             this.enabled = enabled;
         }
 
+        @JsonProperty(value="importer-enabled")
+        public Boolean getEnabled() {
+            return this.enabled;
+        }
+
+        @JsonProperty(value="timeout")
         public void setTimeout(Integer timeout) {
             argMap.put(Opts.XUNIT_IMPORTER_TIMEOUT, Integer.toString(timeout));
             this.timeout = timeout;
         }
 
+        @JsonProperty(value="timeout")
+        public Integer getTimeout(){
+            return this.timeout;
+        }
+
+        @JsonProperty(value="selector-name")
         public void setSelectorName(String name) {
             argMap.put(Opts.XUNIT_SELECTOR_NAME, name);
             this.selectorName = name;
         }
 
+        @JsonProperty(value="selector-name")
+        public String getSelectorName() {
+            return this.selectorName;
+        }
+
+        @JsonProperty(value="selector-val")
         public void setSelectorVal(String selectorVal) {
             argMap.put(Opts.XUNIT_SELECTOR_VAL, selectorVal);
             this.selectorVal = selectorVal;
         }
+
+        @JsonProperty(value="selector-val")
+        public String getSelectorVal() {
+            return this.selectorVal;
+        }
     }
 
-    public class TestCaseImporter extends Importer {
+    public static class TestCaseImporter extends Importer {
         private String prefix;
         private String suffix;
 
-        public TestCaseImporter(JsonNode node) {
+        @JsonCreator
+        public TestCaseImporter(
+                @JsonProperty("prefix") String prefix,
+                @JsonProperty("suffix") String suffix,
+                @JsonProperty("importer-enabled") Boolean enabled,
+                @JsonProperty("timeout") Integer timeout,
+                @JsonProperty("file") String file,
+                @JsonProperty("selector-name") String selName,
+                @JsonProperty("selector-val") String selVal) {
             super();
-            Iterator<Map.Entry<String, JsonNode>> iter = node.fields();
-            while(iter.hasNext()) {
-                Map.Entry<String, JsonNode> me = iter.next();
-                String key = me.getKey();
-                JsonNode n = me.getValue();
-                String val = n.textValue();
-                String fmt = "--%s %s";
-
-                switch(key) {
-                    case "importer-enabled":
-                        this.setEnabled(Boolean.valueOf(val));
-                        break;
-                    case "file":
-                        // TODO: Add way to change the <file path=""> for testcase importer
-                        this.setFile(val);
-                        break;
-                    case "selector-name":
-                        this.setSelectorName(val);
-                        break;
-                    case "selector-val":
-                        this.setSelectorVal(val);
-                        break;
-                    case "timeout":
-                        if (n instanceof IntNode)
-                            this.setTimeout(n.intValue());
-                        else
-                            System.err.println("timeout must evaluate to a number (no quotes)");
-                        break;
-                    case "prefix":
-                        this.setPrefix(val);
-                        break;
-                    case "suffix":
-                        this.setSuffix(val);
-                        break;
-                }
-            }
+            this.enabled = enabled;
+            this.timeout = timeout;
+            this.file = file;
+            this.selectorName = selName;
+            this.selectorVal = selVal;
         }
 
+        @JsonProperty("prefix")
         public void setPrefix(String prefix) {
             if (!prefix.equals(""))
                 argMap.put(Opts.TESTCASE_PREFIX, prefix);
             this.prefix = prefix;
         }
 
+        @JsonProperty("suffix")
         public void setSuffix(String suffix) {
             if (!suffix.equals(""))
                 argMap.put(Opts.TESTCASE_SUFFIX, suffix);
             this.suffix = suffix;
         }
 
+        @JsonProperty("selector-name")
         public void setSelectorName(String name) {
             if (!name.equals(""))
                 argMap.put(Opts.TC_SELECTOR_NAME, name);
             this.selectorName = name;
         }
 
+        @JsonProperty("selector-name")
+        public String getSelectorName() {
+            return this.selectorName;
+        }
+
+        @JsonProperty("selector-val")
         public void setSelectorVal(String selectorVal) {
             if (!selectorVal.equals(""))
                 argMap.put(Opts.TC_SELECTOR_VAL, selectorVal);
             this.selectorVal = selectorVal;
         }
 
+        @JsonProperty("selector-val")
+        public String getSelectorVal() {
+            return this.selectorVal;
+        }
+
+        @JsonProperty("timeout")
         public void setTimeout(Integer timeout) {
             argMap.put(Opts.TC_IMPORTER_TIMEOUT, Integer.toString(timeout));
             this.timeout = timeout;
         }
 
+        @JsonProperty("timeout")
+        public Integer getTimeout() {
+            return this.timeout;
+        }
+
+        @JsonProperty("enabled")
         public void setEnabled(Boolean enabled) {
             argMap.put(Opts.TC_IMPORTER_ENABLED, Boolean.toString(enabled));
             this.enabled = enabled;
         }
+
+        @JsonProperty("enabled")
+        public Boolean getEnabled() {
+            return this.enabled;
+        }
     }
 
-    public class TestRun implements IArgList{
+    public static class TestRun implements IArgList {
         private String templateId;
         private String title;
         private String id;
@@ -260,53 +394,32 @@ public class Opts {
         public Map<String, String> argMap = new HashMap<>();
         public List<String> args = new ArrayList<>();
 
-        public TestRun(JsonNode node) {
-            Iterator<Map.Entry<String, JsonNode>> iter = node.fields();
-            while(iter.hasNext()) {
-                Map.Entry<String, JsonNode> me = iter.next();
-                String key = me.getKey();
-                JsonNode n = me.getValue();
-                String val = n.textValue();
-                String fmt = "--%s %s";
-
-                switch(key) {
-                    case "template-id":
-                        this.setTemplateId(val);
-                        break;
-                    case "title":
-                        this.setTitle(val);
-                        break;
-                    case "id":
-                        this.setId(val);
-                        break;
-                    case "dry-run":
-                        if (n instanceof BooleanNode)
-                            this.setDryRun(n.booleanValue());
-                        else
-                            System.err.println("dry-run must be a boolean value (no quotes)");
-                        break;
-                    case "set-finished":
-                        if (n instanceof BooleanNode)
-                            this.setSetFinished(n.booleanValue());
-                        else
-                            System.err.println("set-finished must be a boolean value (no quotes)");
-                        break;
-                    case "include-skipped":
-                        if (n instanceof BooleanNode)
-                            this.setIncludeSkipped(n.booleanValue());
-                        else
-                            System.err.println("include-skipped must be a boolean value (no quotes)");
-                        break;
-                    default:
-                        System.out.println("Skipping key of " + key);
-                }
-            }
+        @JsonCreator
+        public TestRun(
+                @JsonProperty("template-id") String templateId,
+                @JsonProperty("title") String title,
+                @JsonProperty("id") String id,
+                @JsonProperty("dry-run") Boolean dryRun,
+                @JsonProperty("set-finished") Boolean setFinished,
+                @JsonProperty("include-skipped") Boolean includeSkipped) {
+            this.templateId = templateId;
+            this.title = title;
+            this.id = id;
+            this.dryRun = dryRun;
+            this.setFinished = setFinished;
+            this.includeSkipped = includeSkipped;
         }
 
+        @JsonProperty("template-id")
         public void setTemplateId(String templateId) {
             if (!templateId.equals(""))
                 argMap.put(Opts.TEMPLATE_ID, templateId);
             this.templateId = templateId;
+        }
+
+        @JsonProperty("template-id")
+        public String getTemplateId() {
+            return this.templateId;
         }
 
         public String getTitle() {
@@ -329,79 +442,115 @@ public class Opts {
             this.id = id;
         }
 
+        @JsonProperty("dry-run")
         public void setDryRun(Boolean dryRun) {
             argMap.put(Opts.TR_DRY_RUN, Boolean.toString(dryRun));
             this.dryRun = dryRun;
         }
 
+        @JsonProperty("dry-run")
+        public Boolean getDryRun() {
+            return this.dryRun;
+        }
+
+        @JsonProperty("set-finished")
         public void setSetFinished(Boolean setFinished) {
             argMap.put(Opts.TR_SET_FINISHED, Boolean.toString(setFinished));
             this.setFinished = setFinished;
         }
 
+        @JsonProperty("set-finished")
+        public Boolean getSetFinished() {
+            return this.setFinished;
+        }
+
+        @JsonProperty("include-skipped")
         public void setIncludeSkipped(Boolean includeSkipped) {
             argMap.put(Opts.TR_INCLUDE_SKIPPED, Boolean.toString(includeSkipped));
             this.includeSkipped = includeSkipped;
         }
+
+        @JsonProperty("include-skipped")
+        public Boolean getIncludeSkipped() {
+            return this.includeSkipped;
+        }
     }
 
-    public class Props {
-        public List<String> args = new ArrayList<>();
+    public static class Prop {
+        public String name;
+        public String val;
 
-        public Props(JsonNode node) {
-            Iterator<Map.Entry<String, JsonNode>> iter = node.fields();
-            String fmt = "--property";
+        public String getName() {
+            return name;
+        }
 
-            node.forEach(n -> {
-                String propName = "";
-                String propVal = "";
-                Iterator<Map.Entry<String, JsonNode>> inner = n.fields();
-                while(inner.hasNext()) {
-                    Map.Entry<String, JsonNode> e = inner.next();
-                    String pname = e.getKey();
-                    String pval = e.getValue().textValue();
+        public void setName(String name) {
+            this.name = name;
+        }
 
-                    switch (pname) {
-                        case "name":
-                            propName = pval;
-                            break;
-                        case "val":
-                            propVal = pval;
-                            if (pval.contains(" "))
-                                propVal = String.format("\"%s\"", pval);
-                            break;
-                    }
-                }
-                String property = String.format("%s=%s", propName, propVal);
-                args.add(fmt);
-                args.add(property);
-            });
+        public String getVal() {
+            return val;
+        }
+
+        public void setVal(String val) {
+            this.val = val;
         }
     }
 
 
-    class Servers {
-        public List<String> args = new ArrayList<>();
+    public static class Properties {
+        public List<Prop> properties;
 
-        // This option takes the form of name,user,pw,url.  If any are missing, leave it empty. name is required
-        // --server polarion,ci-user,&$Err,http://some/url
-        // --server kerb,stoner,myP@ss,
-        // --server ossrh,stoner,ossrh-p@ss,
-        public Servers(JsonNode node) {
-            String fmt = "--server";
+        public Properties() {
 
-            node.forEach(n -> {
-                Iterator<Map.Entry<String, JsonNode>> inner = n.fields();
-                String value = "";
-                while(inner.hasNext()) {
-                    Map.Entry<String, JsonNode> e = inner.next();
-                    String val = e.getValue().textValue();
-                    value += val + ",";
-                }
-                value = Utility.removeLast(value);
-                args.add(fmt);
-                args.add(value);
-            });
+        }
+
+        public List<Prop> getProperties() {
+            return properties;
+        }
+
+        public void setProperties(List<Prop> properties) {
+            this.properties = properties;
+        }
+    }
+
+
+    public static class Server {
+        private String name;
+        private String user;
+        private String password;
+        private String url;
+
+        public String getName() {
+            return name;
+        }
+
+        public void setName(String name) {
+            this.name = name;
+        }
+
+        public String getUser() {
+            return user;
+        }
+
+        public void setUser(String user) {
+            this.user = user;
+        }
+
+        public String getPassword() {
+            return password;
+        }
+
+        public void setPassword(String password) {
+            this.password = password;
+        }
+
+        public String getUrl() {
+            return url;
+        }
+
+        public void setUrl(String url) {
+            this.url = url;
         }
     }
 
@@ -472,73 +621,12 @@ public class Opts {
      *     ]
      * }
      *
-     * @param body
+     * @param
      */
     public String[] parse(String body) {
         System.out.println(body);
         ObjectMapper mapper = new ObjectMapper();
         List<String> args = new ArrayList<>();
-        try {
-            JsonNode root = mapper.readTree(body);
-            Iterator<Map.Entry<String, JsonNode>> iter = root.fields();
-            while(iter.hasNext()) {
-                Map.Entry<String, JsonNode> n = iter.next();
-                String key = n.getKey();
-                JsonNode node = n.getValue();
-                String val = node.textValue();
-                String fmt = "--%s %s";
-
-                switch(key) {
-                    case "project":
-                        if (!val.equals(""))
-                            this.addToArgs(args, Opts.PROJECT, val);
-                        this.project = val;
-                        break;
-                    case "base-dir":
-                        // TODO: Add base-dir for configuration
-                        break;
-                    case "author":
-                        // TODO: add author for configuration
-                        System.out.println("Need to add author as configurable");
-                        break;
-                    case "mapping":
-                        // TODO: add mapping for configuration
-                        System.out.println("Need to add mapping as a configurable settings");
-                        break;
-                    case "project-name":
-                        if (!val.equals(""))
-                            this.addToArgs(args, Opts.PROJECT_NAME, val);
-                        break;
-                    case "group-id":
-                        if (!val.equals(""))
-                            this.addToArgs(args, Opts.GROUP_ID, val);
-                        break;
-                    case "edit-config":
-                        if (!val.equals(""))
-                            this.addToArgs(args, Opts.EDIT_CONFIG, val);
-                        break;
-                    case "testcase":
-                        this.tci = new TestCaseImporter(node);
-                        break;
-                    case "xunit":
-                        this.xunit = new XUnit(node);
-                        break;
-                    case "testrun":
-                        this.testrun = new TestRun(node);
-                        break;
-                    case "properties":
-                        this.properties = new Props(node);
-                        break;
-                    case "servers":
-                        this.servers = new Servers(node);
-                        break;
-                    default:
-                        System.out.println("Ignoring key of " + key);
-                }
-            }
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
         List<String> testcaseArgs = this.tci.argList(this.tci.argMap);
         List<String> xunitArgs = this.xunit.argList(this.xunit.argMap);
         List<String> testrunArgs = this.testrun.argList(this.testrun.argMap);
@@ -546,14 +634,20 @@ public class Opts {
         args.addAll(testcaseArgs);
         args.addAll(xunitArgs);
         args.addAll(testrunArgs);
-        args.addAll(this.properties.args);
-        args.addAll(this.servers.args);
 
         System.out.println(args.stream().reduce("", (acc, n) -> acc + " " + n));
         return args.toArray(new String[args.size()]);
     }
 
     public Opts() {
+
+    }
+
+    /**
+     * Takes an xml-config.xml and converts it to json
+     * @param xml
+     */
+    public void xmlToJson(File xml) {
 
     }
 }

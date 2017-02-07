@@ -700,7 +700,8 @@ public class Configurator implements IJAXBHelper {
     /**
      * Given an existing XML file for the Testsuite, edit it according to the params
      *
-     * @param tsPath
+     * @param tsPath existing path for Testsuite
+     * @param newpath path for newly modified testsuite
      */
     public void editTestSuite(String tsPath, String newpath) throws IOException {
         File xunit = new File(tsPath);
@@ -770,6 +771,7 @@ public class Configurator implements IJAXBHelper {
             configFilePath = args[0];
             args = Arrays.copyOfRange(args, 1, args.length);
         }
+        Configurator.parseJson(new File("/home/stoner/.polarize/config.json"), "/tmp/modified-xunit.xml");
         Configurator cfg = configFilePath == null ? new Configurator() : new Configurator(configFilePath);
         cfg.parse(args);
         String path = cfg.configPath;
@@ -779,7 +781,6 @@ public class Configurator implements IJAXBHelper {
             testng = cfg.opts.valueOf(xunit);
         else
             testng = cfg.config.getXunitImporterFilePath();
-        //Configurator.parseJson("/home/stoner/.polarize/config.json");
 
         Boolean edit = cfg.getEditConfig();
         if (edit) {
@@ -804,8 +805,16 @@ public class Configurator implements IJAXBHelper {
         } catch (IOException e) {
             e.printStackTrace();
         }
-        String[] newArgs = opts.parse(sb.toString());
-        cfg.parse(newArgs);
+        ObjectMapper mapper = new ObjectMapper();
+        Optional<Opts> mOpt = Optional.empty();
+        try {
+            mOpt = Optional.of(mapper.readerFor(Opts.class).readValue(sb.toString()));
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+        //String[] newArgs = opts.parse(sb.toString());
+        //cfg.parse(newArgs);
 
         OptionSpec<String> xunit = cfg.sSpecs.get(Opts.CURRENT_XUNIT);
         String testng;
@@ -823,8 +832,8 @@ public class Configurator implements IJAXBHelper {
     public static void parseJson(String jsonBody, String newXML) {
         Configurator cfg = new Configurator();
         Opts opts = new Opts();
-        String[] newArgs = opts.parse(jsonBody);
-        cfg.parse(newArgs);
+        //String[] newArgs = opts.parse(jsonBody);
+        //cfg.parse(newArgs);
 
         OptionSpec<String> xunit = cfg.sSpecs.get(Opts.CURRENT_XUNIT);
         String testng;
@@ -1210,5 +1219,15 @@ public class Configurator implements IJAXBHelper {
 
     interface Setter<T> {
         void set(T t);
+    }
+
+    /**
+     * Creates a Configurator object from a Opts object
+     * @param opt
+     * @return
+     */
+    public static Configurator optsToCfg(Opts opt) {
+
+        return null;
     }
 }

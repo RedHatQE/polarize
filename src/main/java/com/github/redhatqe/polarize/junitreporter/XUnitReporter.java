@@ -141,7 +141,7 @@ public class XUnitReporter implements IReporter {
      */
     @Override
     public void generateReport(List<XmlSuite> xmlSuites, List<ISuite> suites, String outputDirectory) {
-        Testsuites tsuites = XUnitReporter.getTestSuiteInfo(config.xunit.getSelector().getName());
+        Testsuites tsuites = XUnitReporter.initTestSuiteInfo(config.xunit.getSelector().getName());
         List<Testsuite> tsuite = tsuites.getTestsuite();
 
         if (this.bad.exists()) {
@@ -217,7 +217,9 @@ public class XUnitReporter implements IReporter {
         });
 
         // Now that we've gone through the suites, let's marshall this into an XML file for the XUnit Importer
-        getSuiteResults(tsuites);
+        FullResult suiteResults = getSuiteResults(tsuites);
+        System.out.println(String.format("Error: %d, Failures: %d, Success: %d, Skips: %d", suiteResults.errors,
+                suiteResults.fails, suiteResults.passes, suiteResults.skips));
         File reportPath = new File(outputDirectory + "/testng-polarion.xml");
         JAXBHelper jaxb = new JAXBHelper();
         IJAXBHelper.marshaller(tsuites, reportPath, jaxb.getXSDFromResource(Testsuites.class));
@@ -258,14 +260,14 @@ public class XUnitReporter implements IReporter {
         return (node) -> {
             if (!node.isPresent()) {
                 logger.warn("No ObjectNode received from the Message");
-            } else {
+            }
+            else {
                 JsonNode n = node.get();
                 if (n.size() == 0)
                     return;
                 JsonNode root = n.get("root");
-                Boolean passed = false;
                 try {
-                    passed = root.get("status").textValue().equals("passed");
+                    Boolean passed = root.get("status").textValue().equals("passed");
                     if (passed) {
                         logger.info("XUnit importer was successful");
                         logger.info(root.get("testrun-url").textValue());
@@ -372,9 +374,9 @@ public class XUnitReporter implements IReporter {
         return in;
     }
 
-    public void getSuiteResults(Testsuites suites) {
+    public FullResult getSuiteResults(Testsuites suites) {
         List<Testsuite> sList = suites.getTestsuite();
-        FullResult fr = sList.stream()
+        return sList.stream()
                 .reduce(new FullResult(),
                         (acc, s) -> {
                             acc.skips += Integer.parseInt(s.getSkipped());
@@ -385,9 +387,6 @@ public class XUnitReporter implements IReporter {
                             return acc;
                         },
                         FullResult::add);
-        //suites.setErrors(Integer.toString(fr.errors));
-        //suites.setTests(Integer.toString(fr.total));
-        //suites.setFailures(Integer.toString(fr.skips));
     }
 
     /**
@@ -451,7 +450,8 @@ public class XUnitReporter implements IReporter {
             testcase.setClassname(classname);
             XUnitReporter.getStatus(result, testcase, fres, qual);
 
-            // Create the <properties> element, and all the child <property> sub-elements from the iteration data
+            // Create the <properties> element, and all the child <property> sub-elements from the iteration data.
+            // Gets the IdParams from the mapping.json file which has all the parameter information
             IdParams ip = inner.get(project);
             String id = ip.getId();
             List<String> args = ip.getParameters();
@@ -463,6 +463,14 @@ public class XUnitReporter implements IReporter {
         return full;
     }
 
+    /**
+     * Takes the parameter info from the mapping.json file for the TestCase ID, and generates the Properties for it
+     *
+     * @param result
+     * @param args The list of args obtained from mapping.json for the matching polarionID
+     * @param polarionID The matching Property of a Polarion ID for a TestCase
+     * @return
+     */
     public static com.github.redhatqe.polarize.importer.xunit.Properties
     getPropertiesFromMethod(ITestResult result, List<String> args, Property polarionID) {
         com.github.redhatqe.polarize.importer.xunit.Properties props =
@@ -479,7 +487,6 @@ public class XUnitReporter implements IReporter {
         for(int x = 0; x < params.length; x++) {
             Property param = new Property();
             param.setName("polarion-parameter-" + args.get(x));
-            //param.setName(String.format("polarion-parameter-Arg%d", x));
             String p;
             if (params[x] == null)
                 p = "null";
@@ -491,7 +498,13 @@ public class XUnitReporter implements IReporter {
         return props;
     }
 
-    private static Testsuites getTestSuiteInfo(String responseName) {
+    /**
+     * Gets information from xml-config to set as the elements in the <testsuites>
+     *
+     * @param responseName
+     * @return
+     */
+    private static Testsuites initTestSuiteInfo(String responseName) {
         Testsuites tsuites = new Testsuites();
         com.github.redhatqe.polarize.importer.xunit.Properties props =
                 new com.github.redhatqe.polarize.importer.xunit.Properties();
