@@ -704,3 +704,105 @@ Over time, you might want to update one or more fields of the annotation to upda
 Polarion.  You can set a field called update=true and edit any of the fields to do so.  The problem is that if you later
 forget to unset the update field, every time the code is compiled, it will make a new import request.  This is a waste 
 of resources and a burden on the polarion server.
+
+# Building polarize
+
+Building polarize is relatively straight forward and uses gradle.  The tricky part is that polarize is meant to be 
+uploaded to maven central so that other teams may make use of it.
+
+The project also makes use of SNAPSHOT repositories.  If the version contains the word SNAPSHOT in it in the build file, 
+then when you publish the polarize artifacts, it will go into maven's snapshot repository.  If your project uses maven, 
+gradle or leiningen, you may need to add the snapshot repository to your project.
+
+When building a new version of polarize, all you need to do is edit the version variable in the build.gradle file.  Then 
+you can run the following sequence of commands from your polarize directory
+
+```
+gradle clean
+gradle publish
+gradle pP
+```
+
+The gradle clean command will remove the temporary build directory.  The gradle publish command will build a maven pom 
+file, and store that in a local artifacts directory.  The gradle pP command is shorthand for the task gradle 
+preparePublish.  Why run a command called preparePublish _after_ the publish task?  The first gradle publish command is 
+actually just to generate the maven pom and store the artifacts locally.  When you are ready to upload the artifacts to 
+maven central, then you need to run the gradle publish a second time.  The build.gradle script checks for the existence 
+of the maven pom file.  If it doesn't exist, it will create the pom and store the artifacts locally.  If the pom file 
+does exist, then the publish command will do some other work including signing the all the jar files (source jars, doc 
+jars, and the pom itself) and then upload to maven.
+
+However, if you are in a development cycle, and you do not wish to bump to a new version and simply build the lateset 
+snapshot, then you can just run these commands:
+
+```
+gradle clean
+gradle pP
+gradle install
+```
+
+This will clean your temp builds, compile everything, and install to your local maven repo (somewhere in ~/.m2/repos).
+If you have other projects relying on polarize, the gradle install will put the artifacts in your local maven repo.
+
+## Uploading to maven central
+
+When you are ready to make a release version (ie, a version that doesn't have SNAPSHOT in the version name) you will 
+need to have a few things set up.  In your ~/.gradle/gradle.properties file, include the following:
+
+- signing.keyId= id of your pgp key
+- signing.password= the password you used for your pgp key
+- signing.secretKeyRingFile=/home/stoner/.gnupg/secring.gpg
+
+Gradle uses this information to know how to sign all the artifacts.  This is a requirement for maven central, so you 
+must have a pgp/gpg key for the signing, and the oss central site must have your public key registered to a public site.
+For more information on getting set up with Sonatype, please read their page:
+
+http://central.sonatype.org/pages/ossrh-guide.html
+
+## Logging into Nexus
+
+Log into https://oss.sonatype.org#welcome
+
+Enter with your username and password.  Click on the [Staging Repositories][-nexus] link.  Scroll down until you see 
+your project.  Click on Close to close the stage if all the files look good, otherwise edit, and run gradle publish 
+again.
+
+When you close, give it a minute or so and then click the refresh button.  If everything went well, you should see a 
+Release button.  Click that to release.
+
+It takes several minutes or even hours for the oss repo to mirror to maven central.  You can add this repo.
+
+If you are using leiningen for your builds, you can add the maven central repo like this:
+
+```clojure
+:repositories [["clojars.org" {:url       "http://clojars.org/repo"
+                                 :snapshots {:update :always}}]
+               ["sonatype"    {:url        "http://oss.sonatype.org/content/repositories/releases"
+                              ;; If a repository contains releases only setting
+                              ;; :snapshots to false will speed up dependencies.
+                              :snapshots     false
+                              ;; Disable signing releases deployed to this repo.
+                              ;; (Not recommended.)
+                              :sign-releases true
+                              ;; You can also set the policies for how to handle
+                              ;; :checksum failures to :fail, :warn, or :ignore.
+                              :checksum      :fail
+                              ;; How often should this repository be checked for
+                              ;; snapshot updates? (:daily, :always, or :never)
+                              :update        :always}]
+                ["sonatype-snaps"
+                             {:url     "https://oss.sonatype.org/content/repositories/snapshots"
+                              ;; If a repository contains releases only setting
+                              ;; :snapshots to false will speed up dependencies.
+                              :snapshots     true
+                              ;; Disable signing releases deployed to this repo.
+                              ;; (Not recommended.)
+                              :sign-releases false
+                              ;; You can also set the policies for how to handle
+                              ;; :checksum failures to :fail, :warn, or :ignore.
+                              :checksum      :warn
+                              ;; How often should this repository be checked for
+                              ;; snapshot updates? (:daily, :always, or :never)
+                              :update        :always}]
+                 ]
+```
