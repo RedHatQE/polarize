@@ -86,7 +86,7 @@ public class Meta<T> {
         if (!xmlDesc.exists())
             return Optional.empty();
 
-        Meta.logger.info("Description file exists: " + xmlDesc.toString());
+        Meta.logger.debug("Description file exists: " + xmlDesc.toString());
         Optional<T1> witem;
         JAXBHelper jaxb = new JAXBHelper();
         witem = IJAXBHelper.unmarshaller(t, xmlDesc, jaxb.getXSDFromResource(t));
@@ -119,7 +119,7 @@ public class Meta<T> {
             return Optional.of(res);
         }
         Testcase tcase = tc.get();
-        Meta.logger.info("Polarion ID for testcase " + tcase.getTitle() + " is " + tcase.getId());
+        Meta.logger.debug("Polarion ID for testcase " + tcase.getTitle() + " is " + tcase.getId());
         res.first = tcase.getId();
         res.second = tcase;
         return Optional.of(res);

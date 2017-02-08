@@ -1147,6 +1147,38 @@ public class TestDefinitionProcessor extends AbstractProcessor {
                 .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
     }
 
+    @FunctionalInterface
+    interface IDProcessor {
+        void process();
+    }
+
+    public IDProcessor determineIdVal(Meta<TestDefinition> meta,
+                                  String testCasePath,
+                                  Map<String, Map<String, IdParams>> mapFile) {
+        Optional<String> maybePolarionID = meta.getPolarionIDFromTestcase();
+        Boolean idExists = maybePolarionID.isPresent();
+        int idval = 0;
+        if (!idExists) {
+            Optional<String> maybeMapFileID =
+                    TestDefinitionProcessor.getPolarionIDFromMapFile(meta.qualifiedName, meta.project, mapFile);
+            Boolean mapIdExists = maybeMapFileID.isPresent();
+            String mapId = maybeMapFileID.orElse("");
+        }
+        else
+            idval |= 1 << 2;
+
+        Optional<Tuple<String, Testcase>> maybeIDXml = meta.getPolarionIDFromXML(testCasePath);
+        Boolean xmlIdExists = maybeIDXml.isPresent();
+
+        String annId = maybePolarionID.orElse("");
+        Tuple<String, Testcase> idAndTC = maybeIDXml.orElse(new Tuple<>("", null));
+        String xmlId = idAndTC.first;
+
+        Boolean importRequest = meta.annotation.update();
+
+        return null;
+    }
+
     /**
      * Does what is needed based on whether the id exists in the annotation, xml or map file
      *
@@ -1208,7 +1240,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         String pqual = meta.project + " -> " + qual;
 
         // Check that the description field is not empty
-        if (idAndTC.second != null) {
+        if (idAndTC.second != null && tc.getDescription() != null && tc.getDescription().equals("")) {
             String desc = tc.getDescription();
             TestDefinitionProcessor.addDescToXML(meta, testCasePath, desc, idAndTC.second);
         }
