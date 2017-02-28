@@ -771,7 +771,7 @@ public class Configurator implements IJAXBHelper {
             configFilePath = args[0];
             args = Arrays.copyOfRange(args, 1, args.length);
         }
-        Configurator.parseJson(new File("/home/stoner/.polarize/config.json"), "/tmp/modified-xunit.xml");
+        //Configurator.parseJson(new File("/home/stoner/.polarize/config.json"), "/tmp/modified-xunit.xml");
         Configurator cfg = configFilePath == null ? new Configurator() : new Configurator(configFilePath);
         cfg.parse(args);
         String path = cfg.configPath;
