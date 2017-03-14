@@ -291,6 +291,6 @@ task classPath << {
 }
 
 
-task getPomFiles {
+task getPomFiles << {
     println findPomFiles(arcDir)
 }

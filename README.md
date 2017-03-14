@@ -24,33 +24,55 @@ course, it also does not supply the modifications needed by the XUnit importer.
 
 Currently, the heart of polarize lies in these concepts:
 
-1. XML description files (generated via the custom processor)
-2. A custom annotation processor
-3. A custom IReporter class for TestNG
+1. A custom annotation processor
+2. XML description files (generated via the custom processor) that describe the TestCase
+3. A mapping.json file that maps class.methodName to a unique TestCase ID
+4. A custom IReporter class for TestNG that generates special XUnit result files
 
 In essence, polarize uses a custom annotation processor to supply metadata of your classes and test methods.  Given the
-correct annotation data, when your source is compiled and the polarize jar is in your classpath, the annotation 
+correct annotation data, when your source is compiled and the polarize jar is in your classpath, then the annotation 
 processor will run.  As it runs, it will find the elements which were annotated and generate XML equivalents of that 
 annotation data.  In fact, these XML files are the files that are used by the CI Ops Testcase Importer tool.  These XML
 files serve 2 purposes:
 
 - Create the Polarion TestCase if the ID is empty
-- A way to map the test method to the Polarion Testcase if it is not
+- A (tertiary) way to map the test method to the Polarion Testcase if the ID is not in the annotation or mapping.json
 
-This means that if your test ware is not annotated with the necessary metadata, then polarize is really no good.  This
-is done on purpose.  The author originally wrote a tool that would auto-create TestCases in Polarion if they didn't 
-already exist.  This is not only a bad idea technically, it's also wrong from a methodology perspective.  The TestCase
-and Requirements really should be written before the automation is.  Disregarding the methodology, there's also a 
-practical technical requirement.
+The annotations exist to generate the XML equivalent description, as well as documenting metadata of the method itself.
+The annotations generate XML descriptions, which are (arguably) more human readable, and can be used by upstream 
+contributors to make comments on.
 
 One of the requirements for the XUnit importer is that each \<testcase\> must have a polarion ID or custom ID set.  This 
 is to map the testcase to the Polarion ID.  The XML files that polarize generates will either contain the ID or not.  As
 the annotation processor runs, it will use an algorithm to map the qualified name of the testmethod to where the XML 
-file should be.  If it doesn't exist, the processor will create it from the given annotation data.  If the XML 
-description file already exists, it will read it in to get the ID.  If the ID is an empty string, this means there is 
-no Polarion TestCase for this method.  Therefore polarize will issue a Testcase importer request, and when it gets the 
-response message, it will edit the XML with the proper ID (so that even though the annotation data won't have the 
-Polarion ID, the generated XML will)
+file should be.  The algorithm is:
+
+1. Check the annotation testCaseID and see if it is an empty string
+2. Look for the XML description file in path Project/ClassName/MethodName(.xml) and get the testcase id attribute
+3. Check the mapping.json file with the key being the class.methodName of the method being processed
+
+Once all three pieces of information are gathered, it will do the following:
+
+| annotation  | xml      | mapping   | Action(s)                                   | Name      |
+|-------------|----------|-----------|---------------------------------------------|-----------|
+| 0           | 0        | 0         | Make import request                         | NONE
+| 0           | 0        | 1         | Edit the XML file, add to badFunction       | MAP
+| 0           | 1        | 0         | Edit the Mapping file, add to badFunction   | XML
+| 0           | 1        | 1         | Verify equality, add to badFunction         | XML_MAP
+| 1           | 0        | 0         | Edit the XML and mapping file               | ANN
+| 1           | 0        | 1         | Verify equality, edit the XML               | ANN_MAP
+| 1           | 1        | 0         | Verify equality, add to mapping             | ANN_XML
+| 1           | 1        | 1         | Verify equality                             | ALL
+
+The annotation column checks what was described in bullet 1, the xml column does what was in bullet 2, and the mapping 
+column does what was in bullet number 3 above.  If the ID exists for the annotation, xml or mapping, a 1 (or true) is 
+marked for that column, otherwise it is 0.  The Action(s) column describes what happens in each row.  There are eight 
+rows since there are 3^2 possibilities.  In the Action(s) column, if it says "add to badFunction", this is a temporary
+file that will be created in /tmp/badFunction.txt, and it will give the class.methodName of every test case it finds 
+where the ID exists either in the xml or mapping.json, but the ID was not given in the annotation.  This gives the test 
+author the opportunity to go back and add a newly generated Polarion ID back into the source code.
+
+## XML Description File
 
 Here's an example of an annotation generated XML file:
 
@@ -94,6 +116,8 @@ From the following annotation:
     }
 ```
 
+## The mapping.json file
+
 As well as generating the test definition XML file, at the beginning of the source code processing, polarize will load 
 a mapping file in a JSON format (or if this is the first time compiling with polarize, or if the mapping file is missing 
 it will generate the mapping file).  Rather than do a cumbersome look up algorithm  of qualified test name to its 
@@ -105,6 +129,8 @@ exist in more than one Project, it will also have one or more corresponding Pola
 contains an array of the names of the parameters used for this method if it is a parameterized test.  This is so that 
 the xunit report generator can also read in this file to properly generate the parameterization information for each 
 test method that was executed in the TestRun.
+
+## Xunit report generation
 
 Speaking of this, polarize also comes with a class XUnitReporter that implements TestNG's IReporter interface.  By 
 setting your TestNG test to use this Reporter, it will generate the xunit which is compatible with the XUnit Importer.
@@ -251,13 +277,21 @@ This section will describe how to make use of polarize
       <selector name="rhsm_qe" val="testcase_importer"/>
       <!-- An optional prefix and suffix.  If none is given, the qualified name of the method is the title -->
       <title prefix="RHSM-TC : " suffix=""/>
-      <timeout millis="300000"/><!-- time in milliseconds to wait for message reply -->
+      <!-- time in milliseconds to wait for message reply -->
+      <timeout millis="300000"/>
+      <!-- If true, when polarize needs to create a new TestCase in Polarion it will make an import request.  If false, 
+        even if polarize detects that a new TestCase should be made in Polarion, it will skip making a request. The XMl 
+        will still be generated, but since an import request was not made, both the annotation and XML id will be empty.
+        This means once enabled is set to true, polarize will actually do the request to make a new Polarion TestCase-->
       <enabled>false</enabled>
     </importer>
     <importer type="xunit"><!-- # settings for the xunit importer -->
       <!-- id is an optional unique id for testrun. Defaults to a timestamp (uniqueness guaranteed by client)
-           title is the (possibly non-unique) name of the testrun-->
+         title is the (possibly non-unique) name of the testrun.-->
       <template-id id=""/>
+      <!-- By default, this will simply be the name of the project plus a time stamp.  To make it easier to find this 
+        test run in Polarion, the id should be given something more, such as a compose ID, or the version of the 
+        artifact being tested.  For example: "RHEL 7.4 Server 20170314 14:57:31-->
       <testrun id="{project-name}" title=""/>
       <endpoint route="/import/xunit"/>
       <file path="{basedir}/test-output/testng-polarion.xml"/>
@@ -275,7 +309,11 @@ This section will describe how to make use of polarize
         <property name="jenkinsjobs" val=""/><!-- Path to the jenkins job -->
         <property name="notes" val=""/><!-- arbitrary field -->
       </custom-fields>
-      <timeout millis="300000"/><!-- time in milliseconds to wait for reply message -->
+      <!-- time in milliseconds to wait for reply message -->
+      <timeout millis="300000"/>
+      <!-- If true, once xunit report is generated, perform an XUnit Import request to send the results to Polarion.  If
+       false, do not make the XUnit Import request.  The xunit result file will still be generated however so that it 
+       can be uploaded later -->
       <enabled>true</enabled>
     </importer>
   </importers>
@@ -287,13 +325,13 @@ This section will describe how to make use of polarize
 
 There is a configurator class which can be used to edit settings in the xml-config.xml file, or in a given xunit result 
 file.  The former is handy when you need to edit the xml-config.xml file for long term changes, and the latter is nice 
-to have when you only need to edit an existing xunit result file.
+to have when you only need to edit an existing xunit result file say for example to upload to Polarion.
 
 This shows an example of modifying an existing xunit result file with other information and storing it in a new file 
 /tmp/modified-testng-polarion.xml
 
 ```bash
-java -cp ./polarize-0.5.4-SNAPSHOT-all.jar com.github.redhatqe.polarize.configuration.Configurator \
+java -cp ./polarize-0.5.5-SNAPSHOT-all.jar com.github.redhatqe.polarize.configuration.Configurator \
 --current-xunit /home/stoner/Projects/rhsm-qe/test-output/testng-polarion.xml \
 --new-xunit /tmp/modified-polarion.xml \
 --testrun-id "Personal Testrun 1" \
@@ -304,7 +342,7 @@ java -cp ./polarize-0.5.4-SNAPSHOT-all.jar com.github.redhatqe.polarize.configur
 Here's an example of where you might want to change the xml-config settings for a longer term purpose
 
 ```
-java -cp ./polarize-0.5.4-SNAPSHOT-all.jar com.github.redhatqe.polarize.configuration.Configurator \
+java -cp ./polarize-0.5.5-SNAPSHOT-all.jar com.github.redhatqe.polarize.configuration.Configurator \
 --edit-config \
 --project RedHatEnterpriseLinux7 \
 --template-id "sean toner master template test"
@@ -349,14 +387,15 @@ public class TestReq {
               description="TestCase for a dummy test method",
               title="A not necessarily unique title",  // defaults to class.methodName
               reqs={})
-        @TestDefinition(projectID=Project.PLATTP,      // required
+    @TestDefinition(projectID=Project.PLATTP,          // project required
                   testCaseID="PLATTP-9520",            // if empty or null, make request to WorkItem Importer tool
                   importance=DefTypes.Importance.HIGH, // defaults to high  if not given
                   posneg=PosNeg.NEGATIVE,              // defaults to positive if not given
                   level= DefTypes.Level.COMPONENT,     // defaults to component if not given
-                  linkedWorkItems={@LinkedItem(workitemId="PLATTP-10348",         // Required
-                          project=Project.PLATTP,                                 // Required. What Project to go under
-                          role=DefTypes.Role.VERIFIES)},                          // Required. Role type
+                  // linkedWorkItems is optional and allows you to specify another (existing) WorkItem.
+                  linkedWorkItems={@LinkedItem(workitemId="PLATTP-10348",         // If linkedWorkItems used, required
+                          project=Project.PLATTP,                                 // What Project to go under
+                          role=DefTypes.Role.VERIFIES)},                          // Role type
                   // If testtype is FUNCTIONAL, subtype1 and 2 must be of type EMPTY.
                   testtype=@TestType(testtype= DefTypes.TestTypes.NONFUNCTIONAL,  // Defaults to FUNCTIONAL
                                      subtype1= DefTypes.Subtypes.COMPLIANCE,      // Defaults to EMPTY (see note)
@@ -364,7 +403,9 @@ public class TestReq {
                   setup="Description of any preconditions that must be established for test case to run",
                   tags="tier1 some_description",
                   teardown="The methods to clean up after a test method",
-                  update=true,
+                  // defaults to false.  If false do not make a new import even if annotation changes.  If true, the 
+                  // annotation processor will _always_ make a new import request even if nothing changes
+                  update=false,  
                   automation=DefTypes.Automation.AUTOMATED)  // if not given this defaults to AUTOMATED)
     @Test(groups={"simple"},
           description="Test for reporter code",
@@ -546,6 +587,7 @@ display the classpath, but also some extraneous information.  I just copy what I
 Once you have saved off the classpath to a var (say $CP), you can run the annotation processing like this:
 
 ```
+export CP=`gradle -q classPath`
 java -cp $CP -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=5009 com.github.redhatqe.polarize.JarHelper \
 --jar file:///home/stoner/Projects/rhsm-qe/target/sm-1.0.0-SNAPSHOT-standalone.jar \
 --packages "rhsm.gui.tests,rhsm.cli.tests"
@@ -554,11 +596,16 @@ java -cp $CP -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=5009 
 The --jar option specifies the path of the uberjar, and the --packages is a comma separated list of packages to scan 
 for.  Note that this example also sets the debugger option so that you can setup a remote debug configuration if needed.
 
+## Debugging 
+
 Speaking of debugging, if you need to debug your clojure code you can set in your project.clj file the following:
 
 ```clojure
 :jvm-opts ["-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=5007"]
 ```
+
+In your Intellij editor, you can set up a remote debug profile and have it listen to port 5007.  Once the IDE connects, 
+the rhsm-qe tests will run, and will stop once it hits any break points you set in your IDE
 
 # Roadmap
 
