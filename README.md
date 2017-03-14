@@ -95,9 +95,10 @@ From the following annotation:
                   importance=DefTypes.Importance.HIGH, // defaults to high  if not given
                   posneg=PosNeg.NEGATIVE,              // defaults to positive if not given
                   level= DefTypes.Level.COMPONENT,     // defaults to component if not given
-                  linkedWorkItems={@LinkedItem(workitemId="PLATTP-10348",         // Required
-                          project=Project.PLATTP,                                 // Required. What Project to go under
-                          role=DefTypes.Role.VERIFIES)},                          // Required. Role type
+                  // linkedWorkItems is optional and allows you to specify another (existing) WorkItem.
+                  linkedWorkItems={@LinkedItem(workitemId="PLATTP-10348",         // If linkedWorkItems used, required
+                                   project=Project.PLATTP,                        // What Project to go under
+                                   role=DefTypes.Role.VERIFIES)},                 // Role type
                   // If testtype is FUNCTIONAL, subtype1 and 2 must be of type EMPTY.
                   testtype=@TestType(testtype= DefTypes.TestTypes.NONFUNCTIONAL,  // Defaults to FUNCTIONAL
                                      subtype1= DefTypes.Subtypes.COMPLIANCE,      // Defaults to EMPTY (see note)
@@ -187,7 +188,7 @@ After you execute your TestNG test, you will see a report generated like this:
 **Polarize solves all these problems**
 
 - Because requirements/testcases are external files, dont need extra licenses to review or enter
-- Because workitems are external files, they can be kept in source control (single canon of truth)
+- Because workitems are represented by external files, they can be kept in source control (single canon of truth)
 - Decouples definition of requirements and testcases from a specific implementation
 - Because requirements and testcases belong in source control, they can be reviewed by upstream community
 - Since annotations generate plain text xml, it is easy to diff and review
@@ -852,4 +853,77 @@ If you are using leiningen for your builds, you can add the maven central repo l
                               ;; snapshot updates? (:daily, :always, or :never)
                               :update        :always}]
                  ]
+```
+
+# Other metadata mechanisms for other languages
+
+The idea of using a language's built in feature for metadata is desirable.  One could try to write a language agnostic 
+way to capture metadata, for example reading python's docstings or java's javadocs, but you still have a language 
+specific feature (the parser would have have to recognize what a docstring was for a python method, or a javadoc).  Also 
+comments are usually meant for that, comments, not metadata.  Java annotations are actually exactly the use case for 
+adding metadata about a test.  If I am a user of a library, I do not want to read in my javadocs or sphinx generated 
+docs about some Test Case Repository system...I want to know what the functions or classes do. 
+
+So while polarize follows this idea, the majority of test teams use either python or bash, and not a few use ruby.  
+Other teams might be using javascript or some other language.  So then, how do you create metadata for these other 
+languages?
+
+## Target representation 
+
+As of now, polarize generates XML based on the annotation data.  This is because the TestCase Importer made by the CI 
+Ops team expects an XML file in order to generate the Polarion TestCase Workitem.  In other words, XML is just a middle 
+man.  It should be possible to store the metadata in other forms like json
+
+## Python 
+
+Probably the best way to do this is to create decorators which in turn generate XML.  Ironically, the syntax for python 
+decorators could look a lot like the java version.  For example, imagine something like this:
+
+```python
+from functools import wraps
+
+def test_definition(**kwargs):
+    kwargs["project"] = kwargs.get("project", "RHEL6")
+    kwargs["test_case_id"] = kwargs.get("test_case_id")
+    kwargs["importance"] = kwargs.get("importance", "MEDIUM")
+    kwargs["posneg"] = kwargs.get("posneg", "POSITIVE") 
+    kwargs["level"] = kwargs.get("level", "SYSTEM")
+    kwargs["linked_work_items"] = kwargs.get("linked_work_items")
+    kwargs["testtype"] = kwargs.get("testtype")
+    kwargs["setup"] = kwargs.get("setup", "")
+    kwargs["teardown"] = kwargs.get("teardown", "")
+    kwargs["tags"] = kwargs.get("tags")
+    kwargs["update"] = kwargs.get("update", False)
+    kwargs["automation"] = kwargs.get("automation")
+
+    # Set up the defaults 
+    test_case_id = kwargs["test_case_id"]
+    perform_update = True if test_case_id is not None else False
+    update = kwargs["update"]
+    if kwargs["testtype"] is None:
+        # set the default
+        pass
+    perform_update = perform_update and 
+
+    def wrapper(fn):
+        # Check to see if the XML description file for this method exists
+        # If it doesn't or update == true, regenerate the XML
+        # For performance, you can have a global setting to always disable this if desired
+        if update or does_xml_exist(fn.__name__):
+            generate_xml(kwargs)
+
+        @wraps
+        def processor(*args, **kwds):
+            # Actually run our test method
+            return fn(*args, **kwds)
+        return processor
+    return wrapper
+
+
+@test_definition(project="RedHatEnterpriseLinux7",
+                 test_case_id="",
+                 importance="HIGH",
+                 posneg="NEGATIVE")
+def my_test_method():
+    pass
 ```
