@@ -242,11 +242,11 @@ This section will describe how to make use of polarize
   <project-name name="RHSM-QE"/>
   <!-- The value of basedir can be used like <requirements-xml path="{basedir}/requirements"-->
   <basedir path="/home/stoner/Projects/rhsm-qe"/>
-  <!-- <requirements-xml path="/home/stoner/Projects/rhsm-qe/requirements"/> -->
+  <!-- Where Requirements XML are.  Eg <requirements-xml path="/home/stoner/Projects/rhsm-qe/requirements"/> -->
   <requirements-xml path="{basedir}/requirements"/>
-  <!-- <testcases-xml path="/home/stoner/Projects/rhsm-qe/testcases"/> -->
+  <!-- Where TestCase XML are.  Eg. <testcases-xml path="/home/stoner/Projects/rhsm-qe/testcases"/> -->
   <testcases-xml path="{basedir}/testcases"/>
-  <!-- Maps the qualified name to project -> id -->
+  <!-- Path of the mapping.json that maps the qualified name to project -> id -->
   <mapping path="{basedir}/mapping.json"/>
   <author>ci-user</author>
   <project>RHEL6</project>
@@ -556,8 +556,6 @@ In the case of the XUnitReporter, the JSON message will look like this on succes
 }
 ```
 
-
-
 ### POST to the importers
 
 polarize can be used as a standalone tool to make an importer request, or it can be embedded in another java project.  
@@ -588,9 +586,13 @@ display the classpath, but also some extraneous information.  I just copy what I
 Once you have saved off the classpath to a var (say $CP), you can run the annotation processing like this:
 
 ```
-export CP=`gradle -q classPath`
+cd /path/to/rhsm-qe
+export CP=`lein classpath`
+export CP="$CP:${HOME}/.m2/repository/com/github/redhatqe/polarize/polarize/0.5.5-SNAPSHOT/polarize-0.5.5-SNAPSHOT-all.jar
+lein clean
+lein uberjar
 java -cp $CP -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=5009 com.github.redhatqe.polarize.JarHelper \
---jar file:///home/stoner/Projects/rhsm-qe/target/sm-1.0.0-SNAPSHOT-standalone.jar \
+--jar file:///home/stoner/Projects/rhsm-qe/target/sm-1.1.0-SNAPSHOT-standalone.jar \
 --packages "rhsm.gui.tests,rhsm.cli.tests"
 ```
 
@@ -882,6 +884,9 @@ decorators could look a lot like the java version.  For example, imagine somethi
 ```python
 from functools import wraps
 
+base_path = get_base_from_config()
+mapping_path = get_mapping_from_config()
+
 def test_definition(**kwargs):
     kwargs["project"] = kwargs.get("project", "RHEL6")
     kwargs["test_case_id"] = kwargs.get("test_case_id")
@@ -898,19 +903,27 @@ def test_definition(**kwargs):
 
     # Set up the defaults 
     test_case_id = kwargs["test_case_id"]
-    perform_update = True if test_case_id is not None else False
     update = kwargs["update"]
     if kwargs["testtype"] is None:
         # set the default
         pass
-    perform_update = perform_update and 
 
     def wrapper(fn):
         # Check to see if the XML description file for this method exists
         # If it doesn't or update == true, regenerate the XML
         # For performance, you can have a global setting to always disable this if desired
-        if update or does_xml_exist(fn.__name__):
+        xml_path = get_xml_path(fn.__name__, base_path)
+        if update or does_xml_exist(xml_path):
             generate_xml(kwargs)
+            
+        # Check the test_case_id, xml file, and mapping.json.  Do what needs to be done based on the 8 possibilities
+        do_import = get_test_case_id_from_all(xml_path, mapping_path, test_case_id)
+        if do_import:
+            test_case_id = import_request(xml_path)
+            # edit the XML and mapping.json with the new test_case_id
+            edit_xml(xml_path, test_case_id)
+            edit_mapping(mapping_path, test_case_id)
+            
 
         @wraps
         def processor(*args, **kwds):
@@ -927,3 +940,31 @@ def test_definition(**kwargs):
 def my_test_method():
     pass
 ```
+
+## Javascript 
+
+Javascript doesn't have syntactic sugar like python does for decorators, but all python decorators are, is a syntax 
+convenience which is a higher order function that takes another function (and some additional parameters) and returns 
+a modified function.
+
+```javascript
+const test_definition = (test_def, wrap_fn) => {
+    // 1. Set defaults for test_def 
+    // 2. 
+    return wrap_fn;
+}
+
+function my_test_method() {
+    // do your test
+}
+
+var defs = {"project": "RHEL6", 
+            "importance": "HIGH", 
+            "level": "COMPONENT"}
+const my_test_method = test_definition(defs, my_test_method)
+```
+
+## Ruby 
+
+Unfortunately, I don't know ruby so I can't give an example, however, since ruby has the concept of higher order 
+functions, it can follow the same strategy as javascript

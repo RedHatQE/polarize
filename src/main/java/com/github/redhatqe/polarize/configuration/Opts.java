@@ -22,9 +22,13 @@ public class Opts {
     public static final String PROJECT = "project";
     public static final String TESTCASE_PREFIX = "testcase-prefix";
     public static final String TESTCASE_SUFFIX = "testcase-suffix";
-    public static final String PLANNEDIN= "plannedin";
-    public static final String JENKINSJOBS= "jenkinsjobs";
-    public static final String NOTES ="notes";
+
+    public static final String PLANNEDIN = "plannedin";
+    public static final String JENKINSJOBS = "jenkinsjobs";
+    public static final String NOTES = "notes";
+    public static final String ARCH = "arch";
+    public static final String VARIANT = "variant";
+
     public static final String TEMPLATE_ID = "template-id";
     public static final String TC_SELECTOR_NAME = "testcase-selector-name";
     public static final String TC_SELECTOR_VAL = "testcase-selector-val";

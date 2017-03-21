@@ -46,6 +46,8 @@ public class Configurator implements IJAXBHelper {
     private String plannedin;
     private String jenkinsjobs;
     private String notes;
+    private String arch;
+    private String variant;
     private String templateId;
     private String tcSelectorName;
     private String tcSelectorVal;
@@ -110,6 +112,8 @@ public class Configurator implements IJAXBHelper {
         sOptToAccessors.put(Opts.PLANNEDIN, new Tuple<>(this::getPlannedin, this::setPlannedin));
         sOptToAccessors.put(Opts.JENKINSJOBS, new Tuple<>(this::getJenkinsjobs, this::setJenkinsjobs));
         sOptToAccessors.put(Opts.NOTES, new Tuple<>(this::getNotes, this::setNotes));
+        sOptToAccessors.put(Opts.ARCH, new Tuple<>(this::getArch, this::setArch));
+        sOptToAccessors.put(Opts.VARIANT, new Tuple<>(this::getVariant, this::setVariant));
         sOptToAccessors.put(Opts.TEMPLATE_ID, new Tuple<>(this::getTemplateId, this::setTemplateId));
         sOptToAccessors.put(Opts.TC_SELECTOR_NAME, new Tuple<>(this::getTcSelectorName, this::setTcSelectorName));
         sOptToAccessors.put(Opts.TC_SELECTOR_VAL, new Tuple<>(this::getTcSelectorVal, this::setTcSelectorVal));
@@ -264,6 +268,18 @@ public class Configurator implements IJAXBHelper {
                         p.setVal(n);
                     this.testsuiteProps.put(keyname, n);
                     break;
+                case Opts.ARCH:
+                    String a = this.getArch();
+                    if (a != null)
+                        p.setVal(a);
+                    this.testsuiteProps.put(keyname, a);
+                    break;
+                case Opts.VARIANT:
+                    String v = this.getVariant();
+                    if (v != null)
+                        p.setVal(v);
+                    this.testsuiteProps.put(keyname, v);
+                    break;
                 default:
                     logger.error(String.format("Unknown property name %s", name));
                     break;
@@ -401,7 +417,7 @@ public class Configurator implements IJAXBHelper {
         tid.setId(this.getTemplateId());
         imp.setTemplateId(tid);
         PropertyType pt = new PropertyType();
-        pt.setName("template-id");
+        pt.setName("testrun-template-id");
         pt.setVal(templateId);
         added.add(pt);
     }
@@ -546,7 +562,7 @@ public class Configurator implements IJAXBHelper {
         RESPONSE("polarion-response"),
         TESTRUN_TITLE("polarion-testrun-title"),
         TESTRUN_ID("polarion-testrun-id"),
-        TEMPLATE_ID("polarion-template-id"),
+        TEMPLATE_ID("polarion-testrun-template-id"),
         CUSTOM("polarion-custom");
 
         public final String value;
@@ -574,6 +590,8 @@ public class Configurator implements IJAXBHelper {
                     return TESTRUN_TITLE;
                 case "polarion-testrun-id":
                     return TESTRUN_ID;
+                case "polarion-testrun-template-id":
+                    return TEMPLATE_ID;
                 case "polarion-template-id":
                     return TEMPLATE_ID;
                 default:
@@ -963,6 +981,26 @@ public class Configurator implements IJAXBHelper {
 
     public void setNotes(String notes) {
         this.notes = this.sanitize(notes);
+    }
+
+    public String getArch() {
+        if (this.arch == null)
+            this.arch = this.sanitize(this.searchCustomFields("arch"));
+        return this.arch;
+    }
+
+    public void setArch(String a) {
+        this.arch = this.sanitize(a);
+    }
+
+    public String getVariant() {
+        if (this.variant == null)
+            this.variant = this.sanitize(this.searchCustomFields("variant"));
+        return this.variant;
+    }
+
+    public void setVariant(String v) {
+        this.variant = this.sanitize(v);
     }
 
     public String getTemplateId() {
