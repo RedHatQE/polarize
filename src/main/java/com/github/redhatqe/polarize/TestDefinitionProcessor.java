@@ -902,13 +902,15 @@ public class TestDefinitionProcessor extends AbstractProcessor {
     }
 
     public static void
-    setPolarionIDInMapFile(String name, String project, String id, Map<String, Map<String, IdParams>> mapFile) {
+    setPolarionIDInMapFile(Meta<TestDefinition> meta, String id, Map<String, Map<String, IdParams>> mapFile) {
+        String name = meta.qualifiedName;
+        String project = meta.project;
         Map<String, IdParams> pToI;
         if (mapFile.containsKey(name)) {
             pToI = mapFile.get(name);
         }
         else {
-            pToI =new LinkedHashMap<>();
+            pToI = new LinkedHashMap<>();
         }
 
         IdParams ip = pToI.getOrDefault(project, null);
@@ -916,7 +918,13 @@ public class TestDefinitionProcessor extends AbstractProcessor {
             ip.id = id;
         }
         else {
-            ip = new IdParams(id, new LinkedList<>());
+            List<String> params;
+            if (meta.params != null) {
+                params = meta.params.stream().map(Parameter::getName).collect(Collectors.toList());
+            }
+            else
+                params = new ArrayList<>();
+            ip = new IdParams(id, params);
         }
         pToI.put(project, ip);
         mapFile.put(name, pToI);
@@ -1083,7 +1091,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         else {
             // In this case, although the XML file existed and we have (some) annotation data, we don't have all
             // of it.  So let's put it into this.mappingFile
-            TestDefinitionProcessor.setPolarionIDInMapFile(meta.qualifiedName, meta.project, id, mapFile);
+            TestDefinitionProcessor.setPolarionIDInMapFile(meta, id, mapFile);
         }
         writeMapFile(mapPath, mapFile);
     }
@@ -1340,6 +1348,11 @@ public class TestDefinitionProcessor extends AbstractProcessor {
                                      File mapPath,
                                      Map<String, String> methToDesc) {
         Testcase tc = TestDefinitionProcessor.initImporterTestcase(meta, methToDesc);
+        // Check if testCasePath exists.  If it doesn't, generate the XML definition
+        Path xmlDef = FileHelper.makeXmlPath(testCasePath, meta);
+        if (!xmlDef.toFile().exists())
+            createTestCaseXML(tc, xmlDef.toFile());
+
         tcToMeta.put(tc, meta);
 
         Boolean importRequest = processIdEntities(meta, testCasePath, mapFile, tc, mapPath);

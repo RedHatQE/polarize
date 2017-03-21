@@ -100,12 +100,6 @@ public class JarHelper implements IJarHelper {
                 refl.methToProjectDef = refl.makeMethToProjectMeta();
                 refl.processTestDefs();
 
-                if (refl.methToProjectDef.size() > 0) {
-                    File mapPath = new File(refl.config.getMappingPath());
-                    Map<String, Map<String, IdParams>> tmap;
-                    tmap = TestDefinitionProcessor.printSortedMappingFile(refl.mappingFile);
-                    refl.mappingFile = TestDefinitionProcessor.createMappingFile(mapPath, refl.methToProjectDef, tmap);
-                }
 
                 refl.testcasesImporterRequest();
                 File mapPath = new File(refl.config.getMappingPath());
