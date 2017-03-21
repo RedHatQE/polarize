@@ -1,8 +1,15 @@
 <config>
-    <requirements-xml path="/home/stoner/Projects/rhsm-qe/requirements"/>
-    <testcases-xml path="/home/stoner/Projects/rhsm-qe/testcases"/>
-    <!-- JSON file that maps the qualified name -> project -> id -->
-    <mapping path="/home/stoner/Projects/rhsm-qe/mapping.json"/>
+    <!-- The name of your project or team.  Can be used to replace {project-name} in the 
+    <testrun id="{project-name}"> attribute as a default -->
+    <project-name name="MY-PROJECT"></project-name>
+    <!-- basedir path is like a Macro and will be replaced wherever {basedir} is used -->
+    <basedir path="/path/to/MY-PROJECT"></basedir>
+    <!-- Where Requirements XML are.  Eg path="/home/stoner/Projects/rhsm-qe/requirements" -->
+    <requirements-xml path="{basedir}/requirements"/>
+    <!-- Where Testcase XML are.  Eg path="/home/stoner/Projects/rhsm-qe/testcases" -->
+    <testcases-xml path="{basedir}/testcases"/>
+    <!-- Path of the mapping.json that maps the qualified name to project -> id -->
+    <mapping path="{basedir}/mapping.json"/>
     <author>stoner</author>
     <project>PLATTP</project>
     <servers>
@@ -10,6 +17,10 @@
                 url=""
                 user="stoner"
                 password=""/>
+        <server name="polarion-devel"
+                url=""
+                user="USER"
+                password="PASSWORD"/>
         <server name="kerberos"
                 user=""
                 password=""/>
@@ -20,16 +31,29 @@
     </servers>
     <importers>
         <importer type="testcase"><!-- settings for the testcase importer -->
-            <endpoint route="/import/testcase"/>
+          <endpoint route="/import/testcase"/>
+            <!-- Path for where the generated xml file for the TestCase importer will be created --> 
             <file path="/tmp/testcases.xml"/>
-            <selector name="rhsm_qe" val="testcase_importer"/><!-- Creates the JMS selector -->
-            <!-- An optional prefix and suffix.  If none is given, the qualified name of the method is the title -->
+            <!-- Creates the JMS selector used by a Message Bus Listener. The selector will take the
+            form of {name"='{val}'.  For example rhsm_qe='testcase_importer' -->
+            <selector name="rhsm_qe" val="testcase_importer"/>
+            <!-- An optional prefix and suffix.  If none is given, the qualified name of the method
+            is the title.  Otherwise it is "prefix+qualified method name+suffix" -->
             <title prefix="RHSM-TC : " suffix=""/>
-            <timeout millis="300000"/><!-- time in milliseconds to wait for message reply -->
+            <!-- time in milliseconds to wait for message reply -->
+            <timeout millis="300000"/>
+            <!-- If true, when polarize needs to create a new TestCase in Polarion it will make an
+            import request.  If false, even if polarize detects that a new TestCase should be made in
+            Polarion, it will skip making a request. The XMl will still be generated, but since an
+            import request was not made, both the annotation and XML id will be empty.  This means once
+            enabled is set to true, polarize will actually do the request to make a new Polarion
+            TestCase-->
+            <enabled>false</enabled>
         </importer>
         <importer type="xunit"><!-- # settings for the xunit importer -->
-            <!-- id is an optional unique id for testrun. Defaults to a timestamp (uniqueness guaranteed by client)
-                 title is the (possibly non-unique) name of the testrun-->
+            <!-- id is an optional unique id for testrun. Defaults to a timestamp. If id is given here,
+            the client must guarantee the uniqueness
+            guaranteed by client)  title is the (possibly non-unique) name of the testrun-->
             <testrun id="" title="Sean Toner Polarize TestRun"/>
             <endpoint route="/import/xunit"/>
             <!-- # the JMS selector <name>='<value>' -->
