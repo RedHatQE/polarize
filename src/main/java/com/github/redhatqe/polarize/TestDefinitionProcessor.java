@@ -1227,8 +1227,6 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         Optional<String> maybeMapFileID =
                 TestDefinitionProcessor.getPolarionIDFromMapFile(meta.qualifiedName, meta.project, mapFile);
         Boolean idExists = maybePolarionID.isPresent();
-        Boolean xmlIdExists = maybeIDXml.isPresent();
-        Boolean mapIdExists = maybeMapFileID.isPresent();
         String annId = maybePolarionID.orElse("");
         Tuple<String, Testcase> idAndTC = maybeIDXml.orElse(new Tuple<>("", null));
         String xmlId = idAndTC.first;
@@ -1236,7 +1234,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         Boolean importRequest = meta.annotation.update();
 
         // w00t, bit tricks.  Thought I wouldn't need these again after my embedded days :)
-        int idval = (idExists ? 1 << 2 : 0) | (xmlIdExists ? 1 << 1 : 0) | (mapIdExists ? 1 : 0);
+        int idval = (annId.equals("") ? 0 : 1 << 2) | (xmlId.equals("") ? 0 : 1 << 1) | (mapId.equals("") ? 0 : 1);
         IDType idtype = IDType.fromNumber(idval);
         if (idtype == null)
             throw new MappingError("Error in IDType.fromNumber()");
