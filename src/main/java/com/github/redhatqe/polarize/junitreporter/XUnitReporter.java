@@ -358,7 +358,7 @@ public class XUnitReporter implements IReporter {
     checkMethInMapping(Map<String, IdParams> inner, String qual, String project, File badMethods) {
         boolean in = true;
         if (inner == null || !inner.containsKey(project)) {
-            String err = String.format("Project %s does not exist for %s in mapping file\n", project, qual);
+            String err = String.format("%s does not exist in mapping file for Project %s \n", project, qual);
             logger.error(err);
             System.err.println(err);
             try {

@@ -108,7 +108,7 @@ public class Meta<T> {
         Tuple<String, Testcase> res = new Tuple<>();
 
         if (!tc.isPresent()) {
-            Meta.logger.info("Unmarshalling failed.  No Testcase present...");
+            Meta.logger.info(String.format("Unmarshalling failed for %s.  No Testcase present...", tcPath));
             return Optional.empty();
         }
         else if (tc.get().getId() == null || tc.get().getId().equals("")) {
