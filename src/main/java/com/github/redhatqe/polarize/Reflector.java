@@ -173,10 +173,7 @@ public class Reflector {
                     return qualname.equals(fqpn);
                 })
                 .findFirst();
-        if (methodMD.isPresent())
-            return methodMD.get().description;
-        else
-            return "This is an automated test: " + qualname;
+        return methodMD.map(metaData -> metaData.description).orElseGet(() -> "This is an automated test: " + qualname);
     }
 
     public <T> void getAnnotations(Class<T> c) {
@@ -227,7 +224,7 @@ public class Reflector {
         this.testDefs.forEach(td ->
                 TestDefinitionProcessor
                         .processTC(td, this.mappingFile, this.testCaseToMeta, this.tcPath, this.tcMap, mapPath,
-                                   this.methodToDesc));
+                                   this.methodToDesc, this.config));
     }
 
     Map<String, Map<String, Meta<TestDefinition>>> makeMethToProjectMeta() {
@@ -273,6 +270,6 @@ public class Reflector {
         String pw = this.config.polarion.getPassword();
         String url = this.config.polarion.getUrl() + this.config.testcase.getEndpoint().getRoute();
         return TestDefinitionProcessor.tcImportRequest(this.tcMap, sName, sVal, url, user, pw, this.testcases,
-                                                       this.tcPath);
+                                                       this.tcPath, this.config.testcase.getTitle());
     }
 }

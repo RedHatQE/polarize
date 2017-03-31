@@ -2,6 +2,7 @@ package com.github.redhatqe.polarize.configuration;
 
 import com.github.redhatqe.polarize.IJAXBHelper;
 import com.github.redhatqe.polarize.JAXBHelper;
+import com.github.redhatqe.polarize.exceptions.XSDValidationError;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -40,29 +41,42 @@ public class XMLConfig {
         if (path == null) {
             this.configPath = defaultPath;
         }
-        else if (!path.exists()) {
-            logger.error("Path %s does not exist.  Using default", path.toString());
-            this.configPath = defaultPath;
-        }
         else
             this.configPath = path;
         JAXBHelper jaxb = new JAXBHelper();
         Optional<ConfigType> maybeCfg;
-        maybeCfg = IJAXBHelper.unmarshaller(ConfigType.class, this.configPath,
-                jaxb.getXSDFromResource(ConfigType.class));
-        if (!maybeCfg.isPresent()) {
-            throw new Error("Could not load configuration file");
+        try {
+            maybeCfg = IJAXBHelper.unmarshaller(ConfigType.class, this.configPath,
+                    jaxb.getXSDFromResource(ConfigType.class));
         }
+        catch (XSDValidationError xe) {
+            maybeCfg = Optional.empty();
+        }
+        if (!maybeCfg.isPresent()) {
+            //throw new Error("Could not load configuration file");
+            logger.error("=======================================================================");
+            logger.error("You really should be using a config file in ~/.polarize/xml-config.xml");
+            logger.error("If you create new test methods and you still aren't using the config");
+            logger.error("then you must do the following: ");
+            logger.error("1. Manually generate a test case in Polarion and remember the ID");
+            logger.error("2. Manually insert the fully qualified name into mapping.json to map to the ID");
+            logger.error("Note that by refusing to use the config file, upstream contributors will");
+            logger.error("not be able to review your test case definitions, and you increase the odds");
+            logger.error("of making a manual entry error.  You have been warned");
+            logger.error("=======================================================================");
+            this.config = null;
+        }
+        else {
+            this.config = maybeCfg.get();
+            this.checkDefaultBaseDir(this.configPath.toString());
+            this.initImporters();
+            xunit = this.importers.get("xunit");
+            testcase = this.importers.get("testcase");
 
-        this.config = maybeCfg.get();
-        this.checkDefaultBaseDir(this.configPath.toString());
-        this.initImporters();
-        xunit = this.importers.get("xunit");
-        testcase = this.importers.get("testcase");
-
-        this.initCustomFields();
-        this.initTestSuite();
-        this.initServers();
+            this.initCustomFields();
+            this.initTestSuite();
+            this.initServers();
+        }
     }
 
     public static String currentDir() {
@@ -119,22 +133,6 @@ public class XMLConfig {
         return fields.getProperty();
     }
 
-    /**
-     * Given the customFields map, put this into the CustomFieldsType
-     */
-    public void setCustomFields() {
-        CustomFieldsType cft = this.xunit.getCustomFields();
-        List<PropertyType> props = cft.getProperty();
-        props.clear();
-        props.addAll(this.customFields.entrySet().stream()
-                .map(es -> {
-                    PropertyType pt = new PropertyType();
-                    pt.setName(es.getKey());
-                    pt.setVal(es.getValue());
-                    return pt;
-                })
-                .collect(Collectors.toList()));
-    }
 
     public void initCustomFields() {
         List<PropertyType> props = this.getCustomFields();
@@ -144,20 +142,6 @@ public class XMLConfig {
     public List<PropertyType> getTestSuite() {
         TestSuiteType tProps = xunit.getTestSuite();
         return tProps.getProperty();
-    }
-
-    public void setTestSuite() {
-        TestSuiteType tst = this.xunit.getTestSuite();
-        List<PropertyType> props = tst.getProperty();
-        props.clear();
-        props.addAll(this.testRunProps.entrySet().stream()
-                .map(es -> {
-                    PropertyType pt = new PropertyType();
-                    pt.setName(es.getKey());
-                    pt.setVal(es.getValue());
-                    return pt;
-                })
-                .collect(Collectors.toList()));
     }
 
     public void initTestSuite() {

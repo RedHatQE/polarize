@@ -50,12 +50,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
     private Messager msgr;
     private static Logger logger = LoggerFactory.getLogger(TestDefinitionProcessor.class);
     private String tcPath;
-    private Map<String, Meta<Requirement>> methToRequirement;
-    // map of qualified name -> {projectID: meta}
-    private Map<String, Map<String,
-                            Meta<Requirement>>> methToProjectReq;
-    private Map<String, Map<String,
-                            Meta<TestDefinition>>> methToProjectDef;
+    private Map<String, Map<String, Meta<TestDefinition>>> methToProjectDef;
     private Map<String, String> methNameToTestNGDescription;
     private Map<Testcase, Meta<TestDefinition>> testCaseToMeta;
     // Map of qualified name -> { projectID: testcaseID }
@@ -64,9 +59,10 @@ public class TestDefinitionProcessor extends AbstractProcessor {
     private Testcases testcases = new Testcases();
     private Map<String, List<Testcase>> tcMap = new HashMap<>();
     private XMLConfig config;
-    private ConfigType cfg;
-    public static Map<String, WarningInfo> warnings = new HashMap<>();
+    private static Map<String, WarningInfo> warnings = new HashMap<>();
+    private int round = 0;
 
+    public static final String warnText = "/tmp/polarize-warnings.txt";
     /**
      * Recursive function that will get the fully qualified name of a method.
      *
@@ -160,10 +156,10 @@ public class TestDefinitionProcessor extends AbstractProcessor {
      * number specified in the testCaseID.  This also works conversely.  If there are multiple testCaseID, then
      * the same number of projectID must be specified.
      *
-     * @param meta
-     * @param name
+     * @param meta The TestDefinition object to check
+     * @param name name of the project
      */
-    public void validateProjectToTestCase(TestDefinition meta, String name) {
+    private void validateProjectToTestCase(TestDefinition meta, String name) {
         int plength = meta.projectID().length;
         int tclength = meta.testCaseID().length;
         if (plength != tclength) {
@@ -194,8 +190,8 @@ public class TestDefinitionProcessor extends AbstractProcessor {
      * we need to create the Meta object which has all the metadata we need.  This method will find annotations with
      * multiple @TestDefinition applied to the method.
      *
-     * @param elements
-     * @return
+     * @param elements A List of objects that derive from Element
+     * @return A List of Meta\<TestDefinition\>
      */
     private List<Meta<TestDefinition>>
     makeMetaFromTestDefinitions(List<? extends Element> elements){
@@ -231,8 +227,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
     createMeta(TestDefinition r, List<Parameter> params, Project project, Element e, String testID, Boolean badAnn) {
         Meta<TestDefinition> m = new Meta<>();
         m.polarionID = testID;
-        String full = this.getTopLevel(e, "", m);
-        m.qualifiedName = full;
+        m.qualifiedName = this.getTopLevel(e, "", m);
         m.annotation = r;
         m.project = project.toString();
         if (m.params == null)
@@ -301,13 +296,23 @@ public class TestDefinitionProcessor extends AbstractProcessor {
      */
     @Override
     public boolean process(Set<? extends TypeElement> set, RoundEnvironment roundEnvironment) {
-        System.out.println("In process() method");
+        if (this.round > 0) {
+            logger.info("Done with annotation processing");
+            return true;
+        }
+
+        if (this.config.config == null) {
+            logger.info("=====================================================");
+            logger.info("No config file found...skipping annotation processing");
+            logger.info("=====================================================");
+            return true;
+        }
 
         // load the mapping file
         File mapPath = new File(this.config.getMappingPath());
         System.out.println(mapPath.toString());
         if (mapPath.exists()) {
-            System.out.println("Loading the map");
+            logger.info("Loading the map");
             this.mappingFile = FileHelper.loadMapping(mapPath);
             //System.out.println(this.mappingFile.toString());
         }
@@ -333,36 +338,33 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         Map<String, String> methToDescription = this.getTestAnnotations(roundEnvironment);
         this.methNameToTestNGDescription.putAll(methToDescription);
 
-        List<Testcase> tests = this.processAllTC();
+        this.processAllTC();
 
         /* testcases holds all the methods that need a new or updated Polarion TestCase */
-        logger.info("Updating testcases that had no testcaseId...");
         this.tcImportRequest();
-        TestDefinitionProcessor.updateMappingFile(this.mappingFile, this.methToProjectDef, this.tcPath,
-                new File(this.config.getMappingPath()));
+        File mapjsonPath = new File(this.config.getMappingPath());
+        TestDefinitionProcessor.updateMappingFile(this.mappingFile, this.methToProjectDef, this.tcPath, mapjsonPath);
 
         /* Generate the mapping file now that all the XML files should have been generated */
-        if (this.methToProjectDef.size() > 0) {
+        if (!mapjsonPath.exists()) {
             this.mappingFile = this.createMappingFile(mapPath);
-        }
-        else {
-            logger.info("Did not update the mapping file");
         }
 
         this.printWarnings(warnings);
         this.tcMap = new HashMap<>();
         this.mappingFile = new HashMap<>();
+
+        this.round += 1;
         return true;
     }
 
     private void printWarnings(Map<String, WarningInfo> warns) {
         if (this.tcMap.isEmpty()) {
-            String warnMsg = warnings.entrySet().stream()
+            String warnMsg = warns.entrySet().stream()
                     .map(es -> {
                         String meth = es.getKey();
                         WarningInfo wi = es.getValue();
-                        String msg = String.format("In %s- %s : %s", meth, wi.project, wi.wt.message());
-                        return msg;
+                        return String.format("In %s- %s : %s", meth, wi.project, wi.wt.message());
                     })
                     .reduce("", (acc, n) -> String.format("%s%s\n", acc, n));
             logger.warn(warnMsg);
@@ -380,10 +382,10 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         if (badFunctions.size() > 0)
             logger.error("You must check your annotations or enable the TestCase importer in your config " +
                     "before using your project with the XUnit Importer.  Please see the file " +
-                    "/tmp/bad-functions.txt for all the functions to check");
+                    String.format("%s for all the functions to check", warnText));
         try {
-            // FIXME: rotate the /tmp/bad-functions.txt
-            Path bf = Paths.get("/tmp/bad-functions.txt");
+            // FIXME: rotate the TestDefinitionProcess.errorsText
+            Path bf = Paths.get(warnText);
             StandardOpenOption opt = bf.toFile().exists() ? StandardOpenOption.APPEND : StandardOpenOption.CREATE;
             Files.write(bf, badFunctions, opt);
         } catch (IOException e) {
@@ -396,34 +398,27 @@ public class TestDefinitionProcessor extends AbstractProcessor {
                                          String tcpath,
                                          File mapPath) {
         List<String> badFunctions = new ArrayList<>();
-        methMap.entrySet().forEach(e -> {
-            String fnName = e.getKey();
-            Map<String, Meta<TestDefinition>> projectToMeta = e.getValue();
-            projectToMeta.entrySet().forEach(es -> {
-                String project = es.getKey();
-                Meta<TestDefinition> meta = es.getValue();
-                String id = meta.getPolarionIDFromTestcase()
-                        .orElseGet(() -> {
-                            Tuple<String, Testcase> maybe =
-                                    meta.getPolarionIDFromXML(tcpath).orElse(new Tuple<>("", null));
-                            return maybe.first;
-                        });
-                Boolean badFn = false;
-                // Check if the mapFile has the corresponding project of this function name
-                if (!mapFile.containsKey(fnName) || !mapFile.get(fnName).containsKey(project)) {
-                    if (id.equals("")) badFn = true;
-                }
-                else {
-                    String newid = mapFile.get(fnName).get(project).getId();
-                    if (newid.equals("")) badFn= true;
-                    if (id.equals("")) id = newid;
-                }
+        methMap.forEach((fnName, projectToMeta) -> projectToMeta.forEach((project, meta) -> {
+            String id = meta.getPolarionIDFromTestcase()
+                    .orElseGet(() -> {
+                        Tuple<String, Testcase> maybe =
+                                meta.getPolarionIDFromXML(tcpath).orElse(new Tuple<>("", null));
+                        return maybe.first;
+                    });
+            Boolean badFn = false;
+            // Check if the mapFile has the corresponding project of this function name
+            if (!mapFile.containsKey(fnName) || !mapFile.get(fnName).containsKey(project)) {
+                if (id.equals("")) badFn = true;
+            } else {
+                String newid = mapFile.get(fnName).get(project).getId();
+                if (newid.equals("")) badFn = true;
+                if (id.equals("")) id = newid;
+            }
 
-                if (badFn)
-                    TestDefinitionProcessor.addBadFunction(meta.qualifiedName, project, badFunctions);
-                TestDefinitionProcessor.addToMapFile(mapFile, meta, id, mapPath);
-            });
-        });
+            if (badFn)
+                TestDefinitionProcessor.addBadFunction(meta.qualifiedName, project, badFunctions);
+            TestDefinitionProcessor.addToMapFile(mapFile, meta, id, mapPath);
+        }));
         TestDefinitionProcessor.writeBadFunctionText(badFunctions);
     }
 
@@ -433,7 +428,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
      * @return List of all the processed TestCases
      */
     private List<Testcase> processAllTC() {
-        File badFuncs = Paths.get("/tmp/bad-functions.txt").toFile();
+        File badFuncs = Paths.get(warnText).toFile();
         if (badFuncs.exists())
             badFuncs.delete();
         else
@@ -510,7 +505,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
             respProp = new ResponseProperties();
         tests.setResponseProperties(respProp);
         List<ResponseProperty> props = respProp.getResponseProperty();
-        if (!props.stream().anyMatch(p -> p.getName().equals(selectorName) && p.getValue().equals(selectorValue))) {
+        if (props.stream().noneMatch(p -> p.getName().equals(selectorName) && p.getValue().equals(selectorValue))) {
             ResponseProperty rprop = new ResponseProperty();
             rprop.setName(selectorName);
             rprop.setValue(selectorValue);
@@ -542,7 +537,8 @@ public class TestDefinitionProcessor extends AbstractProcessor {
                     String user,
                     String pw,
                     Testcases tests,
-                    String tcPath) {
+                    String tcPath,
+                    TitleType tType) {
         List<Optional<ObjectNode>> maybeNodes = new ArrayList<>();
         if (testcaseMap.isEmpty())
             return maybeNodes;
@@ -557,7 +553,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
             else {
                 try {
                     Consumer<Optional<ObjectNode>> hdlr;
-                    hdlr = TestDefinitionProcessor.testcaseImportHandler(tcPath, project, tests);
+                    hdlr = TestDefinitionProcessor.testcaseImportHandler(tcPath, project, tests, tType);
                     maybeNodes.add(ImporterRequest.sendImportRequest(url, user, pw, testXml, selector, hdlr));
                 } catch (InterruptedException e) {
                     e.printStackTrace();
@@ -576,9 +572,10 @@ public class TestDefinitionProcessor extends AbstractProcessor {
     private List<Optional<ObjectNode>> tcImportRequest() {
         List<Optional<ObjectNode>> maybeNodes = new ArrayList<>();
         if (this.tcMap.isEmpty()) {
-            logger.info("No more testcases to import ...");
+            logger.info("No testcases to import ...");
             return maybeNodes;
         }
+        logger.info("Updating testcases that had no testcaseId...");
 
         for(String project: this.tcMap.keySet()) {
             String selectorName = this.config.testcase.getSelector().getName();
@@ -605,10 +602,6 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         return maybeNodes;
     }
 
-    private Consumer<Optional<ObjectNode>> testcaseImportHandler() {
-        return TestDefinitionProcessor.testcaseImportHandler(this.tcPath, this.cfg.getProject(), this.testcases);
-    }
-
 
     /**
      * Returns a lambda usable as a handler for ImporterRequest.sendImportRequest
@@ -621,9 +614,10 @@ public class TestDefinitionProcessor extends AbstractProcessor {
      * @param tcs Testcases object to be examined
      * @return lambda of a Consumer
      */
-    public static Consumer<Optional<ObjectNode>> testcaseImportHandler(String testPath, String pID, Testcases tcs) {
+    public static Consumer<Optional<ObjectNode>>
+    testcaseImportHandler(String testPath, String pID, Testcases tcs, TitleType tt) {
         return node -> {
-            if (!node.isPresent()) {
+            if (node == null || !node.isPresent()) {
                 logger.warn("No message was received");
                 return;
             }
@@ -632,9 +626,16 @@ public class TestDefinitionProcessor extends AbstractProcessor {
                 if (root.get("status").textValue().equals("failed"))
                     return;
             }
+
             JsonNode testcases = root.get("import-testcases");
+            String pf = tt.getPrefix();
+            String sf = tt.getSuffix();
             testcases.forEach(n -> {
+                // Take off the prefix and suffix from the testcase
                 String name = n.get("name").textValue();
+                name = name.replace(pf, "");
+                name = name.replace(sf, "");
+
                 if (!n.get("status").textValue().equals("failed")) {
                     String id = n.get("id").toString();
                     if (id.startsWith("\""))
@@ -660,6 +661,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
                         }
                         logger.debug(String.format("Found %s for method %s", xmlDefinition.toString(), name));
                         logger.debug("Unmarshalling to edit the XML file");
+                        // FIXME: I need to get the data from the Meta, not XML.
                         Testcase tc = XUnitReporter.setPolarionIDFromXML(xmlDefinition.toFile(), id);
                         if (!tc.getId().equals(id)) {
                             logger.error("Setting the id for the XML on the Testcase failed");
@@ -713,7 +715,8 @@ public class TestDefinitionProcessor extends AbstractProcessor {
             pw = this.config.polarion.getPassword();
         }
         String url = baseUrl + this.config.testcase.getEndpoint().getRoute();
-        Consumer<Optional<ObjectNode>> hdlr = testcaseImportHandler(this.tcPath, project, this.testcases);
+        TitleType tt = this.config.testcase.getTitle();
+        Consumer<Optional<ObjectNode>> hdlr = testcaseImportHandler(this.tcPath, project, this.testcases, tt);
         return ImporterRequest.sendImportRequest(url, user, pw, testcaseXml, selector, hdlr);
     }
 
@@ -740,35 +743,11 @@ public class TestDefinitionProcessor extends AbstractProcessor {
                 if (!projects.containsKey(project)) {
                     projects.put(project, m);
                 }
-                else
-                    logger.warn(String.format("ProjectType %s already exists for %s", project, meth));
             }
         }
         return methods;
     }
 
-    /**
-     * Creates a nested map of qualifiedName -> {projectID: Requirement}
-     *
-     * TODO: Figure out how to do this with reduce
-     *
-     * @param metas A list of Metas of type Requirement
-     * @return a nested map qualifiedName to {projectId: Requirement}
-     */
-    private Map<String, Map<String, Meta<Requirement>>>
-    createMethodToMetaRequirementMap(List<Meta<Requirement>> metas) {
-        Map<String, Map<String, Meta<Requirement>>> acc = new HashMap<>();
-        Map<String, Meta<Requirement>> projectToMeta = new HashMap<>();
-        for(Meta<Requirement> m: metas) {
-            Requirement r = m.annotation;
-            String key = m.qualifiedName;
-            String project = r.project().toString();
-            projectToMeta.put(project, m);
-            if (!acc.containsKey(key))
-                acc.put(key, projectToMeta);
-        }
-        return acc;
-    }
 
     /**
      * Gets annotations from the type specified by c
@@ -999,7 +978,8 @@ public class TestDefinitionProcessor extends AbstractProcessor {
      * @param methToDesc A map which looks up method name to description
      * @return Testcase object
      */
-    public static Testcase initImporterTestcase(Meta<TestDefinition> meta, Map<String, String> methToDesc) {
+    public static Testcase
+    initImporterTestcase(Meta<TestDefinition> meta, Map<String, String> methToDesc, XMLConfig cfg) {
         Testcase tc = new Testcase();
         TestDefinition def = meta.annotation;
         TestDefinitionProcessor.initTestSteps(meta, tc);
@@ -1030,10 +1010,17 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         else
             tc.setDescription(def.description());
 
-        if (def.title().equals(""))
-            tc.setTitle(meta.qualifiedName);
-        else
-            tc.setTitle(def.title());
+        TitleType titleType = cfg.testcase.getTitle();
+        String t = "%s%s%s";
+        String title;
+        if (def.title().equals("")) {
+            title = String.format(t, titleType.getPrefix(), meta.qualifiedName, titleType.getSuffix());
+            tc.setTitle(title);
+        }
+        else {
+            title = String.format(t, titleType.getPrefix(), def.title(), titleType.getSuffix());
+            tc.setTitle(title);
+        }
 
         TestDefinitionProcessor.setLinkedWorkItems(tc, def);
         tc.setId(TestDefinitionProcessor.getPolarionIDFromDef(def, meta.project));
@@ -1072,8 +1059,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
                                     Meta<TestDefinition> meta,
                                     String id,
                                     File mapPath) {
-        // TODO: The ID exists in the XML file, but not in the annotation.  Set the mapping file with this info
-        String msg = "TestCase id is known, but does not exist in mapping file.  Editing map: %s -> {%s: %s}";
+        String msg = "Adding TestCase ID to the mapping file.  Editing map: %s -> {%s: %s}";
         logger.debug(String.format(msg, meta.qualifiedName, meta.project, id));
         Map<String, IdParams> projToId = mapFile.getOrDefault(meta.qualifiedName, null);
         if (projToId != null) {
@@ -1155,37 +1141,6 @@ public class TestDefinitionProcessor extends AbstractProcessor {
                 .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
     }
 
-    @FunctionalInterface
-    interface IDProcessor {
-        void process();
-    }
-
-    public IDProcessor determineIdVal(Meta<TestDefinition> meta,
-                                  String testCasePath,
-                                  Map<String, Map<String, IdParams>> mapFile) {
-        Optional<String> maybePolarionID = meta.getPolarionIDFromTestcase();
-        Boolean idExists = maybePolarionID.isPresent();
-        int idval = 0;
-        if (!idExists) {
-            Optional<String> maybeMapFileID =
-                    TestDefinitionProcessor.getPolarionIDFromMapFile(meta.qualifiedName, meta.project, mapFile);
-            Boolean mapIdExists = maybeMapFileID.isPresent();
-            String mapId = maybeMapFileID.orElse("");
-        }
-        else
-            idval |= 1 << 2;
-
-        Optional<Tuple<String, Testcase>> maybeIDXml = meta.getPolarionIDFromXML(testCasePath);
-        Boolean xmlIdExists = maybeIDXml.isPresent();
-
-        String annId = maybePolarionID.orElse("");
-        Tuple<String, Testcase> idAndTC = maybeIDXml.orElse(new Tuple<>("", null));
-        String xmlId = idAndTC.first;
-
-        Boolean importRequest = meta.annotation.update();
-
-        return null;
-    }
 
     /**
      * Does what is needed based on whether the id exists in the annotation, xml or map file
@@ -1207,14 +1162,23 @@ public class TestDefinitionProcessor extends AbstractProcessor {
      * | 1           | 1        | 0         | Verify equality, add to mapping             | ANN_XML
      * | 1           | 1        | 1         | Verify equality                             | ALL
      *
+     * Note that this returns an integer value representing one of 4 possible states (really 3)
+     *
+     * | update?  | NONE? | Action
+     * |----------|-------|-------------
+     * | 0        | 0     | No update for this Testcase
+     * | 0        | 1     | Make import request, and edit or create XML file for method
+     * | 1        | 0     | Make import request, and edit XML for method
+     * | 1        | 1     | Make import request, and edit or create XML file for method
+     *
      * @param meta A Meta of type TestDefinition which holds the annotation information for the method
      * @param testCasePath A path to look up the XML definition for the method
      * @param mapFile A Map of qualified method -> project -> Polarion ID
      * @param tc the XML representation of the TestCase
      * @param mapPath Path to the mapping.json file (which is the persistent representation of mapFile)
-     * @return true if an Import request needs to be made, false otherwise
+     * @return An int (as binary) representing the 4 possible states for importing
      */
-    private static Boolean
+    private static int
     processIdEntities(Meta<TestDefinition> meta,
                       String testCasePath,
                       Map<String, Map<String, IdParams>> mapFile,
@@ -1226,12 +1190,11 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         Optional<Tuple<String, Testcase>> maybeIDXml = meta.getPolarionIDFromXML(testCasePath);
         Optional<String> maybeMapFileID =
                 TestDefinitionProcessor.getPolarionIDFromMapFile(meta.qualifiedName, meta.project, mapFile);
-        Boolean idExists = maybePolarionID.isPresent();
         String annId = maybePolarionID.orElse("");
         Tuple<String, Testcase> idAndTC = maybeIDXml.orElse(new Tuple<>("", null));
         String xmlId = idAndTC.first;
         String mapId = maybeMapFileID.orElse("");
-        Boolean importRequest = meta.annotation.update();
+        int importType = meta.annotation.update() ? 1 << 1 : 0;
 
         // w00t, bit tricks.  Thought I wouldn't need these again after my embedded days :)
         int idval = (annId.equals("") ? 0 : 1 << 2) | (xmlId.equals("") ? 0 : 1 << 1) | (mapId.equals("") ? 0 : 1);
@@ -1253,15 +1216,17 @@ public class TestDefinitionProcessor extends AbstractProcessor {
 
         // TODO: Instead of throwing an error on mismatch, perhaps we should auto-correct based on precedence
         // FIXME: When query ability is added, can run a check
+        String m = "Adding TestCase ID to the mapping file.  Editing map: %s -> {%s: %s}";
         switch (idtype) {
             case NONE:
-                importRequest = true;
+                importType |= 0x01;
                 break;
             case MAP:
                 editXML(meta, testCasePath, mapId, tc);
                 badFuncs.add(String.format(msg, qual, project, "Map file", mapId));
                 break;
             case XML:
+                logger.info(String.format(m, meta.qualifiedName, meta.project, xmlId));
                 addToMapFile(mapFile, meta, xmlId, mapPath);
                 badFuncs.add(String.format(msg, qual, project, "XML file", xmlId));
                 break;
@@ -1275,6 +1240,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
                 break;
             case ANN:
                 editXML(meta, testCasePath, annId, tc);
+                logger.info(String.format(m, meta.qualifiedName, meta.project, annId));
                 addToMapFile(mapFile, meta, annId, mapPath);
                 break;
             case ANN_MAP:
@@ -1293,6 +1259,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
                     String err = String.format(fmt, annId, xmlId, pqual);
                     throw new MismatchError(err);
                 }
+                logger.info(String.format(m, meta.qualifiedName, meta.project, annId));
                 addToMapFile(mapFile, meta, annId, mapPath);
                 break;
             case ALL:
@@ -1303,9 +1270,9 @@ public class TestDefinitionProcessor extends AbstractProcessor {
                     allIds.put("xml", xmlId);
                     allIds.put("map", mapId);
                     Map<String, String> unmatched = nonMatchingIds(allIds, annId);
-                    unmatched.entrySet().forEach(e -> {
+                    unmatched.forEach((key, value) -> {
                         String err = "%s id = %s did not match %s in %s";
-                        logger.error(String.format(err, e.getKey(), e.getValue(), annId, pqual));
+                        logger.error(String.format(err, key, value, annId, pqual));
                     });
                 }
                 break;
@@ -1313,7 +1280,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
                 logger.error("Should not get here");
         }
         TestDefinitionProcessor.writeBadFunctionText(badFuncs);
-        return importRequest;
+        return importType;
     }
 
 
@@ -1325,7 +1292,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
      */
     private Testcase processTC(Meta<TestDefinition> meta) throws MismatchError {
         return TestDefinitionProcessor.processTC(meta, this.mappingFile, this.testCaseToMeta, this.tcPath, this.tcMap,
-                new File(this.config.getMappingPath()), this.methNameToTestNGDescription);
+                new File(this.config.getMappingPath()), this.methNameToTestNGDescription, this.config);
     }
 
     /**
@@ -1344,17 +1311,24 @@ public class TestDefinitionProcessor extends AbstractProcessor {
                                      String testCasePath,
                                      Map<String, List<Testcase>> testCaseMap,
                                      File mapPath,
-                                     Map<String, String> methToDesc) {
-        Testcase tc = TestDefinitionProcessor.initImporterTestcase(meta, methToDesc);
-        // Check if testCasePath exists.  If it doesn't, generate the XML definition
+                                     Map<String, String> methToDesc,
+                                     XMLConfig config) {
+        Testcase tc = TestDefinitionProcessor.initImporterTestcase(meta, methToDesc, config);
+        // Check if testCasePath exists.  If it doesn't, generate the XML definition.
         Path xmlDef = FileHelper.makeXmlPath(testCasePath, meta);
         if (!xmlDef.toFile().exists())
             createTestCaseXML(tc, xmlDef.toFile());
 
         tcToMeta.put(tc, meta);
 
-        Boolean importRequest = processIdEntities(meta, testCasePath, mapFile, tc, mapPath);
-        if (importRequest) {
+        int importType = processIdEntities(meta, testCasePath, mapFile, tc, mapPath);
+        // If update bit is set, regenerate the XML file with the new data
+        if ((importType & 0b10) == 0b10) {
+            createTestCaseXML(tc, xmlDef.toFile());
+        }
+
+        // If the update bit and the none bit are 0 we don't do anything.  Otherwise, do an import request
+        if (importType != 0) {
             String projId = meta.project;
             if (testCaseMap.containsKey(projId))
                 testCaseMap.get(projId).add(tc);
@@ -1459,7 +1433,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         }
     }
 
-    static Map<String, Map<String, IdParams>> printSortedMappingFile(Map<String, Map<String, IdParams>> defs) {
+    public static Map<String, Map<String, IdParams>> printSortedMappingFile(Map<String, Map<String, IdParams>> defs) {
         Map<String, Map<String, IdParams>> sorted = new TreeMap<>();
         for(Map.Entry<String, Map<String, IdParams>> me: defs.entrySet()) {
             String fnName = me.getKey();
@@ -1476,14 +1450,14 @@ public class TestDefinitionProcessor extends AbstractProcessor {
                 IdParams param = e.getValue();
                 String id = param.getId();
                 String ps = param.getParameters().stream().reduce("", (acc, n) -> {
-                    String total = acc += n + ", ";
-                    return total;
+                    acc += n + ", ";
+                    return acc;
                 });
                 if (ps.length() > 0)
                     ps = String.format("[ %s ]", ps.substring(0, ps.length() - 2));
                 else
                     ps = "[ ]";
-                //System.out.println(String.format(fmt, key, project, id, ps));
+                logger.debug(String.format(fmt, key, project, id, ps));
             }
         }
         return sorted;
@@ -1491,18 +1465,16 @@ public class TestDefinitionProcessor extends AbstractProcessor {
 
     @Override
     public synchronized void init(ProcessingEnvironment env) {
-        System.out.println("In init() method");
         super.init(env);
         this.elements = env.getElementUtils();
         this.msgr = env.getMessager();
 
         this.methNameToTestNGDescription = new HashMap<>();
-        this.methToRequirement = new HashMap<>();
-        this.methToProjectReq = new HashMap<>();
         this.testCaseToMeta = new HashMap<>();
         this.config = new XMLConfig(null);
-        this.cfg = this.config.config;
-        this.tcPath = this.config.getTestcasesXMLPath();
+        ConfigType cfg = this.config.config;
+        if (cfg != null)
+            this.tcPath = this.config.getTestcasesXMLPath();
     }
 
     @Override

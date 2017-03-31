@@ -33,17 +33,6 @@ public class Meta<T> {
 
     }
 
-    public static <O> Meta<O> copy(Meta<O> orig) {
-        Meta<O> meta = new Meta<>();
-        meta.qualifiedName = orig.qualifiedName;
-        meta.methName = orig.methName;
-        meta.className = orig.className;
-        meta.packName = orig.packName;
-        meta.project = orig.project;
-        meta.polarionID = orig.polarionID;
-        return meta;
-    }
-
     public static <A> Meta<A> create(String qual, String meth, String cls, String pack, String proj, String id,
                                      List<Parameter> params, A ann) {
         Meta<A> meta = new Meta<>();
