@@ -63,6 +63,8 @@ public class TestDefinitionProcessor extends AbstractProcessor {
     private int round = 0;
 
     public static final String warnText = "/tmp/polarize-warnings.txt";
+    public static final String tempTestCase = "/tmp/testcases-%s.xml";
+
     /**
      * Recursive function that will get the fully qualified name of a method.
      *
@@ -298,6 +300,10 @@ public class TestDefinitionProcessor extends AbstractProcessor {
     public boolean process(Set<? extends TypeElement> set, RoundEnvironment roundEnvironment) {
         if (this.round > 0) {
             logger.info("Done with annotation processing");
+            String msg = "Don't forget to set <enabled>false</enabled> under the <importer type=\"testcase\"> " +
+                    "section of your xml-config.xml file when you are done creating/updating testcases in Polarion.";
+            if (isUpdateSet(this.config, "testcase"))
+                logger.info(msg);
             return true;
         }
 
@@ -354,6 +360,9 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         this.tcMap = new HashMap<>();
         this.mappingFile = new HashMap<>();
 
+        Tuple<Set<String>, List<UpdateAnnotation>> audit =
+                this.auditMethods(this.methNameToTestNGDescription, this.methToProjectDef);
+
         this.round += 1;
         return true;
     }
@@ -381,7 +390,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
     private static void writeBadFunctionText(List<String> badFunctions) {
         if (badFunctions.size() > 0)
             logger.error("You must check your annotations or enable the TestCase importer in your config " +
-                    "before using your project with the XUnit Importer.  Please see the file " +
+                    "before using your project to create Polarion TestRuns.  Please see the file " +
                     String.format("%s for all the functions to check", warnText));
         try {
             // FIXME: rotate the TestDefinitionProcess.errorsText
@@ -545,7 +554,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
 
         String selector = String.format("%s='%s'", selectorName, selectorValue);
         for(String project: testcaseMap.keySet()) {
-            String path = String.format("/tmp/testcases-%s.xml", project);
+            String path = String.format(tempTestCase, project);
             File testXml = new File(path);
             if (!TestDefinitionProcessor.initTestcases(selectorName, selectorValue, project, testXml,
                     testcaseMap, tests).isPresent())
@@ -581,7 +590,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
             String selectorName = this.config.testcase.getSelector().getName();
             String selectorValue = this.config.testcase.getSelector().getVal();
             String selector = String.format("%s='%s'", selectorName, selectorValue);
-            String path = String.format("/tmp/testcases-%s.xml", project);
+            String path = String.format(tempTestCase, project);
             File testXml = new File(path);
             if (!this.initTestcases(selectorName, selectorValue, project, testXml).isPresent())
                 maybeNodes.add(Optional.empty());
@@ -795,6 +804,55 @@ public class TestDefinitionProcessor extends AbstractProcessor {
             nameToDesc.put(key, val);
         }
         return nameToDesc;
+    }
+
+    class UpdateAnnotation {
+        public String qualName;
+        public String project;
+        public Boolean update;
+
+        public UpdateAnnotation(String q, String p, Boolean u) {
+            this.qualName = q;
+            this.project = p;
+            this.update = u;
+        }
+
+        @Override
+        public String toString() {
+            return String.format("Method name: %s, Project: %s, Update: %b", qualName, project, update);
+        }
+    }
+
+    /**
+     * This method does several things.
+     * - Check if there is a method annotated with @Test, but not @TestDefinition
+     * - Checks if a method's TestDefinition.update = true
+     * @return
+     */
+    private Tuple<Set<String>, List<UpdateAnnotation>>
+    auditMethods(Map<String, String> atTests, Map<String, Map<String, Meta<TestDefinition>>> atTD) {
+        Set<String> atTestMethods = atTests.keySet();
+        Set<String> atTDMethods = atTD.keySet();
+        // The set of methods which are annotated with @Test but not with @TestDefinition
+        Set<String> difference = atTestMethods.stream()
+                .filter(e -> !atTDMethods.contains(e))
+                .collect(Collectors.toSet());
+
+        List<UpdateAnnotation> updateAnnotation = atTD.entrySet().stream()
+                .flatMap(es -> {
+                    String methname = es.getKey();
+                    return es.getValue().entrySet().stream()
+                            .map(es2 -> {
+                                String project = es2.getKey();
+                                Meta<TestDefinition> meta = es2.getValue();
+                                return new UpdateAnnotation(methname, project, meta.annotation.update());
+                            })
+                            .collect(Collectors.toList())
+                            .stream();
+                })
+                .filter(na -> na.update)
+                .collect(Collectors.toList());
+        return new Tuple<>(difference, updateAnnotation);
     }
 
     /**
@@ -1202,8 +1260,8 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         if (idtype == null)
             throw new MappingError("Error in IDType.fromNumber()");
 
-        String msg = "For %s, in project %s, the testCaseID is an empty string even though the " +
-                     "corresponding %s is present and has ID = %s";
+        String msg = "In %s the @TestDefinition for project %s: the testCaseID is an empty string even though the " +
+                     "corresponding %s is present and has ID = %s.";
         String qual = meta.qualifiedName;
         String project = meta.project;
         String pqual = meta.project + " -> " + qual;
@@ -1457,10 +1515,28 @@ public class TestDefinitionProcessor extends AbstractProcessor {
                     ps = String.format("[ %s ]", ps.substring(0, ps.length() - 2));
                 else
                     ps = "[ ]";
-                logger.debug(String.format(fmt, key, project, id, ps));
+                //logger.debug(String.format(fmt, key, project, id, ps));
             }
         }
         return sorted;
+    }
+
+    /**
+     * Checks if the \<enabled\> section is set to true for an importer
+     * @return
+     */
+    private static Boolean isUpdateSet(XMLConfig XCfg, String importerType) {
+        switch(importerType) {
+            case "testcase":
+                ImporterType TC = XCfg.testcase;
+                return TC.isEnabled();
+            case "xunit":
+                ImporterType XU = XCfg.xunit;
+                return XU.isEnabled();
+            default:
+                logger.error("Unknown importer type, returning false");
+                return false;
+        }
     }
 
     @Override
