@@ -25,7 +25,6 @@ import javax.lang.model.util.Elements;
 import javax.tools.Diagnostic;
 import java.io.*;
 import java.lang.annotation.Annotation;
-import java.nio.charset.Charset;
 import java.nio.file.*;
 import java.util.*;
 import java.util.concurrent.ExecutionException;
@@ -363,7 +362,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         this.mappingFile = new HashMap<>();
 
         Tuple<Set<String>, List<UpdateAnnotation>> audit =
-                this.auditMethods(this.methNameToTestNGDescription, this.methToProjectDef);
+                auditMethods(this.methNameToTestNGDescription, this.methToProjectDef);
 
         if (this.round == 0 && auditFile.exists())
             auditFile.delete();
@@ -816,7 +815,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         return nameToDesc;
     }
 
-    class UpdateAnnotation {
+    static class UpdateAnnotation {
         public String qualName;
         public String project;
         public Boolean update;
@@ -839,7 +838,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
      * - Checks if a method's TestDefinition.update = true
      * @return
      */
-    private Tuple<Set<String>, List<UpdateAnnotation>>
+    public static Tuple<Set<String>, List<UpdateAnnotation>>
     auditMethods(Map<String, String> atTests, Map<String, Map<String, Meta<TestDefinition>>> atTD) {
         Set<String> atTestMethods = atTests.keySet();
         Set<String> atTDMethods = atTD.keySet();
@@ -1535,7 +1534,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
      * Checks if the \<enabled\> section is set to true for an importer
      * @return
      */
-    private static Boolean isUpdateSet(XMLConfig XCfg, String importerType) {
+    public static Boolean isUpdateSet(XMLConfig XCfg, String importerType) {
         switch(importerType) {
             case "testcase":
                 ImporterType TC = XCfg.testcase;

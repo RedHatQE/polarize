@@ -4,12 +4,14 @@ import java.io.*;
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.nio.file.FileAlreadyExistsException;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
 import com.github.redhatqe.polarize.metadata.Meta;
 import com.github.redhatqe.polarize.metadata.TestDefAdapter;
 import com.github.redhatqe.polarize.metadata.TestDefinition;
+import com.github.redhatqe.polarize.utils.Tuple;
 import com.google.gson.GsonBuilder;
 import com.google.gson.reflect.TypeToken;
 import joptsimple.OptionParser;
@@ -19,6 +21,7 @@ import com.google.gson.Gson;
 
 import java.lang.reflect.Type;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -124,6 +127,16 @@ public class JarHelper implements IJarHelper {
                 makeFile(jsonDefs, output);
                 makeFile(testng, "/tmp/testng-reflected.json");
 
+                Tuple<Set<String>, List<TestDefinitionProcessor.UpdateAnnotation>> audit =
+                        TestDefinitionProcessor.auditMethods(refl.methodToDesc, refl.methToProjectDef);
+                File path = TestDefinitionProcessor.auditFile;
+                TestDefinitionProcessor.writeAuditFile(path, audit);
+
+                String msg = "Don't forget to set <enabled>false</enabled> under the <importer type=\"testcase\"> " +
+                        "section of your xml-config.xml file when you are done creating/updating testcases " +
+                        "in Polarion.";
+                if (TestDefinitionProcessor.isUpdateSet(refl.config, "testcase"))
+                    System.out.println(msg);
             }
         } catch (IOException e) {
             e.printStackTrace();

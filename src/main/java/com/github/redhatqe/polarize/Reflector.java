@@ -29,8 +29,6 @@ public class Reflector {
     public List<MetaData> methods;
     public List<Meta<TestDefinition>> testDefs;
     public List<Meta<TestDefAdapter>> testDefAdapters;
-    public Map<String,
-               Map<String, Meta<TestDefinition>>> methodToTestDefs;
     private Set<String> testTypes;
     private static Logger logger = LoggerFactory.getLogger(Reflector.class);
     public Map<Testcase, Meta<TestDefinition>> testCaseToMeta = new HashMap<>();
@@ -48,7 +46,6 @@ public class Reflector {
         config = new XMLConfig(null);
         testsToClasses = new HashMap<>();
         testTypes = new HashSet<>(Arrays.asList("AcceptanceTests", "Tier1Tests", "Tier2Tests", "Tier3Tests"));
-        methodToTestDefs = new HashMap<>();
         testDefs = new ArrayList<>();
         mappingFile = FileHelper.loadMapping(new File(config.config.getMapping().getPath()));
         tcPath = config.config.getTestcasesXml().getPath();
