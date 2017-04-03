@@ -926,9 +926,13 @@ public class Configurator implements IJAXBHelper {
 
     public void setTestcasePrefix(String testcasePrefix) {
         this.testcasePrefix = this.sanitize(testcasePrefix);
-        Optional<ImporterType> xunitM = this.getImporterType("xunit");
-        if (xunitM.isPresent())
-            xunitM.get().getTitle().setPrefix(this.testcasePrefix);
+        Optional<ImporterType> tcM = this.getImporterType("testcase");
+        tcM.ifPresent(tc -> {
+            TitleType tt = tc.getTitle();
+            if (tt == null)
+                tt = new TitleType();
+            tt.setPrefix(this.testcasePrefix);
+        });
     }
 
     public String getTestcaseSuffix() {
@@ -939,9 +943,13 @@ public class Configurator implements IJAXBHelper {
 
     public void setTestcaseSuffix(String testcaseSuffix) {
         this.testcaseSuffix = this.sanitize(testcaseSuffix);
-        Optional<ImporterType> xunitM = this.getImporterType("xunit");
-        if (xunitM.isPresent())
-            xunitM.get().getTitle().setSuffix(this.testcaseSuffix);
+        Optional<ImporterType> tcM = this.getImporterType("testcase");
+        tcM.ifPresent(tc -> {
+            TitleType tt = tc.getTitle();
+            if (tt == null)
+                tt = new TitleType();
+            tt.setSuffix(this.testcaseSuffix);
+        });
     }
 
     private String searchCustomFields(String field) {
