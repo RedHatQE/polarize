@@ -25,6 +25,7 @@ import javax.lang.model.util.Elements;
 import javax.tools.Diagnostic;
 import java.io.*;
 import java.lang.annotation.Annotation;
+import java.nio.charset.Charset;
 import java.nio.file.*;
 import java.util.*;
 import java.util.concurrent.ExecutionException;
@@ -64,6 +65,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
 
     public static final String warnText = "/tmp/polarize-warnings.txt";
     public static final String tempTestCase = "/tmp/testcases-%s.xml";
+    public static final File auditFile = new File("/tmp/polarize-auditing.txt");
 
     /**
      * Recursive function that will get the fully qualified name of a method.
@@ -362,6 +364,14 @@ public class TestDefinitionProcessor extends AbstractProcessor {
 
         Tuple<Set<String>, List<UpdateAnnotation>> audit =
                 this.auditMethods(this.methNameToTestNGDescription, this.methToProjectDef);
+
+        if (this.round == 0 && auditFile.exists())
+            auditFile.delete();
+        try {
+            writeAuditFile(auditFile, audit);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
 
         this.round += 1;
         return true;
@@ -1536,6 +1546,24 @@ public class TestDefinitionProcessor extends AbstractProcessor {
             default:
                 logger.error("Unknown importer type, returning false");
                 return false;
+        }
+    }
+
+    public static void writeAuditFile(File path, Tuple<Set<String>, List<UpdateAnnotation>> audit) throws IOException {
+
+        Set<String> difference = audit.first;
+        List<UpdateAnnotation> updates = audit.second;
+
+        String diffMsg = difference.stream().reduce("", (acc, n) -> acc + "\n- " + n);
+        diffMsg = String.format("Tests that are annotated with @Test but not @TestDefinition:\n%s", diffMsg);
+        String updateMsg = updates.stream()
+                .map(UpdateAnnotation::toString)
+                .reduce("", (acc, n) -> acc + "\n- " + n);
+        updateMsg = String.format("Methods that have update=true in @TestDefinition:\n%s", updateMsg);
+        Path p = path.toPath();
+        try (BufferedWriter writer = Files.newBufferedWriter(p)) {
+            writer.write(diffMsg + "\n\n");
+            writer.write(updateMsg);
         }
     }
 
