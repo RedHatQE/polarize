@@ -11,7 +11,8 @@ import com.github.redhatqe.polarize.exceptions.XSDValidationError;
 
 import com.github.redhatqe.polarize.importer.ImporterRequest;
 import com.github.redhatqe.polarize.importer.xunit.*;
-import com.github.redhatqe.polarize.utils.Tuple;
+
+import com.github.redhatqe.polarize.utils.Tuple3;
 import joptsimple.OptionParser;
 import joptsimple.OptionSet;
 import joptsimple.OptionSpec;
@@ -74,9 +75,10 @@ public class Configurator implements IJAXBHelper {
 
     public List<ServerType> servers;
 
-    private Map<String, Tuple<Getter<String>, Setter<String>>> sOptToAccessors = new HashMap<>();
-    private Map<String, Tuple<Getter<Boolean>, Setter<Boolean>>> bOptToAccessors = new HashMap<>();
-    private Map<String, Tuple<Getter<Integer>,Setter<Integer>>> iOptToAccessors = new HashMap<>();
+    // These all take a Tuple3 which are a getter function, setter function, and a description
+    private Map<String, Tuple3<Getter<String>, Setter<String>, String>> sOptToAccessors = new HashMap<>();
+    private Map<String, Tuple3<Getter<Boolean>, Setter<Boolean>, String>> bOptToAccessors = new HashMap<>();
+    private Map<String, Tuple3<Getter<Integer>,Setter<Integer>, String>> iOptToAccessors = new HashMap<>();
     private Map<String, OptionSpec<String>> sSpecs = new HashMap<>();
     private Map<String, OptionSpec<Boolean>> bSpecs = new HashMap<>();
     private Map<String, OptionSpec<Integer>> iSpecs = new HashMap<>();
@@ -104,69 +106,172 @@ public class Configurator implements IJAXBHelper {
     }
 
     private void configureParser() {
-        sOptToAccessors.put(Opts.TESTRUN_TITLE, new Tuple<>(this::getTestrunTitle, this::setTestrunTitle));
-        sOptToAccessors.put(Opts.TESTRUN_ID, new Tuple<>(this::getTestrunID, this::setTestrunID));
-        sOptToAccessors.put(Opts.PROJECT, new Tuple<>(this::getProject, this::setProject));
-        sOptToAccessors.put(Opts.TESTCASE_PREFIX, new Tuple<>(this::getTestcasePrefix, this::setTestcasePrefix));
-        sOptToAccessors.put(Opts.TESTCASE_SUFFIX, new Tuple<>(this::getTestcaseSuffix, this::setTestcaseSuffix));
-        sOptToAccessors.put(Opts.PLANNEDIN, new Tuple<>(this::getPlannedin, this::setPlannedin));
-        sOptToAccessors.put(Opts.JENKINSJOBS, new Tuple<>(this::getJenkinsjobs, this::setJenkinsjobs));
-        sOptToAccessors.put(Opts.NOTES, new Tuple<>(this::getNotes, this::setNotes));
-        sOptToAccessors.put(Opts.ARCH, new Tuple<>(this::getArch, this::setArch));
-        sOptToAccessors.put(Opts.VARIANT, new Tuple<>(this::getVariant, this::setVariant));
-        sOptToAccessors.put(Opts.TEMPLATE_ID, new Tuple<>(this::getTemplateId, this::setTemplateId));
-        sOptToAccessors.put(Opts.TC_SELECTOR_NAME, new Tuple<>(this::getTcSelectorName, this::setTcSelectorName));
-        sOptToAccessors.put(Opts.TC_SELECTOR_VAL, new Tuple<>(this::getTcSelectorVal, this::setTcSelectorVal));
-        sOptToAccessors.put(Opts.XUNIT_SELECTOR_NAME, new Tuple<>(this::getXunitSelectorName,
-                                                                  this::setXunitSelectorName));
-        sOptToAccessors.put(Opts.XUNIT_SELECTOR_VAL, new Tuple<>(this::getXunitSelectorVal, this::setXunitSelectorVal));
-        sOptToAccessors.put(Opts.NEW_XUNIT, new Tuple<>(this::getNewXunit, this::setNewXunit));
-        sOptToAccessors.put(Opts.CURRENT_XUNIT, new Tuple<>(this::getCurrentXunit, this::setCurrentXunit));
-        sOptToAccessors.put(Opts.PROJECT_NAME, new Tuple<>(this::getProjectName, this::setProjectName));
-        sOptToAccessors.put(Opts.GROUP_ID, new Tuple<>(this::getGroupId, this::setGroupId));
-        sOptToAccessors.put(Opts.BASE_DIR, new Tuple<>(this::getBaseDir, this::setBaseDir));
-        sOptToAccessors.put(Opts.MAPPING, new Tuple<>(this::getMappingFile, this::setMappingFile));
-        sOptToAccessors.put(Opts.TC_XML_PATH, new Tuple<>(this::getTcPath, this::setTcPath));
-        sOptToAccessors.put(Opts.REQ_XML_PATH, new Tuple<>(this::getReqPath, this::setReqPath));
+        sOptToAccessors.put(Opts.TESTRUN_TITLE,
+                new Tuple3<>(this::getTestrunTitle, this::setTestrunTitle,
+                        "A (possibly non-unique) title to give for a TestRun.  If empty defaults to a timestamp." +
+                                "Relevant for xunit file"));
+        sOptToAccessors.put(Opts.TESTRUN_ID,
+                new Tuple3<>(this::getTestrunID, this::setTestrunID,
+                        "If given, must be a unique ID for the TestRun, otherwise Polarion generates one." +
+                                "Relevant for xunit file"));
+        sOptToAccessors.put(Opts.PROJECT,
+                new Tuple3<>(this::getProject, this::setProject,
+                        "Sets the Polarion Project ID.  Relevant for xml-config or xunit file"));
+        sOptToAccessors.put(Opts.TESTCASE_PREFIX,
+                new Tuple3<>(this::getTestcasePrefix, this::setTestcasePrefix,
+                        "An optional string which will be prepended to the Testcase title.  Relevant to xml-config"));
+        sOptToAccessors.put(Opts.TESTCASE_SUFFIX,
+                new Tuple3<>(this::getTestcaseSuffix, this::setTestcaseSuffix,
+                        "An optional string will be appended to the Testcase title.  Relevant to xml-config"));
+        sOptToAccessors.put(Opts.PLANNEDIN,
+                new Tuple3<>(this::getPlannedin, this::setPlannedin,
+                        "PROPERTY: A string representing what plan time this test is for. Relevant to xunit.  " +
+                                "It is used like this --property plannedin=7_4_Pre-testing "));
+        sOptToAccessors.put(Opts.JENKINSJOBS,
+                new Tuple3<>(this::getJenkinsjobs, this::setJenkinsjobs,
+                        "PROPERTY: An optional custom field for the jenkins job URL.  Relevant to xunit. It is " +
+                                "used like this: --property jenkinsjobs=$JENKINS_JOB."));
+        sOptToAccessors.put(Opts.NOTES,
+                new Tuple3<>(this::getNotes, this::setNotes,
+                        "PROPERTY: An optional free form section for notes.  Relevant to xunit.  It is used " +
+                                "like this: --property notes=\"Some description\""));
+        sOptToAccessors.put(Opts.ARCH,
+                new Tuple3<>(this::getArch, this::setArch,
+                        "PROPERTY: Optional arch test was run on. Relevant to xunit.  It is used like this: " +
+                                "--property arch=x8664"));
+        sOptToAccessors.put(Opts.VARIANT,
+                new Tuple3<>(this::getVariant, this::setVariant,
+                        "PROPERTY: Optional variant type like Server or Workstation.  Relevant to xunit.  It is " +
+                                "used like this: --property variant=Server"));
+        sOptToAccessors.put(Opts.TEMPLATE_ID,
+                new Tuple3<>(this::getTemplateId, this::setTemplateId,
+                        "The string of a template id.  For example, --template-id=\"testing template\""));
+        sOptToAccessors.put(Opts.TC_SELECTOR_NAME,
+                new Tuple3<>(this::getTcSelectorName, this::setTcSelectorName,
+                        "A JMS selector is used to filter results.  A selector looks like name='val'.  This " +
+                                "switch provides the name part of the selector.  Applies to the xml-config file " +
+                                "when running a TestCase Import request"));
+        sOptToAccessors.put(Opts.TC_SELECTOR_VAL,
+                new Tuple3<>(this::getTcSelectorVal, this::setTcSelectorVal,
+                        "As above, but it provides the val in name='val'.  Applies to the xml-config file " +
+                                "when running a TestCase Import request"));
+        sOptToAccessors.put(Opts.XUNIT_SELECTOR_NAME,
+                new Tuple3<>(this::getXunitSelectorName, this::setXunitSelectorName,
+                        "As TC_SELECTOR_NAME, but applicable to the xunit file when running an XUnit Import " +
+                                "request"));
+        sOptToAccessors.put(Opts.XUNIT_SELECTOR_VAL,
+                new Tuple3<>(this::getXunitSelectorVal, this::setXunitSelectorVal,
+                        "As TC_SELECTOR_VAL but applicable to the xunit file when running an XUnit Import " +
+                                "request"));
+        sOptToAccessors.put(Opts.NEW_XUNIT,
+                new Tuple3<>(this::getNewXunit, this::setNewXunit,
+                        "A path for where the modified xunit file will be written.  Applicable to xunit file"));
+        sOptToAccessors.put(Opts.CURRENT_XUNIT,
+                new Tuple3<>(this::getCurrentXunit, this::setCurrentXunit,
+                        "The path for where to read in the xunit file that will be used as a base"));
+        sOptToAccessors.put(Opts.PROJECT_NAME,
+                new Tuple3<>(this::getProjectName, this::setProjectName,
+                        "A name for your project.  Wherever {PROJECT_NAME} is in the xml-config file, the vaule " +
+                                "here will replace it."));
+        sOptToAccessors.put(Opts.GROUP_ID,
+                new Tuple3<>(this::getGroupId, this::setGroupId,
+                        ""));
+        sOptToAccessors.put(Opts.BASE_DIR,
+                new Tuple3<>(this::getBaseDir, this::setBaseDir,
+                        "The absolute path, to where your project directory is.  The value here will replace " +
+                                "wherever {BASEDIR} is in the xml-config file.  Relevant to xml-config"));
+        sOptToAccessors.put(Opts.MAPPING,
+                new Tuple3<>(this::getMappingFile, this::setMappingFile,
+                        "Absolute path to where the JSON file that mps methods to IDs will be looked up.  " +
+                                "Relevant to both"));
+        sOptToAccessors.put(Opts.TC_XML_PATH,
+                new Tuple3<>(this::getTcPath, this::setTcPath,
+                        "Path relative to basedir where the XML description files will be stored.  Relevant " +
+                                "to xml-config"));
+        sOptToAccessors.put(Opts.REQ_XML_PATH,
+                new Tuple3<>(this::getReqPath, this::setReqPath,
+                        ""));
 
-        bOptToAccessors.put(Opts.TC_IMPORTER_ENABLED, new Tuple<>(this::getTestcaseImporterEnabled,
-                this::setTestcaseImporterEnabled));
-        bOptToAccessors.put(Opts.XUNIT_IMPORTER_ENABLED, new Tuple<>(this::getXunitImporterEnabled,
-                this::setXunitImporterEnabled));
-        bOptToAccessors.put(Opts.TR_DRY_RUN, new Tuple<>(this::getTestrunDryRun, this::setTestrunDryRun));
-        bOptToAccessors.put(Opts.TR_SET_FINISHED, new Tuple<>(this::getTestrunSetFinished,
-                this::setTestrunSetFinished));
-        bOptToAccessors.put(Opts.TR_INCLUDE_SKIPPED, new Tuple<>(this::getTestrunIncludeSkipped,
-                this::setTestrunIncludeSkipped));
+        bOptToAccessors.put(Opts.TC_IMPORTER_ENABLED,
+                new Tuple3<>(this::getTestcaseImporterEnabled, this::setTestcaseImporterEnabled,
+                        "Whether the TestCase Importer will be enabled or not. If false, even if polarize detects" +
+                                "that a new Polarion TestCase should be created, it will not make the import."));
+        bOptToAccessors.put(Opts.XUNIT_IMPORTER_ENABLED,
+                new Tuple3<>(this::getXunitImporterEnabled, this::setXunitImporterEnabled,
+                        "Whether the XUnit Importer is enabled or not.  XUnit Importer can still be run manually " +
+                                "but this setting will be checked for automation"));
+        bOptToAccessors.put(Opts.TR_DRY_RUN,
+                new Tuple3<>(this::getTestrunDryRun, this::setTestrunDryRun,
+                        "When making an XUnit Import request, if set to true, it will not actually create a new " +
+                                "TestRun, but will only report what it would have created.  Relevant to xunit"));
+        bOptToAccessors.put(Opts.TR_SET_FINISHED,
+                new Tuple3<>(this::getTestrunSetFinished, this::setTestrunSetFinished,
+                        "When making an XUnit Import request, if set to true, mark the newly created TestRun " +
+                                "as finished.  Relevant to xunit"));
+        bOptToAccessors.put(Opts.TR_INCLUDE_SKIPPED,
+                new Tuple3<>(this::getTestrunIncludeSkipped, this::setTestrunIncludeSkipped,
+                        "When making an XUnit Import request, if set to true, also include any testcases that " +
+                                "were marked as skipped in the xunit file (these will show as Blocking in Polarion." +
+                                "Relevant to xunit"));
 
-        iOptToAccessors.put(Opts.TC_IMPORTER_TIMEOUT, new Tuple<>(this::getTestcaseTimeout,
-                this::setTestcaseTimeout));
-        iOptToAccessors.put(Opts.XUNIT_IMPORTER_TIMEOUT, new Tuple<>(this::getXunitTimeout, this::setXunitTimeout));
+        iOptToAccessors.put(Opts.TC_IMPORTER_TIMEOUT,
+                new Tuple3<>(this::getTestcaseTimeout, this::setTestcaseTimeout,
+                        "The time in miliseconds to wait for a message reply when performing a TestCase Import " +
+                                "request.  Relevant to xml-config"));
+        iOptToAccessors.put(Opts.XUNIT_IMPORTER_TIMEOUT,
+                new Tuple3<>(this::getXunitTimeout, this::setXunitTimeout,
+                        "The time in miliseconds to wait for a message reply when performing an XUnit Import " +
+                                "request.  Relevant to xunit"));
 
-        bOptToAccessors.keySet().forEach(b -> {
-            bSpecs.put(b, this.parser.accepts(b).withRequiredArg().ofType(Boolean.class));
+        sOptToAccessors.entrySet().forEach(es -> {
+            String s = es.getKey();
+            sSpecs.put(s, this.parser.accepts(s, es.getValue().third).withRequiredArg().ofType(String.class));
         });
-        sOptToAccessors.keySet().forEach(s -> {
-            sSpecs.put(s, this.parser.accepts(s).withRequiredArg().ofType(String.class));
+        bOptToAccessors.entrySet().forEach(es -> {
+            String s = es.getKey();
+            String desc = es.getValue().third;
+            bSpecs.put(s, this.parser.accepts(s, desc).withRequiredArg().ofType(Boolean.class));
         });
-        iOptToAccessors.keySet().forEach(i -> {
-            iSpecs.put(i, this.parser.accepts(i).withRequiredArg().ofType(Integer.class));
+        iOptToAccessors.entrySet().forEach(es -> {
+            String s = es.getKey();
+            String desc = es.getValue().third;
+            iSpecs.put(s, this.parser.accepts(s, desc).withRequiredArg().ofType(Integer.class));
         });
 
         // Non standard parsing required for these
-        sSpecs.put(Opts.SERVER, this.parser.accepts(Opts.SERVER).withRequiredArg().ofType(String.class));
-        sSpecs.put(Opts.TR_PROPERTY, this.parser.accepts(Opts.TR_PROPERTY).withRequiredArg().ofType(String.class));
-        bSpecs.put(Opts.EDIT_CONFIG, this.parser.accepts(Opts.EDIT_CONFIG).withOptionalArg().ofType(Boolean.class)
+        String msg = "Path to the server for doing TestCase and Xunit Import requests";
+        sSpecs.put(Opts.SERVER, this.parser.accepts(Opts.SERVER, msg).withRequiredArg().ofType(String.class));
+        msg = "Used to set custom polarion fields.  Any CLI switch marked as PROPERTY uses the --property switch." +
+                "It takes the form: --property name=val.";
+        sSpecs.put(Opts.TR_PROPERTY, this.parser.accepts(Opts.TR_PROPERTY, msg).withRequiredArg().ofType(String.class));
+        msg = "When set to true, only sets values to the xml-config file (given as the first arugment to the CLI)." +
+                "If false, then only read in the xunit file as given by --current-xunit, and create a new modified " +
+                "version given the other CLI switches that will be written to --new-xunit";
+        bSpecs.put(Opts.EDIT_CONFIG, this.parser.accepts(Opts.EDIT_CONFIG, msg).withOptionalArg().ofType(Boolean.class)
         .defaultsTo(Boolean.FALSE));
+        msg = "Prints out help for all command line options";
+        sSpecs.put(Opts.HELP, this.parser.accepts(Opts.HELP, msg).withOptionalArg().ofType(String.class)
+        .describedAs("Show help"));
     }
 
     /**
      *
      * @param args
      */
-    private void parse(String[] args){
+    private Boolean parse(String[] args){
         OptionSet opts = parser.parse(args);
         this.opts = opts;
+
+        OptionSpec<String> helpSpec = this.sSpecs.get("help");
+        if (this.opts.has(helpSpec)) {
+            try {
+                this.parser.printHelpOn( System.out );
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+            return false;
+        }
+
         this.sOptToAccessors.entrySet().forEach(es -> {
             String opt = es.getKey();
             OptionSpec<String> spec = this.sSpecs.get(opt);
@@ -210,6 +315,7 @@ public class Configurator implements IJAXBHelper {
         customProps = properties.stream()
                 .map(this::parseProperty)
                 .collect(Collectors.toList());
+        return true;
     }
 
 
@@ -754,8 +860,8 @@ public class Configurator implements IJAXBHelper {
             for(Property p2: props) {
                 matched = p.getName().equals(p2.getName());
                 if (matched) {
-                    String val = p2.getValue();
-                    p.setValue(val);
+                    String val = p.getValue();
+                    p2.setValue(val);
                     break;
                 }
             }
@@ -782,7 +888,11 @@ public class Configurator implements IJAXBHelper {
      * @param args
      */
     public static void main(String[] args) throws IOException {
-        String arglist = Arrays.stream(args).reduce("", (acc, n) -> acc = acc + " " + n);
+        String arglist = Arrays.stream(args).reduce("", (acc, n) -> {
+            if (n.contains(" "))
+                n = String.format("\"%s\"", n);
+            return acc + " " + n;
+        });
         logger.info(String.format("Calling main with %s", arglist));
         String configFilePath = null;
         if (!args[0].startsWith("-")) {
@@ -791,7 +901,8 @@ public class Configurator implements IJAXBHelper {
         }
         //Configurator.parseJson(new File("/home/stoner/.polarize/config.json"), "/tmp/modified-xunit.xml");
         Configurator cfg = configFilePath == null ? new Configurator() : new Configurator(configFilePath);
-        cfg.parse(args);
+        if (!cfg.parse(args))
+            return;
         String path = cfg.configPath;
         String testng;
         OptionSpec<String> xunit = cfg.sSpecs.get(Opts.CURRENT_XUNIT);
@@ -815,7 +926,7 @@ public class Configurator implements IJAXBHelper {
 
     public static void parseJson(File json, String newXML) {
         Configurator cfg = new Configurator();
-        Opts opts = new Opts();
+
         StringBuffer sb = new StringBuffer();
         try {
             BufferedReader rdr = Files.newBufferedReader(json.toPath());
@@ -825,14 +936,18 @@ public class Configurator implements IJAXBHelper {
         }
         ObjectMapper mapper = new ObjectMapper();
         Optional<Opts> mOpt = Optional.empty();
+        Opts opts;
         try {
-            mOpt = Optional.of(mapper.readerFor(Opts.class).readValue(sb.toString()));
+            opts = mapper.readerFor(Opts.class).readValue(sb.toString());
+            mOpt = Optional.of(opts);
         } catch (IOException e) {
             e.printStackTrace();
         }
+        mOpt.ifPresent(o -> {
+            String[] newArgs = o.parse(sb.toString());
+            cfg.parse(newArgs);
+        });
 
-        //String[] newArgs = opts.parse(sb.toString());
-        //cfg.parse(newArgs);
 
         OptionSpec<String> xunit = cfg.sSpecs.get(Opts.CURRENT_XUNIT);
         String testng;

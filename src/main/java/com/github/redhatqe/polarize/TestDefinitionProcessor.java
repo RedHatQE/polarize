@@ -342,8 +342,8 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         this.methToProjectDef = this.createMethodToMetaPolarionMap(metas);
 
         /* Get all the @Test annotations in order to get the description */
-        Map<String, String> methToDescription = this.getTestAnnotations(roundEnvironment);
-        this.methNameToTestNGDescription.putAll(methToDescription);
+        Tuple<Map<String, String>, Map<String, Meta<Test>>> maps = this.getTestAnnotations(roundEnvironment);
+        this.methNameToTestNGDescription.putAll(maps.first);
 
         this.processAllTC();
 
@@ -361,8 +361,9 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         this.tcMap = new HashMap<>();
         this.mappingFile = new HashMap<>();
 
-        Tuple<Set<String>, List<UpdateAnnotation>> audit =
-                auditMethods(this.methNameToTestNGDescription, this.methToProjectDef);
+        Set<String> enabledTests = TestDefinitionProcessor.getEnabledTests(maps.second);
+        Tuple<SortedSet<String>, List<UpdateAnnotation>> audit =
+                auditMethods(enabledTests, this.methToProjectDef);
 
         if (this.round == 0 && auditFile.exists())
             auditFile.delete();
@@ -376,6 +377,17 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         return true;
     }
 
+    public static Set<String> getEnabledTests(Map<String, Meta<Test>> meths) {
+        return meths.entrySet().stream()
+                .map(es -> {
+                    String methName = es.getKey();
+                    Meta<Test> meta = es.getValue();
+                    return meta.annotation.enabled() ? methName : "";
+                })
+                .filter(s -> !s.equals(""))
+                .collect(Collectors.toSet());
+    }
+
     private void printWarnings(Map<String, WarningInfo> warns) {
         if (this.tcMap.isEmpty()) {
             String warnMsg = warns.entrySet().stream()
@@ -385,7 +397,8 @@ public class TestDefinitionProcessor extends AbstractProcessor {
                         return String.format("In %s- %s : %s", meth, wi.project, wi.wt.message());
                     })
                     .reduce("", (acc, n) -> String.format("%s%s\n", acc, n));
-            logger.warn(warnMsg);
+            if (!warnMsg.equals(""))
+                logger.warn(warnMsg);
         }
     }
 
@@ -800,19 +813,27 @@ public class TestDefinitionProcessor extends AbstractProcessor {
      * @param env RoundEnvironment passed by during compilation
      * @return map of fully qualified name of method, to description of the method
      */
-    private Map<String, String> getTestAnnotations(RoundEnvironment env) {
+    private Tuple<Map<String, String>, Map<String, Meta<Test>>>
+    getTestAnnotations(RoundEnvironment env) {
         List<? extends Element> testAnns = env.getElementsAnnotatedWith(Test.class)
                 .stream().collect(Collectors.toList());
+
+        testAnns = testAnns.stream()
+                .filter(ta -> ta.getKind() == ElementKind.METHOD)
+                .collect(Collectors.toList());
 
         List<Meta<Test>> tests = this.makeMeta(testAnns, Test.class);
 
         Map<String, String> nameToDesc = new HashMap<>();
+        Map<String, Meta<Test>> nameToTestMeta = new HashMap<>();
         for(Meta<Test> mt: tests) {
             String key = mt.qualifiedName;
             String val = mt.annotation.description();
             nameToDesc.put(key, val);
+            nameToTestMeta.put(key, mt);
         }
-        return nameToDesc;
+        Tuple<Map<String, String>, Map<String, Meta<Test>>> maps = new Tuple<>(nameToDesc, nameToTestMeta);
+        return maps;
     }
 
     static class UpdateAnnotation {
@@ -838,14 +859,14 @@ public class TestDefinitionProcessor extends AbstractProcessor {
      * - Checks if a method's TestDefinition.update = true
      * @return
      */
-    public static Tuple<Set<String>, List<UpdateAnnotation>>
-    auditMethods(Map<String, String> atTests, Map<String, Map<String, Meta<TestDefinition>>> atTD) {
-        Set<String> atTestMethods = atTests.keySet();
+    public static Tuple<SortedSet<String>, List<UpdateAnnotation>>
+    auditMethods(Set<String> atTestMethods, Map<String, Map<String, Meta<TestDefinition>>> atTD) {
         Set<String> atTDMethods = atTD.keySet();
         // The set of methods which are annotated with @Test but not with @TestDefinition
         Set<String> difference = atTestMethods.stream()
                 .filter(e -> !atTDMethods.contains(e))
                 .collect(Collectors.toSet());
+        SortedSet<String> ordered = new TreeSet<>(difference);
 
         List<UpdateAnnotation> updateAnnotation = atTD.entrySet().stream()
                 .flatMap(es -> {
@@ -861,7 +882,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
                 })
                 .filter(na -> na.update)
                 .collect(Collectors.toList());
-        return new Tuple<>(difference, updateAnnotation);
+        return new Tuple<>(ordered, updateAnnotation);
     }
 
     /**
@@ -1127,7 +1148,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
                                     String id,
                                     File mapPath) {
         String msg = "Adding TestCase ID to the mapping file.  Editing map: %s -> {%s: %s}";
-        logger.debug(String.format(msg, meta.qualifiedName, meta.project, id));
+        //logger.debug(String.format(msg, meta.qualifiedName, meta.project, id));
         Map<String, IdParams> projToId = mapFile.getOrDefault(meta.qualifiedName, null);
         if (projToId != null) {
             if (projToId.containsKey(meta.project)) {
@@ -1548,13 +1569,14 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         }
     }
 
-    public static void writeAuditFile(File path, Tuple<Set<String>, List<UpdateAnnotation>> audit) throws IOException {
+    public static void
+    writeAuditFile(File path, Tuple<SortedSet<String>, List<UpdateAnnotation>> audit) throws IOException {
 
         Set<String> difference = audit.first;
         List<UpdateAnnotation> updates = audit.second;
 
         String diffMsg = difference.stream().reduce("", (acc, n) -> acc + "\n- " + n);
-        diffMsg = String.format("Tests that are annotated with @Test but not @TestDefinition:\n%s", diffMsg);
+        diffMsg = String.format("Enabled tests that are annotated with @Test but not @TestDefinition:\n%s", diffMsg);
         String updateMsg = updates.stream()
                 .map(UpdateAnnotation::toString)
                 .reduce("", (acc, n) -> acc + "\n- " + n);

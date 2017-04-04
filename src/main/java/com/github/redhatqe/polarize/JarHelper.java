@@ -5,8 +5,7 @@ import java.net.URL;
 import java.net.URLClassLoader;
 import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
 
 import com.github.redhatqe.polarize.metadata.Meta;
 import com.github.redhatqe.polarize.metadata.TestDefAdapter;
@@ -20,8 +19,6 @@ import joptsimple.OptionSet;
 import com.google.gson.Gson;
 
 import java.lang.reflect.Type;
-import java.util.Map;
-import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -103,7 +100,6 @@ public class JarHelper implements IJarHelper {
                 refl.methToProjectDef = refl.makeMethToProjectMeta();
                 refl.processTestDefs();
 
-
                 refl.testcasesImporterRequest();
                 File mapPath = new File(refl.config.getMappingPath());
                 TestDefinitionProcessor.writeMapFile(mapPath, refl.mappingFile);
@@ -127,8 +123,9 @@ public class JarHelper implements IJarHelper {
                 makeFile(jsonDefs, output);
                 makeFile(testng, "/tmp/testng-reflected.json");
 
-                Tuple<Set<String>, List<TestDefinitionProcessor.UpdateAnnotation>> audit =
-                        TestDefinitionProcessor.auditMethods(refl.methodToDesc, refl.methToProjectDef);
+                Set<String> enabledTests = JarHelper.getEnabledTests(refl.methods);
+                Tuple<SortedSet<String>, List<TestDefinitionProcessor.UpdateAnnotation>> audit =
+                        TestDefinitionProcessor.auditMethods(enabledTests, refl.methToProjectDef);
                 File path = TestDefinitionProcessor.auditFile;
                 TestDefinitionProcessor.writeAuditFile(path, audit);
 
@@ -141,6 +138,13 @@ public class JarHelper implements IJarHelper {
         } catch (IOException e) {
             e.printStackTrace();
         }
+    }
+
+    public static Set<String> getEnabledTests(List<MetaData> anns) {
+        return anns.stream()
+                .filter(a -> a.enabled)
+                .map(a -> a.className + "." + a.methodName)
+                .collect(Collectors.toSet());
     }
 
     static private void makeFile(String json, String filename) {

@@ -18,6 +18,7 @@ public interface IJarHelper {
     /**
      * Given the path to a jar file, get all the .class files
      * @param jarPath
+     * @param pkg
      */
     static List<String> getClasses(String jarPath, String pkg) throws IOException {
        try(ZipFile zf = new ZipFile(jarPath)) {
@@ -31,19 +32,6 @@ public interface IJarHelper {
                    .filter(e -> e.contains(pkg))
                    .collect(Collectors.toList());
        }
-    }
-
-    default List<String> fromClassPath(String pkg) {
-        ClassLoader loader = this.getClass().getClassLoader();
-        try {
-            Enumeration<URL> resources = loader.getResources("");
-            while(resources.hasMoreElements()) {
-
-            }
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-        return null;
     }
 
     /**

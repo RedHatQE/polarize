@@ -4,12 +4,8 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.BooleanNode;
-import com.fasterxml.jackson.databind.node.IntNode;
-import com.github.redhatqe.polarize.Utility;
 
 import java.io.File;
-import java.io.IOException;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -55,6 +51,7 @@ public class Opts {
     public static final String TC_XML_PATH = "testcases-xml";
     public static final String REQ_XML_PATH = "requirements-xml";
     public static final String AUTHOR = "author";
+    public static final String HELP = "help";
 
     public static final String fmt = "--%s %s";
 
@@ -228,6 +225,16 @@ public class Opts {
 
         public void setFile(String file) {
             this.file = file;
+        }
+
+        /**
+         * Subclasses of Importer will define the equivalent XML CLI arg to change an attribute.
+         *
+         * For example {"prefix": "--testcase-prefix"} means that the prefix attribute maps to --testcase-prefix
+         * @return
+         */
+        public Map<String, String> createArgMap() {
+            return this.argMap;
         }
     }
 
@@ -630,6 +637,7 @@ public class Opts {
     public String[] parse(String body) {
         System.out.println(body);
         ObjectMapper mapper = new ObjectMapper();
+
         List<String> args = new ArrayList<>();
         List<String> testcaseArgs = this.tci.argList(this.tci.argMap);
         List<String> xunitArgs = this.xunit.argList(this.xunit.argMap);

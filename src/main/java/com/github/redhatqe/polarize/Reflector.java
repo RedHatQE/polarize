@@ -47,7 +47,7 @@ public class Reflector {
         testsToClasses = new HashMap<>();
         testTypes = new HashSet<>(Arrays.asList("AcceptanceTests", "Tier1Tests", "Tier2Tests", "Tier3Tests"));
         testDefs = new ArrayList<>();
-        mappingFile = FileHelper.loadMapping(new File(config.config.getMapping().getPath()));
+        mappingFile = FileHelper.loadMapping(new File(config.getMappingPath()));
         tcPath = config.config.getTestcasesXml().getPath();
         tcPath = config.getTestcasesXMLPath();
     }
