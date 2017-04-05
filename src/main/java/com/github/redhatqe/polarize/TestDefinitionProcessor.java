@@ -56,7 +56,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
     // Map of qualified name -> { projectID: testcaseID }
     private Map<String, Map<String, IdParams>> mappingFile = new LinkedHashMap<>();
     public static JAXBHelper jaxb = new JAXBHelper();
-    private Testcases testcases = new Testcases();
+    //private Testcases testcases = new Testcases();
     private Map<String, List<Testcase>> tcMap = new HashMap<>();
     private XMLConfig config;
     private static Map<String, WarningInfo> warnings = new HashMap<>();
@@ -299,14 +299,8 @@ public class TestDefinitionProcessor extends AbstractProcessor {
      */
     @Override
     public boolean process(Set<? extends TypeElement> set, RoundEnvironment roundEnvironment) {
-        if (this.round > 0) {
-            logger.info("Done with annotation processing");
-            String msg = "Don't forget to set <enabled>false</enabled> under the <importer type=\"testcase\"> " +
-                    "section of your xml-config.xml file when you are done creating/updating testcases in Polarion.";
-            if (isUpdateSet(this.config, "testcase"))
-                logger.info(msg);
+        if (this.checkNoMoreRounds(this.round))
             return true;
-        }
 
         if (this.config.config == null) {
             logger.info("=====================================================");
@@ -377,6 +371,57 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         return true;
     }
 
+    /**
+     * Determines if no more rounds, and what to do when there are no more rounds to process.
+     *
+     * This will print out the TestDefinitionProcess.warnText and auditFiles if they exist
+     *
+     * @param round
+     * @return
+     */
+    private Boolean checkNoMoreRounds(int round) {
+        File warn;
+        if (this.round > 0) {
+            warn = new File(warnText);
+            if (warn.exists()) {
+                logger.warn("====================================================");
+                logger.warn(String.format("Please check the following test methods (taken from %s):", warnText));
+                try {
+                    BufferedReader warnFile = Files.newBufferedReader(warn.toPath());
+                    warnFile.lines().forEach(l -> logger.warn(l));
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+
+            if (auditFile.exists()) {
+                logger.warn("====================================================");
+                logger.warn(String.format("Audit warning!! Taken from %s", auditFile.toString()));
+                try {
+                    String audit = new String(Files.readAllBytes(auditFile.toPath()));
+                    logger.warn(audit);
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+
+            logger.info("=======================================================");
+            logger.info("Done with annotation processing");
+            String msg = "Don't forget to set <enabled>false</enabled> under the <importer type=\"testcase\"> " +
+                    "section of your xml-config.xml file when you are done creating/updating testcases in Polarion.";
+            if (isUpdateSet(this.config, "testcase"))
+                logger.info(msg);
+            logger.info("=======================================================");
+            return true;
+        }
+        else {
+            warn = new File(warnText);
+            if (warn.exists())
+                warn.delete();
+        }
+        return false;
+    }
+
     public static Set<String> getEnabledTests(Map<String, Meta<Test>> meths) {
         return meths.entrySet().stream()
                 .map(es -> {
@@ -402,18 +447,13 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         }
     }
 
-    private static void addBadFunction(String qualName, String project, List<String> badFuncs) {
-        String err = "No ID in XML or annotation.  Check your Annotation %s in %s";
+    private static void addBadFunction(String qualName, String project, List<String> badFuncs, String err) {
         err = String.format(err, qualName, project);
         logger.error(err);
         badFuncs.add(err);
     }
 
     private static void writeBadFunctionText(List<String> badFunctions) {
-        if (badFunctions.size() > 0)
-            logger.error("You must check your annotations or enable the TestCase importer in your config " +
-                    "before using your project to create Polarion TestRuns.  Please see the file " +
-                    String.format("%s for all the functions to check", warnText));
         try {
             // FIXME: rotate the TestDefinitionProcess.errorsText
             Path bf = Paths.get(warnText);
@@ -437,18 +477,53 @@ public class TestDefinitionProcessor extends AbstractProcessor {
                         return maybe.first;
                     });
             Boolean badFn = false;
+            int check = 0;
+            String err = "No ID in XML or annotation.  Check your Annotation %s in %s";
+            String mapid = "";
             // Check if the mapFile has the corresponding project of this function name
             if (!mapFile.containsKey(fnName) || !mapFile.get(fnName).containsKey(project)) {
-                if (id.equals("")) badFn = true;
-            } else {
-                String newid = mapFile.get(fnName).get(project).getId();
-                if (newid.equals("")) badFn = true;
-                if (id.equals("")) id = newid;
+                if (id.equals("")) {
+                    TestDefinitionProcessor.addBadFunction(meta.qualifiedName, project, badFunctions, err);
+                }
+                else
+                    TestDefinitionProcessor.addToMapFile(mapFile, meta, id, mapPath);
+                return;
+            }
+            else {
+                mapid = mapFile.get(fnName).get(project).getId();
+                if (!mapid.equals(""))
+                    check |= 1 << 2;
+                if (id.equals(""))
+                    id = mapid;
+                else
+                    check |= 1 << 1;
+                if (mapid.equals(id))
+                    check |= 1;
             }
 
-            if (badFn)
-                TestDefinitionProcessor.addBadFunction(meta.qualifiedName, project, badFunctions);
-            TestDefinitionProcessor.addToMapFile(mapFile, meta, id, mapPath);
+            switch(check) {
+                case 0: case 1:
+                    err = "No TestCase ID exists anywhere (not in map file, annotation or xml)";
+                    TestDefinitionProcessor.addBadFunction(meta.qualifiedName, project, badFunctions, err);
+                    break;
+                case 2: case 3:
+                    TestDefinitionProcessor.addToMapFile(mapFile, meta, id, mapPath);
+                    break;
+                case 4: case 5:
+                    err = "TestCase ID is in the mapping file, but not the XML or annotation";
+                    TestDefinitionProcessor.addBadFunction(meta.qualifiedName, project, badFunctions, err);
+                    break;
+                case 6:
+                    String msg = "TestCase ID %s in map file and %s from XML don't match.  Replacing with XML value";
+                    logger.warn(String.format(msg, mapid, id));
+                    TestDefinitionProcessor.addToMapFile(mapFile, meta, id, mapPath);
+                case 7:
+                    // nothing to do in this case, as the ID exists in the map file, and also in XML and annotation
+                    break;
+                default:
+                    logger.error("Unknown value for check");
+                    break;
+            }
         }));
         TestDefinitionProcessor.writeBadFunctionText(badFunctions);
     }
@@ -497,9 +572,9 @@ public class TestDefinitionProcessor extends AbstractProcessor {
      * @param testXml File of where the XML representation will go
      * @return
      */
-    private Optional<String> initTestcases(String selectorName, String selectorValue, String pID, File testXml) {
-        return TestDefinitionProcessor.initTestcases(selectorName, selectorValue, pID, testXml, this.tcMap,
-                this.testcases);
+    private Optional<String>
+    initTestcases(String selectorName, String selectorValue, String pID, File testXml, Testcases tests) {
+        return TestDefinitionProcessor.initTestcases(selectorName, selectorValue, pID, testXml, this.tcMap, tests);
     }
 
     /**
@@ -606,7 +681,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
             logger.info("No testcases to import ...");
             return maybeNodes;
         }
-        logger.info("Updating testcases that had no testcaseId...");
+        logger.info("Updating testcases...");
 
         for(String project: this.tcMap.keySet()) {
             String selectorName = this.config.testcase.getSelector().getName();
@@ -614,11 +689,12 @@ public class TestDefinitionProcessor extends AbstractProcessor {
             String selector = String.format("%s='%s'", selectorName, selectorValue);
             String path = String.format(tempTestCase, project);
             File testXml = new File(path);
-            if (!this.initTestcases(selectorName, selectorValue, project, testXml).isPresent())
+            Testcases tests = new Testcases();
+            if (!this.initTestcases(selectorName, selectorValue, project, testXml, tests).isPresent())
                 maybeNodes.add(Optional.empty());
             else {
                 try {
-                    maybeNodes.add(this.sendTCImporterRequest(selector, testXml, project));
+                    maybeNodes.add(this.sendTCImporterRequest(selector, testXml, project, tests));
                 } catch (InterruptedException e) {
                     e.printStackTrace();
                 } catch (ExecutionException e) {
@@ -728,7 +804,8 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         return tcs.get(0);
     }
 
-    private Optional<ObjectNode> sendTCImporterRequest(String selector, File testcaseXml, String project)
+    private Optional<ObjectNode>
+    sendTCImporterRequest(String selector, File testcaseXml, String project, Testcases tests)
             throws InterruptedException, ExecutionException, JMSException {
         if (!this.config.testcase.isEnabled())
             return Optional.empty();
@@ -747,7 +824,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         }
         String url = baseUrl + this.config.testcase.getEndpoint().getRoute();
         TitleType tt = this.config.testcase.getTitle();
-        Consumer<Optional<ObjectNode>> hdlr = testcaseImportHandler(this.tcPath, project, this.testcases, tt);
+        Consumer<Optional<ObjectNode>> hdlr = testcaseImportHandler(this.tcPath, project, tests, tt);
         return ImporterRequest.sendImportRequest(url, user, pw, testcaseXml, selector, hdlr);
     }
 
@@ -1271,7 +1348,8 @@ public class TestDefinitionProcessor extends AbstractProcessor {
                       String testCasePath,
                       Map<String, Map<String, IdParams>> mapFile,
                       Testcase tc,
-                      File mapPath) {
+                      File mapPath,
+                      Path xmlDef) {
         List<String> badFuncs = new ArrayList<>();
 
         Optional<String> maybePolarionID = meta.getPolarionIDFromTestcase();
@@ -1368,6 +1446,14 @@ public class TestDefinitionProcessor extends AbstractProcessor {
                 logger.error("Should not get here");
         }
         TestDefinitionProcessor.writeBadFunctionText(badFuncs);
+
+        // If update bit is set, regenerate the XML file with the new data, however, check that xml file doesn't already
+        // have the ID set.  If it does, add the ID to the tc
+        if ((importType & 0b10) == 0b10) {
+            if (!xmlId.equals(""))
+                tc.setId(xmlId);
+            createTestCaseXML(tc, xmlDef.toFile());
+        }
         return importType;
     }
 
@@ -1409,11 +1495,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
 
         tcToMeta.put(tc, meta);
 
-        int importType = processIdEntities(meta, testCasePath, mapFile, tc, mapPath);
-        // If update bit is set, regenerate the XML file with the new data
-        if ((importType & 0b10) == 0b10) {
-            createTestCaseXML(tc, xmlDef.toFile());
-        }
+        int importType = processIdEntities(meta, testCasePath, mapFile, tc, mapPath, xmlDef);
 
         // If the update bit and the none bit are 0 we don't do anything.  Otherwise, do an import request
         if (importType != 0) {

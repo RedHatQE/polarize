@@ -38,7 +38,8 @@ public interface IJAXBHelper {
             Marshaller marshaller = jaxbc.createMarshaller();
             marshaller.setProperty( Marshaller.JAXB_FORMATTED_OUTPUT, true);
             marshaller.marshal(t, xmlpath);
-            marshaller.marshal(t, System.out);
+            if (false)
+                marshaller.marshal(t, System.out);
         } catch (JAXBException e) {
             e.printStackTrace();
         }
