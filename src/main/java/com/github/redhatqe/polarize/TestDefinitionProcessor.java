@@ -299,7 +299,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
      */
     @Override
     public boolean process(Set<? extends TypeElement> set, RoundEnvironment roundEnvironment) {
-        if (this.checkNoMoreRounds(this.round))
+        if (checkNoMoreRounds(this.round, this.config))
             return true;
 
         if (this.config.config == null) {
@@ -379,16 +379,16 @@ public class TestDefinitionProcessor extends AbstractProcessor {
      * @param round
      * @return
      */
-    private Boolean checkNoMoreRounds(int round) {
+    public static Boolean checkNoMoreRounds(int round, XMLConfig config) {
         File warn;
-        if (this.round > 0) {
+        if (round > 0) {
             warn = new File(warnText);
             if (warn.exists()) {
                 logger.warn("====================================================");
                 logger.warn(String.format("Please check the following test methods (taken from %s):", warnText));
                 try {
-                    BufferedReader warnFile = Files.newBufferedReader(warn.toPath());
-                    warnFile.lines().forEach(l -> logger.warn(l));
+                    String warning = new String(Files.readAllBytes(warn.toPath()));
+                    logger.warn("\n" + warning);
                 } catch (IOException e) {
                     e.printStackTrace();
                 }
@@ -409,7 +409,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
             logger.info("Done with annotation processing");
             String msg = "Don't forget to set <enabled>false</enabled> under the <importer type=\"testcase\"> " +
                     "section of your xml-config.xml file when you are done creating/updating testcases in Polarion.";
-            if (isUpdateSet(this.config, "testcase"))
+            if (isUpdateSet(config, "testcase"))
                 logger.info(msg);
             logger.info("=======================================================");
             return true;
@@ -563,21 +563,6 @@ public class TestDefinitionProcessor extends AbstractProcessor {
     }
 
     /**
-     * Sets all the information necessary for the testcases object, and marshalls it to an XML file
-     *
-     * The XML that is created by this call can be used for the sendImportRequest method
-     * @param selectorName name part of JMS selector string
-     * @param selectorValue value part of JMS selector string
-     * @param pID project ID
-     * @param testXml File of where the XML representation will go
-     * @return
-     */
-    private Optional<String>
-    initTestcases(String selectorName, String selectorValue, String pID, File testXml, Testcases tests) {
-        return TestDefinitionProcessor.initTestcases(selectorName, selectorValue, pID, testXml, this.tcMap, tests);
-    }
-
-    /**
      * Initializes the Testcases object and returns an optional project ID
      *
      * @param selectorName name part of selector
@@ -632,7 +617,6 @@ public class TestDefinitionProcessor extends AbstractProcessor {
      * @param url
      * @param user
      * @param pw
-     * @param tests
      * @return
      */
     public static List<Optional<ObjectNode>>
@@ -642,17 +626,18 @@ public class TestDefinitionProcessor extends AbstractProcessor {
                     String url,
                     String user,
                     String pw,
-                    Testcases tests,
                     String tcPath,
-                    TitleType tType) {
+                    TitleType tType,
+                    Boolean enabled) {
         List<Optional<ObjectNode>> maybeNodes = new ArrayList<>();
-        if (testcaseMap.isEmpty())
+        if (testcaseMap.isEmpty() || !enabled)
             return maybeNodes;
 
         String selector = String.format("%s='%s'", selectorName, selectorValue);
         for(String project: testcaseMap.keySet()) {
             String path = String.format(tempTestCase, project);
             File testXml = new File(path);
+            Testcases tests = new Testcases();
             if (!TestDefinitionProcessor.initTestcases(selectorName, selectorValue, project, testXml,
                     testcaseMap, tests).isPresent())
                 maybeNodes.add(Optional.empty());
@@ -676,37 +661,28 @@ public class TestDefinitionProcessor extends AbstractProcessor {
     }
 
     private List<Optional<ObjectNode>> tcImportRequest() {
-        List<Optional<ObjectNode>> maybeNodes = new ArrayList<>();
-        if (this.tcMap.isEmpty()) {
-            logger.info("No testcases to import ...");
-            return maybeNodes;
+        String selectorName = this.config.testcase.getSelector().getName();
+        String selectorValue = this.config.testcase.getSelector().getVal();
+        String baseUrl;
+        String user;
+        String pw;
+        if (this.config.config.getProject().contains("PLATTP")) {
+            baseUrl = this.config.polarionDevel.getUrl();
+            user = this.config.polarionDevel.getUser();
+            pw = this.config.polarionDevel.getPassword();
         }
-        logger.info("Updating testcases...");
+        else {
+            baseUrl = this.config.polarion.getUrl();
+            user = this.config.polarion.getUser();
+            pw = this.config.polarion.getPassword();
+        }
+        String url = baseUrl + this.config.testcase.getEndpoint().getRoute();
+        String tcpath = this.config.getTestcasesXMLPath();
+        TitleType title = this.config.testcase.getTitle();
+        Boolean enabled = this.config.testcase.isEnabled();
 
-        for(String project: this.tcMap.keySet()) {
-            String selectorName = this.config.testcase.getSelector().getName();
-            String selectorValue = this.config.testcase.getSelector().getVal();
-            String selector = String.format("%s='%s'", selectorName, selectorValue);
-            String path = String.format(tempTestCase, project);
-            File testXml = new File(path);
-            Testcases tests = new Testcases();
-            if (!this.initTestcases(selectorName, selectorValue, project, testXml, tests).isPresent())
-                maybeNodes.add(Optional.empty());
-            else {
-                try {
-                    maybeNodes.add(this.sendTCImporterRequest(selector, testXml, project, tests));
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                } catch (ExecutionException e) {
-                    logger.warn("FIXME: Retry on ExecutionException");
-                    e.printStackTrace();
-                } catch (JMSException e) {
-                    logger.warn("TODO: Retry due to JMS Exception");
-                    e.printStackTrace();
-                }
-            }
-        }
-        return maybeNodes;
+        return TestDefinitionProcessor.tcImportRequest(this.tcMap, selectorName, selectorValue, url, user, pw,
+                tcpath, title, enabled);
     }
 
 
@@ -749,7 +725,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
                         id = id.substring(1);
                     if (id.endsWith("\""))
                         id = id.substring(0, id.length() -1);
-                    logger.info("New Testcase id = " + id);
+                    logger.info("Testcase id from message response = " + id);
                     Optional<Path> maybeXML = FileHelper.getXmlPath(testPath, name, pID);
                     if (!maybeXML.isPresent()) {
                         // In this case, we couldn't get the XML path due to a bad name or tcPath
@@ -1187,19 +1163,26 @@ public class TestDefinitionProcessor extends AbstractProcessor {
             tc.setTitle(title);
         }
 
-        TestDefinitionProcessor.setLinkedWorkItems(tc, def);
+        TestDefinitionProcessor.setLinkedWorkItems(tc, def, meta.project);
         tc.setId(TestDefinitionProcessor.getPolarionIDFromDef(def, meta.project));
         tc.setCustomFields(custom);
         return tc;
     }
 
-    private static void setLinkedWorkItems(Testcase tc, TestDefinition ann) {
+    private static void setLinkedWorkItems(Testcase tc, TestDefinition ann, String project) {
         LinkedItem[] li = ann.linkedWorkItems();
         LinkedWorkItems lwi = tc.getLinkedWorkItems();
         if (lwi == null)
             lwi = new LinkedWorkItems();
         List<LinkedWorkItem> links = lwi.getLinkedWorkItem();
-        links.addAll(Arrays.stream(li)
+
+
+        List<LinkedItem> litems = Arrays.stream(li)
+                .filter((LinkedItem l) -> l.project().toString().equals(project))
+                .collect(Collectors.toList());
+
+
+        links.addAll(litems.stream()
                 .map(wi -> {
                     LinkedWorkItem tcLwi = new LinkedWorkItem();
                     tcLwi.setWorkitemId(wi.workitemId());
@@ -1368,8 +1351,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         if (idtype == null)
             throw new MappingError("Error in IDType.fromNumber()");
 
-        String msg = "In %s the @TestDefinition for project %s: the testCaseID is an empty string even though the " +
-                     "corresponding %s is present and has ID = %s.";
+        String msg = "- %s for project %s: the testCaseID=\"\" in the @TestDefinition but the ID=%s in the %s.";
         String qual = meta.qualifiedName;
         String project = meta.project;
         String pqual = meta.project + " -> " + qual;
@@ -1389,12 +1371,12 @@ public class TestDefinitionProcessor extends AbstractProcessor {
                 break;
             case MAP:
                 editXML(meta, testCasePath, mapId, tc);
-                badFuncs.add(String.format(msg, qual, project, "Map file", mapId));
+                badFuncs.add(String.format(msg, qual, project, mapId, "Map file"));
                 break;
             case XML:
                 logger.info(String.format(m, meta.qualifiedName, meta.project, xmlId));
                 addToMapFile(mapFile, meta, xmlId, mapPath);
-                badFuncs.add(String.format(msg, qual, project, "XML file", xmlId));
+                badFuncs.add(String.format(msg, qual, project, xmlId, "XML file"));
                 break;
             case XML_MAP:
                 String[] idsToCheck = {xmlId, mapId};
@@ -1402,7 +1384,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
                     String err = String.format("XML Id = %s and Map ID = %s do not match in %s", xmlId, mapId, pqual);
                     throw new MismatchError(err);
                 }
-                badFuncs.add(String.format(msg, qual, project, "XML file", mapId));
+                badFuncs.add(String.format(msg, qual, project, mapId, "XML file"));
                 break;
             case ANN:
                 editXML(meta, testCasePath, annId, tc);

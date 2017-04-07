@@ -4,7 +4,6 @@ import java.io.*;
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.nio.file.FileAlreadyExistsException;
-import java.nio.file.Path;
 import java.util.*;
 
 import com.github.redhatqe.polarize.metadata.Meta;
@@ -128,12 +127,7 @@ public class JarHelper implements IJarHelper {
                         TestDefinitionProcessor.auditMethods(enabledTests, refl.methToProjectDef);
                 File path = TestDefinitionProcessor.auditFile;
                 TestDefinitionProcessor.writeAuditFile(path, audit);
-
-                String msg = "Don't forget to set <enabled>false</enabled> under the <importer type=\"testcase\"> " +
-                        "section of your xml-config.xml file when you are done creating/updating testcases " +
-                        "in Polarion.";
-                if (TestDefinitionProcessor.isUpdateSet(refl.config, "testcase"))
-                    System.out.println(msg);
+                TestDefinitionProcessor.checkNoMoreRounds(1, refl.config);
             }
         } catch (IOException e) {
             e.printStackTrace();

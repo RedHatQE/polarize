@@ -33,13 +33,12 @@ public class Reflector {
     private static Logger logger = LoggerFactory.getLogger(Reflector.class);
     public Map<Testcase, Meta<TestDefinition>> testCaseToMeta = new HashMap<>();
     public Map<String,
-                Map<String, IdParams>> mappingFile;
+               Map<String, IdParams>> mappingFile;
     public XMLConfig config;
     public String tcPath;
     private Map<String, List<Testcase>> tcMap = new HashMap<>();
     public Map<String,
                Map<String, Meta<TestDefinition>>> methToProjectDef;
-    private Testcases testcases = new Testcases();
     public Map<String, String> methodToDesc = new HashMap<>();
 
     public Reflector() {
@@ -266,7 +265,8 @@ public class Reflector {
         String user = this.config.polarion.getUser();
         String pw = this.config.polarion.getPassword();
         String url = this.config.polarion.getUrl() + this.config.testcase.getEndpoint().getRoute();
-        return TestDefinitionProcessor.tcImportRequest(this.tcMap, sName, sVal, url, user, pw, this.testcases,
-                                                       this.tcPath, this.config.testcase.getTitle());
+        Boolean enabled = this.config.testcase.isEnabled();
+        return TestDefinitionProcessor.tcImportRequest(this.tcMap, sName, sVal, url, user, pw, this.tcPath,
+                this.config.testcase.getTitle(), enabled);
     }
 }
