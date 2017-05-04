@@ -49,7 +49,7 @@ public @interface TestDefinition {
 
     DefTypes.Importance importance() default DefTypes.Importance.HIGH;
     DefTypes.PosNeg posneg() default DefTypes.PosNeg.POSITIVE;
-    DefTypes.Level level() default DefTypes.Level.SYSTEM;
+    DefTypes.Level level() default DefTypes.Level.COMPONENT;
     DefTypes.Automation automation() default DefTypes.Automation.AUTOMATED;
     String script() default "";                // path or name of automation script/method
     TestType testtype() default @TestType();

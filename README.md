@@ -683,6 +683,19 @@ name but different type signature) then there will no longer be a one-to-one map
 file.  Note that this does not apply to data driven tests.  It is perfectly fine to have a test method with data driven
 parameters.
 
+## Many methods to one testcase
+
+The XUnit Importer has the ability to do different lookups.  There are 3 possibilities:
+
+- id (default): Uses the Polarion TestCase ID
+- custom: Allows the user to have a custom (but unique) ID of method -> customID
+- name: If the class.name is unique, then this can be used
+
+The last lookup by name was added after polarize had already (mostly) been written.  However, the name lookup also will 
+not work where you have several test methods which verify the same TestCase.  For example if you have more than one way
+of doing essentially the same test.  Some might argue that there should be a one-to-one mapping, but TestCases should 
+be somewhat implementation agnostic.
+
 ## Setting your own title and xml path
 
 The following annotation fields do not yet currently work:

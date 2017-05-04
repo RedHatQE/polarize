@@ -61,6 +61,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
     private XMLConfig config;
     private static Map<String, WarningInfo> warnings = new HashMap<>();
     private int round = 0;
+    private String configPath = System.getProperty("polarizeConfig");
 
     public static final String warnText = "/tmp/polarize-warnings.txt";
     public static final String tempTestCase = "/tmp/testcases-%s.xml";
@@ -1660,7 +1661,10 @@ public class TestDefinitionProcessor extends AbstractProcessor {
 
         this.methNameToTestNGDescription = new HashMap<>();
         this.testCaseToMeta = new HashMap<>();
-        this.config = new XMLConfig(null);
+        File cfgFile = null;
+        if (this.configPath != null)
+            cfgFile = new File(this.configPath);
+        this.config = new XMLConfig(cfgFile);
         ConfigType cfg = this.config.config;
         if (cfg != null)
             this.tcPath = this.config.getTestcasesXMLPath();

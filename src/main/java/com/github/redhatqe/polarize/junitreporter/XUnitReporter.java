@@ -510,7 +510,7 @@ public class XUnitReporter implements IReporter {
                 new com.github.redhatqe.polarize.importer.xunit.Properties();
         List<Property> properties = props.getProperty();
 
-        Property author = XUnitReporter.createProperty("polarion-user-id", cfg.getAuthor());
+        Property author = XUnitReporter.createProperty("polarion-user-id", cfg.getUser());
         properties.add(author);
 
         Property projectID = XUnitReporter.createProperty("polarion-project-id", cfg.getProject());
