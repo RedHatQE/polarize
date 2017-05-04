@@ -39,8 +39,10 @@ public class Configurator implements IJAXBHelper {
     public ConfigType cfg;
     public String configPath;
 
+    private String user;
     private String testrunTitle;
     private String testrunID;
+    private String testrunType;
     private String project;
     private String testcasePrefix;
     private String testcaseSuffix;
@@ -114,6 +116,10 @@ public class Configurator implements IJAXBHelper {
                 new Tuple3<>(this::getTestrunID, this::setTestrunID,
                         "If given, must be a unique ID for the TestRun, otherwise Polarion generates one." +
                                 "Relevant for xunit file"));
+        sOptToAccessors.put(Opts.TESTRUN_TYPE,
+                new Tuple3<>(this::getTestrunType, this::setTestrunType,
+                        "The type of test, can be one of build_acceptance, regression or feature_verification " +
+                                "Defaults to feature_verification"));
         sOptToAccessors.put(Opts.PROJECT,
                 new Tuple3<>(this::getProject, this::setProject,
                         "Sets the Polarion Project ID.  Relevant for xml-config or xunit file"));
@@ -188,9 +194,10 @@ public class Configurator implements IJAXBHelper {
                 new Tuple3<>(this::getTcPath, this::setTcPath,
                         "Path relative to basedir where the XML description files will be stored.  Relevant " +
                                 "to xml-config"));
-        sOptToAccessors.put(Opts.REQ_XML_PATH,
-                new Tuple3<>(this::getReqPath, this::setReqPath,
-                        ""));
+        sOptToAccessors.put(Opts.USER,
+                new Tuple3<>(this::getUser, this::setUser,
+                        "Set the user which will be used as the author of TestRuns or TestCases"));
+
 
         bOptToAccessors.put(Opts.TC_IMPORTER_ENABLED,
                 new Tuple3<>(this::getTestcaseImporterEnabled, this::setTestcaseImporterEnabled,
@@ -387,7 +394,7 @@ public class Configurator implements IJAXBHelper {
                     this.testsuiteProps.put(keyname, v);
                     break;
                 default:
-                    logger.error(String.format("Unknown property name %s", name));
+                    logger.error(String.format("Unknown custom field name %s", name));
                     break;
             }
         }
@@ -464,6 +471,7 @@ public class Configurator implements IJAXBHelper {
         //if (this.opts.has(sSpecs.get(Opts.TESTRUN_TITLE)))
         this.setTestRunTitleFromConfig(imp, fromConfig);
         this.setTestRunIDFromConfig(imp, fromConfig);
+        this.setTestRunTypeFromConfig(imp, fromConfig);
         if (this.opts.has(sSpecs.get(Opts.TEMPLATE_ID)))
             this.setTemplateIDFromConfig(imp, fromConfig);
         if (this.opts.has(bSpecs.get(Opts.TR_DRY_RUN)))
@@ -487,6 +495,13 @@ public class Configurator implements IJAXBHelper {
         this.setSelectorName(imp, Opts.XUNIT_SELECTOR_NAME, Opts.XUNIT_SELECTOR_VAL);
     }
 
+    /**
+     * FIXME: There seems to be some overlap with this function and setTestPropsFromXML.
+     * @param opt
+     * @param propName
+     * @param added
+     * @param <T>
+     */
     private <T> void setTestRunProperty(OptionSpec<T> opt, String propName, List<PropertyType> added) {
         T val = this.opts.valueOf(opt);
         PropertyType pt = new PropertyType();
@@ -548,15 +563,28 @@ public class Configurator implements IJAXBHelper {
 
     private void setTestRunIDFromConfig(ImporterType imp, List<PropertyType> added) {
         TestrunType tr = imp.getTestrun();
-        String title = this.getTestrunID();
+        String id = this.getTestrunID();
 
-        tr.setTitle(title);
+        tr.setId(id);
         imp.setTestrun(tr);
         PropertyType pt = new PropertyType();
         pt.setName("testrun-id");
-        pt.setVal(title);
+        pt.setVal(id);
         added.add(pt);
     }
+
+    private void setTestRunTypeFromConfig(ImporterType imp, List<PropertyType> added) {
+        TestrunType tr = imp.getTestrun();
+        String name = this.getTestrunID();
+
+        tr.setType(name);
+        imp.setTestrun(tr);
+        PropertyType pt = new PropertyType();
+        pt.setName("testrun-type-id");
+        pt.setVal(name);
+        added.add(pt);
+    }
+
 
     private void setSelectorName(ImporterType imp, String name, String val) {
         SelectorType st = imp.getSelector();
@@ -614,7 +642,7 @@ public class Configurator implements IJAXBHelper {
      * @param cust
      */
     private Property parseProperty(String cust) {
-        String[] tokens = cust.split("=");
+        String[] tokens = cust.split("=", 2);
         if (tokens.length != 2)
             throw new InvalidArgument("--property must be in key=value form");
         if (tokens[0].contains(" "))
@@ -668,6 +696,7 @@ public class Configurator implements IJAXBHelper {
         RESPONSE("polarion-response"),
         TESTRUN_TITLE("polarion-testrun-title"),
         TESTRUN_ID("polarion-testrun-id"),
+        TESTRUN_TYPE("polarion-testrun-type-id"),
         TEMPLATE_ID("polarion-testrun-template-id"),
         CUSTOM("polarion-custom");
 
@@ -696,6 +725,8 @@ public class Configurator implements IJAXBHelper {
                     return TESTRUN_TITLE;
                 case "polarion-testrun-id":
                     return TESTRUN_ID;
+                case "polarion-testrun-type-id":
+                    return TESTRUN_TYPE;
                 case "polarion-testrun-template-id":
                     return TEMPLATE_ID;
                 case "polarion-template-id":
@@ -785,6 +816,11 @@ public class Configurator implements IJAXBHelper {
                 String title = this.getTestrunTitle();
                 if (title != null && !title.equals(""))
                     p.setValue(title);
+                break;
+            case TESTRUN_TYPE:
+                String typeid = this.getTestrunType();
+                if (typeid != null && !typeid.equals(""))
+                    p.setValue(typeid);
                 break;
             case CUSTOM:
                 break;
@@ -1006,6 +1042,8 @@ public class Configurator implements IJAXBHelper {
 
     public void setTestrunID(String id) {
         this.testrunID = this.sanitize(id);
+        Optional<ImporterType> xunitOpt = this.getImporterType("xunit");
+        xunitOpt.ifPresent(importerType -> importerType.getTestrun().setTitle(this.testrunID));
     }
 
     public String getTestrunTitle() {
@@ -1018,9 +1056,21 @@ public class Configurator implements IJAXBHelper {
     public void setTestrunTitle(String testrunTitle) {
         this.testrunTitle = this.sanitize(testrunTitle);
         Optional<ImporterType> xunitOpt = this.getImporterType("xunit");
-        if (xunitOpt.isPresent())
-            xunitOpt.get().getTestrun().setTitle(this.testrunTitle);
+        xunitOpt.ifPresent(importerType -> importerType.getTestrun().setTitle(this.testrunTitle));
     }
+
+    public String getTestrunType() {
+        if (this.testrunType == null) {
+            this.testrunType = "feature_verification";  // default
+        }
+        return this.testrunType;
+    }
+
+    public void setTestrunType(String t) {
+        this.testrunType = this.sanitize(t);
+        Optional<ImporterType> maybeXunit = this.getImporterType("xunit");
+        maybeXunit.ifPresent(impType -> impType.getTestrun().setType(this.testrunType));
+     }
 
     public String getProject() {
         if (this.project == null)
@@ -1352,6 +1402,20 @@ public class Configurator implements IJAXBHelper {
         this.cfg.getTestcasesXml().setPath(tcPath);
     }
 
+    public String getUser() {
+        if (this.user == null)
+            this.user = this.cfg.getUser();
+        return this.user;
+    }
+
+    public void setUser(String user) {
+        if (user.contains("{project}"))
+            user = String.format("%s_machine", this.getProject());
+        this.cfg.setUser(user);
+    }
+
+    /**
+     * Uncomment if/when a Requirement Importer is created
     public String getReqPath() {
         if (this.reqPath == null)
             this.reqPath = this.cfg.getRequirementsXml().getPath();
@@ -1362,6 +1426,7 @@ public class Configurator implements IJAXBHelper {
         this.reqPath = reqPath;
         this.cfg.getRequirementsXml().setPath(reqPath);
     }
+    */
 
     @Override
     public URL getXSDFromResource(Class<?> t) {

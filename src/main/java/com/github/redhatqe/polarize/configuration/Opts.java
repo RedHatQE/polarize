@@ -15,6 +15,7 @@ import java.util.stream.Collectors;
 public class Opts {
     public static final String TESTRUN_TITLE = "testrun-title";
     public static final String TESTRUN_ID = "testrun-id";
+    public static final String TESTRUN_TYPE = "testrun-type";
     public static final String PROJECT = "project";
     public static final String TESTCASE_PREFIX = "testcase-prefix";
     public static final String TESTCASE_SUFFIX = "testcase-suffix";
@@ -50,7 +51,7 @@ public class Opts {
     public static final String MAPPING = "mapping";
     public static final String TC_XML_PATH = "testcases-xml";
     public static final String REQ_XML_PATH = "requirements-xml";
-    public static final String AUTHOR = "author";
+    public static final String USER = "user";
     public static final String HELP = "help";
 
     public static final String fmt = "--%s %s";
