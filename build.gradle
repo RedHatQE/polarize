@@ -24,7 +24,7 @@ targetCompatibility = 1.8
 }
 
 task wrapper(type: Wrapper) {
-    gradleVersion = '3.1'
+    gradleVersion = '3.5'
 }
 
 repositories {
@@ -123,7 +123,7 @@ task signPom(type: Sign) {
         sign arcPomFile
 }
 
-task signJars (type : Sign, dependsOn: [jar, javadocJar, sourceJar]) {
+task signJars (type : Sign, dependsOn: [jar, javadocJar, sourceJar, shadowJar]) {
     sign configurations.archives
 }
 
@@ -286,11 +286,15 @@ task copyTask(type: Copy) {
 }
 
 
-task classPath << {
-    println sourceSets.main.runtimeClasspath.asPath
+task classPath {
+    doLast {
+        println sourceSets.main.runtimeClasspath.asPath
+    }
 }
 
 
-task getPomFiles << {
-    println findPomFiles(arcDir)
+task getPomFiles {
+    doLast {
+        println findPomFiles(arcDir)
+    }
 }
