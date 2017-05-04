@@ -138,7 +138,7 @@
           <xs:documentation>Maps the qualified name to project->id</xs:documentation>
         </xs:annotation>
       </xs:element>
-      <xs:element type="xs:string" name="author"/>
+      <xs:element type="xs:string" name="user"/>
       <xs:element type="xs:string" name="project"/>
       <xs:element type="serversType" name="servers"/>
       <xs:element type="importersType" name="importers"/>
@@ -185,6 +185,7 @@
       <xs:extension base="xs:string">
         <xs:attribute type="xs:string" name="id"/>
         <xs:attribute type="xs:string" name="title"/>
+        <xs:attribute type="xs:string" name="type"/>
       </xs:extension>
     </xs:simpleContent>
   </xs:complexType>
