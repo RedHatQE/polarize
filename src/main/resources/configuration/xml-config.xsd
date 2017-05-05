@@ -127,6 +127,15 @@
     </xs:simpleContent>
   </xs:complexType>
 
+  <xs:complexType name="userType">
+    <xs:simpleContent>
+      <xs:extension base="xs:string">
+        <xs:attribute type="xs:string" name="name"/>
+        <xs:attribute type="xs:string" name="password"/>
+      </xs:extension>
+    </xs:simpleContent>
+  </xs:complexType>
+
   <xs:complexType name="configType">
     <xs:sequence>
       <xs:element type="projectNameType" name="project-name" minOccurs="1" maxOccurs="1"/>
@@ -138,7 +147,11 @@
           <xs:documentation>Maps the qualified name to project->id</xs:documentation>
         </xs:annotation>
       </xs:element>
-      <xs:element type="xs:string" name="user"/>
+      <xs:element type="userType" name="user">
+        <xs:annotation>
+          <xs:documentation>Will be passed to kerberos credentials</xs:documentation>
+        </xs:annotation>
+      </xs:element>
       <xs:element type="xs:string" name="project"/>
       <xs:element type="serversType" name="servers"/>
       <xs:element type="importersType" name="importers"/>

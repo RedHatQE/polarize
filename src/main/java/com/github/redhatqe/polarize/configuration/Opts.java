@@ -51,7 +51,8 @@ public class Opts {
     public static final String MAPPING = "mapping";
     public static final String TC_XML_PATH = "testcases-xml";
     public static final String REQ_XML_PATH = "requirements-xml";
-    public static final String USER = "user";
+    public static final String USERNAME = "user-name";
+    public static final String USERPASSWORD = "user-password";
     public static final String HELP = "help";
 
     public static final String fmt = "--%s %s";

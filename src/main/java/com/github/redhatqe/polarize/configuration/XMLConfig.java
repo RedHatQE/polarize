@@ -43,6 +43,7 @@ public class XMLConfig {
         }
         else
             this.configPath = path;
+        logger.info("Using config file at " + this.configPath);
         JAXBHelper jaxb = new JAXBHelper();
         Optional<ConfigType> maybeCfg;
         try {

@@ -40,6 +40,7 @@ public class Configurator implements IJAXBHelper {
     public String configPath;
 
     private String user;
+    private String userPassword;
     private String testrunTitle;
     private String testrunID;
     private String testrunType;
@@ -194,9 +195,12 @@ public class Configurator implements IJAXBHelper {
                 new Tuple3<>(this::getTcPath, this::setTcPath,
                         "Path relative to basedir where the XML description files will be stored.  Relevant " +
                                 "to xml-config"));
-        sOptToAccessors.put(Opts.USER,
+        sOptToAccessors.put(Opts.USERNAME,
                 new Tuple3<>(this::getUser, this::setUser,
-                        "Set the user which will be used as the author of TestRuns or TestCases"));
+                        "Set the user name which will be used as the author of TestRuns or TestCases"));
+        sOptToAccessors.put(Opts.USERPASSWORD,
+                new Tuple3<>(this::getUserPassword, this::setUserPassword,
+                        "Set the password for the user who will be used as the author of TestRuns or TestCases"));
 
 
         bOptToAccessors.put(Opts.TC_IMPORTER_ENABLED,
@@ -322,11 +326,44 @@ public class Configurator implements IJAXBHelper {
         customProps = properties.stream()
                 .map(this::parseProperty)
                 .collect(Collectors.toList());
+
+        // Get all the --server options
+        List<String> servers = opts.valuesOf(this.sSpecs.get(Opts.SERVER));
+
         return true;
     }
 
 
+    /**
+     * Gets all the server info from <servers> element, and then checks if any of the user has {user:name} and if
+     * any of the password has {user:password} in it
+     */
+    private void getServers() {
+        List<ServerType> current = this.cfg.getServers().getServer();
+        String username = this.cfg.getUser().getName();
+        String password = this.cfg.getUser().getPassword();
+        // Commandline overrides config file
+        String user = (this.opts.has(sSpecs.get(Opts.USERNAME))) ?
+                this.opts.valueOf(sSpecs.get(Opts.USERNAME)) :
+                username;
+        String pw = (this.opts.has(sSpecs.get(Opts.USERPASSWORD))) ?
+                this.opts.valueOf(sSpecs.get(Opts.USERPASSWORD)) :
+                password;
+        current.stream().forEach(srv -> {
+                    String uname = srv.getUser();
+                    String upw = srv.getPassword();
+                    String serverName = srv.getName();
+                    Boolean check = serverName.equals("kerberos") || serverName.equals("polarion");
+                    if (uname != null && check)
+                        srv.setUser(user);
+                    if (upw != null && check)
+                        srv.setPassword(pw);
+                });
+    }
+
+
     private void setServers(OptionSet opts) {
+        this.getServers();
         OptionSpec<String> serverSpec = this.sSpecs.get(Opts.SERVER);
         List<String> vals = serverSpec.values(opts);
         List<ServerType> current = this.cfg.getServers().getServer();
@@ -338,9 +375,9 @@ public class Configurator implements IJAXBHelper {
                     .findFirst();
             if (matched.isPresent()) {
                 ServerType m = matched.get();
-                m.setUrl(m.getUrl());
-                m.setUser(m.getUser());
-                m.setPassword(m.getPassword());
+                m.setUrl(st.getUrl());
+                m.setUser(st.getUser());
+                m.setPassword(st.getPassword());
             }
         }
     }
@@ -423,6 +460,10 @@ public class Configurator implements IJAXBHelper {
                     String template = this.getTemplateId();
                     if (!template.equals(""))
                         p.setVal(template);
+                    break;
+                case "testrun-title":
+                case "testrun-id":
+                case "testrun-type-id":
                     break;
                 default:
                     logger.error(String.format("Unknown property name %s", name));
@@ -619,20 +660,47 @@ public class Configurator implements IJAXBHelper {
     }
 
 
+    /**
+     * When using the --server option you can specify this multiple times.  It takes the form of:
+     * --server serverName,user,password,(url)  the url is optional
+     * So for example, to change the kerberos and polarion servers you would do:
+     *
+     * --server kerberos,platformqe_machine,secretpw
+     * --server polarion,stoner,mypassword,http://10.0.0.1:5000/polarion/
+     *
+     * @param server
+     * @return
+     */
     private ServerType parseServer(String server) {
         ServerType st = new ServerType();
 
         String[] tokens = server.split(",");
+        if (tokens == null || tokens.length < 3) {
+            logger.error("Must use --server with at least 3 args like:  --server kerberos,username,pw");
+            throw new InvalidArgument();
+        }
         if (tokens[0].equals(""))
             throw new ConfigurationError("First entry in comma separated list must be the name of the server");
         st.setName(tokens[0]);
-        st.setUser(tokens[1]);
-        st.setPassword(tokens[2]);
+        try {
+            st.setUser(tokens[1]);
+        }
+        catch (ArrayIndexOutOfBoundsException oob) {
+            logger.error("Must pass username as 2nd arg to --server");
+            throw oob;
+        }
+        try {
+            st.setPassword(tokens[2]);
+        }
+        catch (ArrayIndexOutOfBoundsException oob) {
+            logger.error("Must specify the user's password as 3rd argument to --server");
+            throw oob;
+        }
         try {
             st.setUrl(tokens[3]);
         }
         catch (ArrayIndexOutOfBoundsException oob) {
-
+            logger.info(String.format("Not setting a URL for %s", st.getName()));
         }
         return st;
     }
@@ -688,7 +756,6 @@ public class Configurator implements IJAXBHelper {
     }
 
     private enum TestsuiteProps {
-        USER("polarion-user-id"),
         PROJECT("polarion-project-id"),
         TESTRUN_FINISHED("polarion-set-testrun-finished"),
         DRY_RUN("polarion-dry-run"),
@@ -711,8 +778,6 @@ public class Configurator implements IJAXBHelper {
 
         public static TestsuiteProps fromString(String s) {
             switch(s) {
-                case "polarion-user-id":
-                    return USER;
                 case "polarion-project-id":
                     return PROJECT;
                 case "polarion-set-testrun-finished":
@@ -785,9 +850,6 @@ public class Configurator implements IJAXBHelper {
                 Boolean finished = this.getTestrunSetFinished();
                 if (finished != null)
                     p.setValue(this.getTestrunSetFinished().toString());
-                break;
-            case USER:
-                logger.warn("Need to add user to config");
                 break;
             case PROJECT:
                 String project = this.getProject();
@@ -886,6 +948,7 @@ public class Configurator implements IJAXBHelper {
 
         Testsuites suites = ts.get();
         List<com.github.redhatqe.polarize.importer.xunit.Property> props = suites.getProperties().getProperty();
+        props.removeIf(p -> p.getName().equals("polarion-user-id"));
         this.matchProps(props);
         props.forEach(this::setTestPropsFromXML);
         props.removeIf(p -> p.getValue().equals(""));
@@ -1061,7 +1124,7 @@ public class Configurator implements IJAXBHelper {
 
     public String getTestrunType() {
         if (this.testrunType == null) {
-            this.testrunType = "feature_verification";  // default
+            this.testrunType = "";  // default
         }
         return this.testrunType;
     }
@@ -1404,14 +1467,22 @@ public class Configurator implements IJAXBHelper {
 
     public String getUser() {
         if (this.user == null)
-            this.user = this.cfg.getUser();
+            this.user = this.cfg.getUser().getName();
         return this.user;
     }
 
     public void setUser(String user) {
-        if (user.contains("{project}"))
-            user = String.format("%s_machine", this.getProject());
-        this.cfg.setUser(user);
+        this.cfg.getUser().setName(user);
+    }
+
+    public String getUserPassword() {
+        if (this.userPassword == null)
+            this.userPassword = this.cfg.getUser().getPassword();
+        return this.user;
+    }
+
+    public void setUserPassword(String pw) {
+        this.cfg.getUser().setPassword(pw);
     }
 
     /**
