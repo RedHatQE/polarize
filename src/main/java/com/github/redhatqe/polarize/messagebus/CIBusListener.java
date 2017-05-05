@@ -44,6 +44,15 @@ public class CIBusListener {
         this.listener = this.createListener();
     }
 
+    public CIBusListener(String path) {
+        this.configurator = new Configurator(path);
+        this.polarizeConfig = this.configurator.config;
+        this.logger = LoggerFactory.getLogger(CIBusListener.class);
+        this.topic = "CI";
+        this.clientID = "Polarize";
+        this.listener = this.createListener();
+    }
+
     /**
      * Creates a default listener for MapMessage types
      * @return
@@ -201,9 +210,8 @@ public class CIBusListener {
      */
     public static Supplier<Optional<ObjectNode>> getCIMessage(String selector, String path) {
         return () -> {
-            XUnitReporter.setXMLConfig(path);
             ObjectNode root = null;
-            CIBusListener bl = new CIBusListener();
+            CIBusListener bl = new CIBusListener(path);
             bl.logger.info(String.format("Using selector of %s", selector));
             Optional<Tuple<Connection, Message>> maybeConn = bl.waitForMessage(selector);
             if (!maybeConn.isPresent()) {
