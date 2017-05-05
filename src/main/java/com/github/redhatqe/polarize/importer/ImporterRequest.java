@@ -196,24 +196,17 @@ public class ImporterRequest {
      */
     public static Optional<ObjectNode>
     sendImportRequest(String url, String user, String pw, File reportPath, String selector,
-                      Consumer<Optional<ObjectNode>> handler)
+                      Consumer<Optional<ObjectNode>> handler, String cfgPath)
             throws InterruptedException, ExecutionException, JMSException {
-        Supplier<Optional<ObjectNode>> sup = CIBusListener.getCIMessage(selector);
+        Supplier<Optional<ObjectNode>> sup = CIBusListener.getCIMessage(selector, cfgPath);
         CompletableFuture<Optional<ObjectNode>> future = CompletableFuture.supplyAsync(sup);
         // FIXME: While this async code works, it's possible for the calling thread to finish before the handler is
         // called.  Perhaps I can return the future, and the calling thread just joins()?
         //future.thenAccept(messageHandler());
 
+        logger.info("Making import request as user: " + user);
         CloseableHttpResponse resp = ImporterRequest.post(url, reportPath, user, pw);
         HttpEntity entity = resp.getEntity();
-        /* FIXME: This code sometimes gets an exception that the stream is closed
-        try {
-            BufferedReader bfr = new BufferedReader(new InputStreamReader(entity.getContent()));
-            System.out.println(bfr.lines().collect(Collectors.joining("\n")));
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-        */
         System.out.println(resp.toString());
 
         // FIXME:  Should I synchronize here?  If I leave this out and return future, it is the caller's responsibility

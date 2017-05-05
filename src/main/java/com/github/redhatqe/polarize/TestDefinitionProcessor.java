@@ -61,7 +61,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
     private XMLConfig config;
     private static Map<String, WarningInfo> warnings = new HashMap<>();
     private int round = 0;
-    private String configPath = System.getProperty("polarizeConfig");
+    private String configPath = System.getProperty("polarize.config");
 
     public static final String warnText = "/tmp/polarize-warnings.txt";
     public static final String tempTestCase = "/tmp/testcases-%s.xml";
@@ -629,7 +629,8 @@ public class TestDefinitionProcessor extends AbstractProcessor {
                     String pw,
                     String tcPath,
                     TitleType tType,
-                    Boolean enabled) {
+                    Boolean enabled,
+                    String cfgPath) {
         List<Optional<ObjectNode>> maybeNodes = new ArrayList<>();
         if (testcaseMap.isEmpty() || !enabled)
             return maybeNodes;
@@ -646,7 +647,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
                 try {
                     Consumer<Optional<ObjectNode>> hdlr;
                     hdlr = TestDefinitionProcessor.testcaseImportHandler(tcPath, project, tests, tType);
-                    maybeNodes.add(ImporterRequest.sendImportRequest(url, user, pw, testXml, selector, hdlr));
+                    maybeNodes.add(ImporterRequest.sendImportRequest(url, user, pw, testXml, selector, hdlr, cfgPath));
                 } catch (InterruptedException e) {
                     e.printStackTrace();
                 } catch (ExecutionException e) {
@@ -683,7 +684,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         Boolean enabled = this.config.testcase.isEnabled();
 
         return TestDefinitionProcessor.tcImportRequest(this.tcMap, selectorName, selectorValue, url, user, pw,
-                tcpath, title, enabled);
+                tcpath, title, enabled, this.configPath);
     }
 
 
@@ -802,7 +803,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         String url = baseUrl + this.config.testcase.getEndpoint().getRoute();
         TitleType tt = this.config.testcase.getTitle();
         Consumer<Optional<ObjectNode>> hdlr = testcaseImportHandler(this.tcPath, project, tests, tt);
-        return ImporterRequest.sendImportRequest(url, user, pw, testcaseXml, selector, hdlr);
+        return ImporterRequest.sendImportRequest(url, user, pw, testcaseXml, selector, hdlr, this.configPath);
     }
 
     /**

@@ -40,6 +40,7 @@ public class Reflector {
     public Map<String,
                Map<String, Meta<TestDefinition>>> methToProjectDef;
     public Map<String, String> methodToDesc = new HashMap<>();
+    private String configPath = System.getProperty("polarize.config");
 
     public Reflector() {
         config = new XMLConfig(null);
@@ -267,6 +268,6 @@ public class Reflector {
         String url = this.config.polarion.getUrl() + this.config.testcase.getEndpoint().getRoute();
         Boolean enabled = this.config.testcase.isEnabled();
         return TestDefinitionProcessor.tcImportRequest(this.tcMap, sName, sVal, url, user, pw, this.tcPath,
-                this.config.testcase.getTitle(), enabled);
+                this.config.testcase.getTitle(), enabled, this.configPath);
     }
 }

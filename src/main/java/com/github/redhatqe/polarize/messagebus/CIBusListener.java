@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.github.redhatqe.polarize.configuration.Configurator;
 import com.github.redhatqe.polarize.configuration.XMLConfig;
 import com.github.redhatqe.polarize.exceptions.ConfigurationError;
+import com.github.redhatqe.polarize.junitreporter.XUnitReporter;
 import com.github.redhatqe.polarize.utils.Tuple;
 import org.apache.activemq.*;
 
@@ -198,8 +199,9 @@ public class CIBusListener {
      *
      * @return ObjectNode that is the parsed message
      */
-    public static Supplier<Optional<ObjectNode>> getCIMessage(String selector) {
+    public static Supplier<Optional<ObjectNode>> getCIMessage(String selector, String path) {
         return () -> {
+            XUnitReporter.setXMLConfig(path);
             ObjectNode root = null;
             CIBusListener bl = new CIBusListener();
             bl.logger.info(String.format("Using selector of %s", selector));

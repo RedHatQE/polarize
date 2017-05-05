@@ -50,7 +50,13 @@ import java.util.stream.Collectors;
  */
 public class XUnitReporter implements IReporter {
     private final static Logger logger = LoggerFactory.getLogger(XUnitReporter.class);
-    private static XMLConfig config = new XMLConfig(null);
+    public static String configPath = System.getProperty("polarize.config");
+    public static File cfgFile = null;
+    static {
+        if (configPath != null)
+            cfgFile = new File(configPath);
+    }
+    private static XMLConfig config = new XMLConfig(cfgFile);
     private final static ConfigType cfg = config.config;
     private final static File defaultPropertyFile =
             new File(System.getProperty("user.home") + "/.polarize/reporter.properties");
@@ -62,6 +68,14 @@ public class XUnitReporter implements IReporter {
     public final static String polarionCustom = "polarion-custom";
     public final static String polarionResponse = "polarion-response";
     private File bad = new File("/tmp/bad-tests.txt");
+
+    public static void setXMLConfig(String path) {
+        if (path == null || path.equals(""))
+            return;
+        File cfgFile = new File(path);
+        XUnitReporter.config = new XMLConfig(cfgFile);
+        logger.info("Set XUnitReporter config to " + path);
+    }
 
     public static Properties getProperties() {
         Properties props = new Properties();
@@ -510,8 +524,8 @@ public class XUnitReporter implements IReporter {
                 new com.github.redhatqe.polarize.importer.xunit.Properties();
         List<Property> properties = props.getProperty();
 
-        Property author = XUnitReporter.createProperty("polarion-user-id", cfg.getUser());
-        properties.add(author);
+        Property user = XUnitReporter.createProperty("polarion-user-id", cfg.getUser().getName());
+        properties.add(user);
 
         Property projectID = XUnitReporter.createProperty("polarion-project-id", cfg.getProject());
         properties.add(projectID);
@@ -749,6 +763,7 @@ public class XUnitReporter implements IReporter {
                 throw new ImportRequestError(String.format("Could not download %s", xml.toString()));
         }
 
-        ImporterRequest.sendImportRequest(url, user, pw, xml, selector, XUnitReporter.xunitMessageHandler());
+        ImporterRequest.sendImportRequest(url, user, pw, xml, selector, XUnitReporter.xunitMessageHandler(),
+                configPath);
     }
 }

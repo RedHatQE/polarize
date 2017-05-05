@@ -675,6 +675,16 @@ requirements.xml.path/<project>/<class>/<methodName>.feature
 
 Here is a compilation of known limitations and TODO's.  Keep these in mind when using polarize
 
+## Editing the xml-config.xsd
+
+If you ever need to edit the xml-config.xsd file to add new configuration properties, you will need to cd into the 
+src/main/resources/configuration directory, and then run the configuration.sh script.  Due to some weirdness with JAXB 
+the generated class for the ConfigType does not get annotated with @XmlRootElement(name="config").  So remember to 
+manually add this to the ConfigType class.
+
+There appears to be some workarounds by using the ObjectFactory to marshall/unmarshall classes that are not annotated 
+with the XmlRootElement, but I have not looked into that method.
+
 ## Unique method names
 
 One limitation of polarize is that it assumes that there are no overloaded testmethods.  This is because polarize maps
