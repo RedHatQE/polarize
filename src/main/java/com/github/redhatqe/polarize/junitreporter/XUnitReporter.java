@@ -218,7 +218,7 @@ public class XUnitReporter implements IReporter {
 
                         setTestSuiteResults(ts, fr, ctx);
                         if (fr == null) {
-                            System.out.println(String.format("Skipping test for %s", ctx.toString()));
+                            //System.out.println(String.format("Skipping test for %s", ctx.toString()));
                             return null;  // No FullResult due to empty frList.  Will be filtered out
                         }
                         else
@@ -730,9 +730,9 @@ public class XUnitReporter implements IReporter {
         OptionSpec<String> urlOpt = parser.accepts("url").withRequiredArg().ofType(String.class)
                 .defaultsTo(defaultUrl);
         OptionSpec<String> userOpt = parser.accepts("user").withRequiredArg().ofType(String.class)
-                .defaultsTo(XUnitReporter.config.kerb.getUser());
+                .defaultsTo(XUnitReporter.config.polarion.getUser());
         OptionSpec<String> pwOpt = parser.accepts("pass").withRequiredArg().ofType(String.class)
-                .defaultsTo(XUnitReporter.config.kerb.getPassword());
+                .defaultsTo(XUnitReporter.config.polarion.getPassword());
         OptionSpec<String> xunitOpt = parser.accepts("xunit").withRequiredArg().ofType(String.class).required();
         OptionSpec<String> selectorOpt = parser.accepts("selector").withRequiredArg().ofType(String.class)
                 .defaultsTo(defaultSelector);

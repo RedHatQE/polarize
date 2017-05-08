@@ -250,10 +250,11 @@ public class Configurator implements IJAXBHelper {
         });
 
         // Non standard parsing required for these
-        String msg = "Path to the server for doing TestCase and Xunit Import requests";
+        String msg = "Takes a comma separated value of server-name,user-name,user-pw,[url].  The last field is " +
+                "optional.  Can be called multiple times.  Eg --server polarion,stoner,mypass";
         sSpecs.put(Opts.SERVER, this.parser.accepts(Opts.SERVER, msg).withRequiredArg().ofType(String.class));
         msg = "Used to set custom polarion fields.  Any CLI switch marked as PROPERTY uses the --property switch." +
-                "It takes the form: --property name=val.";
+                "It takes the form: --property name=val.  Can be called multiple times";
         sSpecs.put(Opts.TR_PROPERTY, this.parser.accepts(Opts.TR_PROPERTY, msg).withRequiredArg().ofType(String.class));
         msg = "When set to true, only sets values to the xml-config file (given as the first arugment to the CLI)." +
                 "If false, then only read in the xunit file as given by --current-xunit, and create a new modified " +
@@ -353,7 +354,7 @@ public class Configurator implements IJAXBHelper {
                     String uname = srv.getUser();
                     String upw = srv.getPassword();
                     String serverName = srv.getName();
-                    Boolean check = serverName.equals("kerberos") || serverName.equals("polarion");
+                    Boolean check = serverName.equals("polarion");
                     if (uname != null && check)
                         srv.setUser(user);
                     if (upw != null && check)
@@ -928,8 +929,8 @@ public class Configurator implements IJAXBHelper {
     public void editTestSuite(String tsPath, String newpath) throws IOException {
         File xunit = new File(tsPath);
         if (tsPath.startsWith("https")) {
-            String user = this.config.kerb.getUser();
-            String pw = this.config.kerb.getPassword();
+            String user = this.config.polarion.getUser();
+            String pw = this.config.polarion.getPassword();
             Optional<File> maybeXunit = ImporterRequest.get(tsPath, user, pw, newpath);
             if (maybeXunit.isPresent())
                 xunit = maybeXunit.get();
