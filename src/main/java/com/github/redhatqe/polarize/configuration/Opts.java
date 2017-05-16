@@ -16,6 +16,7 @@ public class Opts {
     public static final String TESTRUN_TITLE = "testrun-title";
     public static final String TESTRUN_ID = "testrun-id";
     public static final String TESTRUN_TYPE = "testrun-type";
+    public static final String TESTRUN_TEMPLATE_ID = "testrun-template-id";
     public static final String PROJECT = "project";
     public static final String TESTCASE_PREFIX = "testcase-prefix";
     public static final String TESTCASE_SUFFIX = "testcase-suffix";
@@ -26,7 +27,6 @@ public class Opts {
     public static final String ARCH = "arch";
     public static final String VARIANT = "variant";
 
-    public static final String TEMPLATE_ID = "template-id";
     public static final String TC_SELECTOR_NAME = "testcase-selector-name";
     public static final String TC_SELECTOR_VAL = "testcase-selector-val";
     public static final String XUNIT_SELECTOR_NAME = "xunit-selector-name";
@@ -426,7 +426,7 @@ public class Opts {
         @JsonProperty("template-id")
         public void setTemplateId(String templateId) {
             if (!templateId.equals(""))
-                argMap.put(Opts.TEMPLATE_ID, templateId);
+                argMap.put(Opts.TESTRUN_TEMPLATE_ID, templateId);
             this.templateId = templateId;
         }
 

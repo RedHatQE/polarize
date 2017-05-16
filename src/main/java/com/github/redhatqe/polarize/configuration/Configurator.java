@@ -117,6 +117,9 @@ public class Configurator implements IJAXBHelper {
                 new Tuple3<>(this::getTestrunID, this::setTestrunID,
                         "If given, must be a unique ID for the TestRun, otherwise Polarion generates one." +
                                 "Relevant for xunit file"));
+        sOptToAccessors.put(Opts.TESTRUN_TEMPLATE_ID,
+                new Tuple3<>(this::getTemplateId, this::setTemplateId,
+                        "The string of a template id.  For example, --template-id=\"testing template\""));
         sOptToAccessors.put(Opts.TESTRUN_TYPE,
                 new Tuple3<>(this::getTestrunType, this::setTestrunType,
                         "The type of test, can be one of build_acceptance, regression or feature_verification " +
@@ -150,9 +153,6 @@ public class Configurator implements IJAXBHelper {
                 new Tuple3<>(this::getVariant, this::setVariant,
                         "PROPERTY: Optional variant type like Server or Workstation.  Relevant to xunit.  It is " +
                                 "used like this: --property variant=Server"));
-        sOptToAccessors.put(Opts.TEMPLATE_ID,
-                new Tuple3<>(this::getTemplateId, this::setTemplateId,
-                        "The string of a template id.  For example, --template-id=\"testing template\""));
         sOptToAccessors.put(Opts.TC_SELECTOR_NAME,
                 new Tuple3<>(this::getTcSelectorName, this::setTcSelectorName,
                         "A JMS selector is used to filter results.  A selector looks like name='val'.  This " +
@@ -465,6 +465,7 @@ public class Configurator implements IJAXBHelper {
                 case "testrun-title":
                 case "testrun-id":
                 case "testrun-type-id":
+                case "testrun-template-id":
                     break;
                 default:
                     logger.error(String.format("Unknown property name %s", name));
@@ -514,7 +515,7 @@ public class Configurator implements IJAXBHelper {
         this.setTestRunTitleFromConfig(imp, fromConfig);
         this.setTestRunIDFromConfig(imp, fromConfig);
         this.setTestRunTypeFromConfig(imp, fromConfig);
-        if (this.opts.has(sSpecs.get(Opts.TEMPLATE_ID)))
+        if (this.opts.has(sSpecs.get(Opts.TESTRUN_TEMPLATE_ID)))
             this.setTemplateIDFromConfig(imp, fromConfig);
         if (this.opts.has(bSpecs.get(Opts.TR_DRY_RUN)))
             this.setTestRunProperty(bSpecs.get(Opts.TR_DRY_RUN), Opts.TR_DRY_RUN, fromConfig);
@@ -574,13 +575,13 @@ public class Configurator implements IJAXBHelper {
      * @param added
      */
     private void setTemplateIDFromConfig(ImporterType imp, List<PropertyType> added) {
-        String templateId = this.opts.valueOf(sSpecs.get(Opts.TEMPLATE_ID));
+        String templateId = this.opts.valueOf(sSpecs.get(Opts.TESTRUN_TEMPLATE_ID));
         this.setTemplateId(templateId);
         TemplateIdType tid = imp.getTemplateId();
         tid.setId(this.getTemplateId());
         imp.setTemplateId(tid);
         PropertyType pt = new PropertyType();
-        pt.setName("testrun-template-id");
+        pt.setName(Opts.TESTRUN_TEMPLATE_ID);
         pt.setVal(templateId);
         added.add(pt);
     }
@@ -1131,6 +1132,17 @@ public class Configurator implements IJAXBHelper {
     }
 
     public void setTestrunType(String t) {
+        switch(t) {
+            case "regression":
+            case "build_acceptance":
+            case "feature_verification":
+                break;
+            default:
+                String error = "You must pass in one of 'regression', 'build_acceptance' or feature_verification' " +
+                        "if you use this option";
+                logger.error(error);
+                throw new InvalidArgument(error);
+        }
         this.testrunType = this.sanitize(t);
         Optional<ImporterType> maybeXunit = this.getImporterType("xunit");
         maybeXunit.ifPresent(impType -> impType.getTestrun().setType(this.testrunType));

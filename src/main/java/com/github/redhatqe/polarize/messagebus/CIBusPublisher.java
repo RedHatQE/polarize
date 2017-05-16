@@ -20,14 +20,12 @@ public class CIBusPublisher {
         this.logger = LoggerFactory.getLogger(CIBusListener.class);
     }
 
-    public void sendMessage(String text) {
+    public void sendMessage(String text, String user, String pw) {
         String brokerUrl = this.polarizeConfig.broker.getUrl();
         ActiveMQConnectionFactory factory = new ActiveMQConnectionFactory(brokerUrl);
         Connection connection;
         MessageProducer producer;
 
-        String user = this.polarizeConfig.kerb.getUser();
-        String pw = this.polarizeConfig.kerb.getPassword();
         factory.setUserName(user);
         factory.setPassword(pw);
         try {
