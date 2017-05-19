@@ -763,7 +763,9 @@ public class XUnitReporter implements IReporter {
                 throw new ImportRequestError(String.format("Could not download %s", xml.toString()));
         }
 
-        ImporterRequest.sendImportRequest(url, user, pw, xml, selector, XUnitReporter.xunitMessageHandler(),
+        Optional<ObjectNode> node =
+                ImporterRequest.sendImportRequest(url, user, pw, xml, selector, XUnitReporter.xunitMessageHandler(),
                 configPath);
+        ObjectNode n = node.orElseThrow(() -> new MessageError("Did not get a response message from CI Bus"));
     }
 }
