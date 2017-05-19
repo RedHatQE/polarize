@@ -124,6 +124,9 @@ public class Configurator implements IJAXBHelper {
                 new Tuple3<>(this::getTestrunType, this::setTestrunType,
                         "The type of test, can be one of build_acceptance, regression or feature_verification " +
                                 "Defaults to feature_verification"));
+        sOptToAccessors.put(Opts.TESTRUN_GROUP_ID,
+                new Tuple3<>(this::getGroupId, this::setGroupId,
+                        "The value for the group id (not yet implemented)"));
         sOptToAccessors.put(Opts.PROJECT,
                 new Tuple3<>(this::getProject, this::setProject,
                         "Sets the Polarion Project ID.  Relevant for xml-config or xunit file"));
@@ -180,9 +183,6 @@ public class Configurator implements IJAXBHelper {
                 new Tuple3<>(this::getProjectName, this::setProjectName,
                         "A name for your project.  Wherever {PROJECT_NAME} is in the xml-config file, the vaule " +
                                 "here will replace it."));
-        sOptToAccessors.put(Opts.GROUP_ID,
-                new Tuple3<>(this::getGroupId, this::setGroupId,
-                        ""));
         sOptToAccessors.put(Opts.BASE_DIR,
                 new Tuple3<>(this::getBaseDir, this::setBaseDir,
                         "The absolute path, to where your project directory is.  The value here will replace " +
@@ -259,8 +259,11 @@ public class Configurator implements IJAXBHelper {
         msg = "When set to true, only sets values to the xml-config file (given as the first arugment to the CLI)." +
                 "If false, then only read in the xunit file as given by --current-xunit, and create a new modified " +
                 "version given the other CLI switches that will be written to --new-xunit";
-        bSpecs.put(Opts.EDIT_CONFIG, this.parser.accepts(Opts.EDIT_CONFIG, msg).withOptionalArg().ofType(Boolean.class)
-        .defaultsTo(Boolean.FALSE));
+        bSpecs.put(Opts.EDIT_CONFIG,
+                this.parser.accepts(Opts.EDIT_CONFIG, msg)
+                        .withOptionalArg()
+                        .ofType(Boolean.class)
+                        .defaultsTo(Boolean.FALSE));
         msg = "Prints out help for all command line options";
         sSpecs.put(Opts.HELP, this.parser.accepts(Opts.HELP, msg).withOptionalArg().ofType(String.class)
         .describedAs("Show help"));
@@ -1126,7 +1129,7 @@ public class Configurator implements IJAXBHelper {
 
     public String getTestrunType() {
         if (this.testrunType == null) {
-            this.testrunType = "";  // default
+            this.testrunType = "regression";  // default
         }
         return this.testrunType;
     }
@@ -1134,11 +1137,11 @@ public class Configurator implements IJAXBHelper {
     public void setTestrunType(String t) {
         switch(t) {
             case "regression":
-            case "build_acceptance":
-            case "feature_verification":
+            case "buildacceptance":
+            case "featureverification":
                 break;
             default:
-                String error = "You must pass in one of 'regression', 'build_acceptance' or feature_verification' " +
+                String error = "You must pass in one of 'regression', 'buildacceptance' or featureverification' " +
                         "if you use this option";
                 logger.error(error);
                 throw new InvalidArgument(error);

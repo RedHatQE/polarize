@@ -17,6 +17,8 @@ public class Opts {
     public static final String TESTRUN_ID = "testrun-id";
     public static final String TESTRUN_TYPE = "testrun-type";
     public static final String TESTRUN_TEMPLATE_ID = "testrun-template-id";
+    public static final String TESTRUN_GROUP_ID = "testrun-group-id";
+
     public static final String PROJECT = "project";
     public static final String TESTCASE_PREFIX = "testcase-prefix";
     public static final String TESTCASE_SUFFIX = "testcase-suffix";
@@ -45,7 +47,7 @@ public class Opts {
     public static final String CURRENT_XUNIT = "current-xunit";
     public static final String EDIT_CONFIG = "edit-config";
     public static final String PROJECT_NAME = "project-name";
-    public static final String GROUP_ID = "group-id";
+
     public static final String SERVER = "server";
     public static final String BASE_DIR = "base-dir";
     public static final String MAPPING = "mapping";
