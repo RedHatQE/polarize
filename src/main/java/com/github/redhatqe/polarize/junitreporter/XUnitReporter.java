@@ -372,9 +372,8 @@ public class XUnitReporter implements IReporter {
     checkMethInMapping(Map<String, IdParams> inner, String qual, String project, File badMethods) {
         boolean in = true;
         if (inner == null || !inner.containsKey(project)) {
-            String err = String.format("%s does not exist in mapping file for Project %s \n", project, qual);
+            String err = String.format("%s does not exist in mapping file for Project %s \n", qual, project);
             logger.error(err);
-            System.err.println(err);
             try {
                 FileWriter badf = new FileWriter(badMethods, true);
                 BufferedWriter bw = new BufferedWriter(badf);
@@ -495,7 +494,10 @@ public class XUnitReporter implements IReporter {
         // Get all the iteration data
         Object[] params = result.getParameters();
         if (args.size() != params.length) {
-            XUnitReporter.logger.error("Length of parameters from IResult not the same as from mapping file");
+            String name = String.format("testname: %s, methodname: %s", result.getTestName(), result.getMethod().getMethodName());
+            XUnitReporter.logger.error(String.format("Length of parameters from %s not the same as from mapping file", name));
+            String argList = args.stream().reduce("", (acc, n) -> acc + n + ",");
+            logger.error(String.format("While checking args = %s", argList));
             throw new MappingError();
         }
         for(int x = 0; x < params.length; x++) {

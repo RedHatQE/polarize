@@ -3,9 +3,11 @@ package com.github.redhatqe.polarize.configuration;
 import com.github.redhatqe.polarize.IJAXBHelper;
 import com.github.redhatqe.polarize.JAXBHelper;
 import com.github.redhatqe.polarize.exceptions.XSDValidationError;
+import com.github.redhatqe.polarize.utils.Environ;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.naming.ConfigurationException;
 import java.io.File;
 import java.nio.file.FileSystems;
 import java.nio.file.Paths;
@@ -37,13 +39,22 @@ public class XMLConfig {
 
     public XMLConfig(File path) {
         String homeDir = System.getProperty("user.home");
-        File defaultPath = FileSystems.getDefault().getPath(homeDir + "/.polarize/xml-config.xml").toFile();
+        String envDir = Environ.getVar("POLARIZE_CONFIG").orElse("");
+        File defaultPath;
+        if (envDir.equals(""))
+            defaultPath = FileSystems.getDefault().getPath(homeDir + "/.polarize/xml-config.xml").toFile();
+        else
+            defaultPath = new File(envDir);
         if (path == null) {
             this.configPath = defaultPath;
         }
         else
             this.configPath = path;
         logger.info("Using config file at " + this.configPath);
+
+        if (!this.configPath.exists())
+            throw new Error("Config file does not exist!");
+
         JAXBHelper jaxb = new JAXBHelper();
         Optional<ConfigType> maybeCfg;
         try {
@@ -56,7 +67,8 @@ public class XMLConfig {
         if (!maybeCfg.isPresent()) {
             //throw new Error("Could not load configuration file");
             logger.error("=======================================================================");
-            logger.error("You really should be using a config file in ~/.polarize/xml-config.xml");
+            logger.error("You really should be using a config file. The default is in ~/.polarize/xml-config.xml");
+            logger.error("but you can also specify POLARIZE_CONFIG=/path/to/config.xml in your environment");
             logger.error("If you create new test methods and you still aren't using the config");
             logger.error("then you must do the following: ");
             logger.error("1. Manually generate a test case in Polarion and remember the ID");

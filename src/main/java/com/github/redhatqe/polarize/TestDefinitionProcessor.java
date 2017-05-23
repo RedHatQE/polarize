@@ -300,6 +300,9 @@ public class TestDefinitionProcessor extends AbstractProcessor {
      */
     @Override
     public boolean process(Set<? extends TypeElement> set, RoundEnvironment roundEnvironment) {
+        if (this.round == 0 && auditFile.exists())
+            auditFile.delete();
+
         if (checkNoMoreRounds(this.round, this.config))
             return true;
 
@@ -360,8 +363,6 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         Tuple<SortedSet<String>, List<UpdateAnnotation>> audit =
                 auditMethods(enabledTests, this.methToProjectDef);
 
-        if (this.round == 0 && auditFile.exists())
-            auditFile.delete();
         try {
             writeAuditFile(auditFile, audit);
         } catch (IOException e) {
@@ -632,8 +633,34 @@ public class TestDefinitionProcessor extends AbstractProcessor {
                     Boolean enabled,
                     String cfgPath) {
         List<Optional<ObjectNode>> maybeNodes = new ArrayList<>();
-        if (testcaseMap.isEmpty() || !enabled)
+        if (testcaseMap.isEmpty() || !enabled) {
+            if (!testcaseMap.isEmpty()) {
+                String importTests;
+                List<String> projToTCSNeedingImport = testcaseMap.entrySet().stream()
+                        .map(es -> {
+                            String project = es.getKey();
+                            String ts;
+                            List<Testcase> tcs = es.getValue();
+                            ts = String.join("\n\t",
+                                    tcs.stream().map(Testcase::getTitle).collect(Collectors.toList()));
+                            return project + ":\n\t" + ts;
+                        })
+                        .collect(Collectors.toList());
+                importTests = String.join("\n\t", projToTCSNeedingImport);
+                String highlight = "====================================================";
+                String msg = "The TestCase Importer is disabled, but polarize detected that TestCase imports are " +
+                        "required for\n%s";
+                msg = String.format(msg, importTests);
+                try {
+                    writeAuditFile(TestDefinitionProcessor.auditFile, highlight + "\n");
+                    writeAuditFile(TestDefinitionProcessor.auditFile, msg + "\n");
+                    writeAuditFile(TestDefinitionProcessor.auditFile, highlight + "\n");
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
             return maybeNodes;
+        }
 
         String selector = String.format("%s='%s'", selectorName, selectorValue);
         for(String project: testcaseMap.keySet()) {
@@ -1035,19 +1062,14 @@ public class TestDefinitionProcessor extends AbstractProcessor {
             pToI = new LinkedHashMap<>();
         }
 
-        IdParams ip = pToI.getOrDefault(project, null);
-        if (ip != null) {
-            ip.id = id;
+        IdParams ip; // = pToI.getOrDefault(project, null);
+        List<String> params;
+        if (meta.params != null) {
+            params = meta.params.stream().map(Parameter::getName).collect(Collectors.toList());
         }
-        else {
-            List<String> params;
-            if (meta.params != null) {
-                params = meta.params.stream().map(Parameter::getName).collect(Collectors.toList());
-            }
-            else
-                params = new ArrayList<>();
-            ip = new IdParams(id, params);
-        }
+        else
+            params = new ArrayList<>();
+        ip = new IdParams(id, params);
         pToI.put(project, ip);
         mapFile.put(name, pToI);
     }
@@ -1291,6 +1313,72 @@ public class TestDefinitionProcessor extends AbstractProcessor {
                 .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
     }
 
+    public enum Mismatch {
+        METHOD_NOT_IN_MAPFILE(-1),
+        METHOD_NOT_FOR_PROJECT(-2);
+
+        int value;
+
+        Mismatch(Integer val) {
+            this.value = val;
+        }
+
+        public static int toInt(Mismatch m) {
+            return m.value;
+        }
+    }
+
+    public static void checkParameterMismatch(Meta<TestDefinition> meta, Map<String, Map<String, IdParams>> mapFile) {
+        String qualName = meta.qualifiedName;
+        Map<String, IdParams> methodToParams = mapFile.get(qualName);
+
+        int paramSize = meta.params.size();
+        if (methodToParams == null && paramSize == 0)
+            return;
+        if (methodToParams == null && paramSize != 0) {
+            String err = String.format("Method %s has %d args, but doesnt exist in mapfile", qualName, paramSize);
+            throw new MismatchError(err);
+        }
+
+        IdParams params = methodToParams.get(meta.project);
+        if (params == null)
+            throw new MappingError(String.format("Could not find %s in map file for %s", qualName, meta.project));
+        int mapFileArgSize = params.getParameters().size();
+        if (mapFileArgSize != paramSize) {
+            String msg = "For %s: number of params from method = %d, but number of params in Map File = %d";
+            throw new MismatchError(String.format(msg, qualName, paramSize, mapFileArgSize));
+        }
+    }
+
+
+    /**
+     * Determines the number of params from the Meta object and what's in the Mapping file.
+     *
+     * @param meta
+     * @param mapFile
+     * @return first element of tuple is num of args in method, second is num args in mapfile (or Mismatch value)
+     */
+    public static Tuple<Integer, Integer>
+    paramCount(Meta<TestDefinition> meta, Map<String, Map<String, IdParams>> mapFile) {
+        Tuple<Integer, Integer> params = new Tuple<>();
+        params.first = meta.params.size();
+
+        String qualName = meta.qualifiedName;
+        Map<String, IdParams> methodToParams = mapFile.get(qualName);
+        if (methodToParams == null) {
+            params.second = Mismatch.toInt(Mismatch.METHOD_NOT_IN_MAPFILE);
+            return params;
+        }
+
+        IdParams idparams = methodToParams.get(meta.project);
+        if (idparams == null)
+            params.second = Mismatch.toInt(Mismatch.METHOD_NOT_FOR_PROJECT);
+        else
+            params.second = idparams.getParameters().size();
+
+        return params;
+    }
+
 
     /**
      * Does what is needed based on whether the id exists in the annotation, xml or map file
@@ -1318,7 +1406,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
      * |----------|-------|-------------
      * | 0        | 0     | No update for this Testcase
      * | 0        | 1     | Make import request, and edit or create XML file for method
-     * | 1        | 0     | Make import request, and edit XML for method
+     * | 1        | 0     | Make import request, and edit XML and map for method
      * | 1        | 1     | Make import request, and edit or create XML file for method
      *
      * @param meta A Meta of type TestDefinition which holds the annotation information for the method
@@ -1328,13 +1416,14 @@ public class TestDefinitionProcessor extends AbstractProcessor {
      * @param mapPath Path to the mapping.json file (which is the persistent representation of mapFile)
      * @return An int (as binary) representing the 4 possible states for importing
      */
-    private static int
+    private static Tuple<Integer, Boolean>
     processIdEntities(Meta<TestDefinition> meta,
                       String testCasePath,
                       Map<String, Map<String, IdParams>> mapFile,
                       Testcase tc,
                       File mapPath,
-                      Path xmlDef) {
+                      Path xmlDef,
+                      Map<String, Map<String, Meta<TestDefinition>>> methToPD) {
         List<String> badFuncs = new ArrayList<>();
 
         Optional<String> maybePolarionID = meta.getPolarionIDFromTestcase();
@@ -1363,6 +1452,11 @@ public class TestDefinitionProcessor extends AbstractProcessor {
             String desc = tc.getDescription();
             TestDefinitionProcessor.addDescToXML(meta, testCasePath, desc, idAndTC.second);
         }
+
+        Boolean mapIsEdited = false;
+        Tuple<Integer, Integer> count = paramCount(meta, mapFile);
+        if (!count.first.equals(count.second))
+            mapIsEdited = true;
 
         // TODO: Instead of throwing an error on mismatch, perhaps we should auto-correct based on precedence
         // FIXME: When query ability is added, can run a check
@@ -1432,13 +1526,29 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         TestDefinitionProcessor.writeBadFunctionText(badFuncs);
 
         // If update bit is set, regenerate the XML file with the new data, however, check that xml file doesn't already
-        // have the ID set.  If it does, add the ID to the tc
+        // have the ID set.  If it does, add the ID to the tc.  Also, add to the mapping file
         if ((importType & 0b10) == 0b10) {
             if (!xmlId.equals(""))
                 tc.setId(xmlId);
             createTestCaseXML(tc, xmlDef.toFile());
+            String idtouse = "";
+            if (annId.equals("")) {
+                if (xmlId.equals("")) {
+                    idtouse = mapId;
+                }
+                else
+                    idtouse = xmlId;
+            }
+            if (!idtouse.equals("")) {
+                TestDefinitionProcessor.setPolarionIDInMapFile(meta, idtouse, mapFile);
+                createMappingFile(mapPath, methToPD, mapFile);
+            }
         }
-        return importType;
+
+        // At this point, make sure that the number of args in the method is how many we have in the mapping file.
+        checkParameterMismatch(meta, mapFile);
+
+        return new Tuple<>(importType, mapIsEdited);
     }
 
 
@@ -1450,7 +1560,8 @@ public class TestDefinitionProcessor extends AbstractProcessor {
      */
     private Testcase processTC(Meta<TestDefinition> meta) throws MismatchError {
         return TestDefinitionProcessor.processTC(meta, this.mappingFile, this.testCaseToMeta, this.tcPath, this.tcMap,
-                new File(this.config.getMappingPath()), this.methNameToTestNGDescription, this.config);
+                new File(this.config.getMappingPath()), this.methNameToTestNGDescription, this.config,
+                this.methToProjectDef);
     }
 
     /**
@@ -1470,7 +1581,8 @@ public class TestDefinitionProcessor extends AbstractProcessor {
                                      Map<String, List<Testcase>> testCaseMap,
                                      File mapPath,
                                      Map<String, String> methToDesc,
-                                     XMLConfig config) {
+                                     XMLConfig config,
+                                     Map<String, Map<String, Meta<TestDefinition>>> methToPD) {
         Testcase tc = TestDefinitionProcessor.initImporterTestcase(meta, methToDesc, config);
         // Check if testCasePath exists.  If it doesn't, generate the XML definition.
         Path xmlDef = FileHelper.makeXmlPath(testCasePath, meta);
@@ -1479,7 +1591,9 @@ public class TestDefinitionProcessor extends AbstractProcessor {
 
         tcToMeta.put(tc, meta);
 
-        int importType = processIdEntities(meta, testCasePath, mapFile, tc, mapPath, xmlDef);
+        int importType;
+        Tuple<Integer, Boolean> res = processIdEntities(meta, testCasePath, mapFile, tc, mapPath, xmlDef, methToPD);
+        importType = res.first;
 
         // If the update bit and the none bit are 0 we don't do anything.  Otherwise, do an import request
         if (importType != 0) {
@@ -1492,6 +1606,25 @@ public class TestDefinitionProcessor extends AbstractProcessor {
                 testCaseMap.put(projId, tcs);
             }
         }
+
+        if (res.second && !config.testcase.isEnabled()) {
+            List<String> msgs = new ArrayList<>();
+            String hl = "\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!";
+            msgs.add(hl);
+            msgs.add("WARNING!");
+            msgs.add("The mapping file changed but the TestCase Importer is also disabled!");
+            msgs.add("This means that at runtime the TestRun will fail to import some of the methods since");
+            msgs.add("the TestCase in Polarion and what will be sent in the xunit file are no longer in accord.");
+            msgs.add("To correct this, set the testcase enabled to true in the config file.");
+            msgs.add("This behavior may occur automatically in the future!!");
+            msgs.add(hl);
+            try {
+                writeAuditFile(TestDefinitionProcessor.auditFile, msgs);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+
         return tc;
     }
 
@@ -1648,9 +1781,37 @@ public class TestDefinitionProcessor extends AbstractProcessor {
                 .reduce("", (acc, n) -> acc + "\n- " + n);
         updateMsg = String.format("Methods that have update=true in @TestDefinition:\n%s", updateMsg);
         Path p = path.toPath();
-        try (BufferedWriter writer = Files.newBufferedWriter(p)) {
+        OpenOption[] opts = {StandardOpenOption.APPEND, StandardOpenOption.CREATE};
+        try (BufferedWriter writer = Files.newBufferedWriter(p, opts)) {
+
             writer.write(diffMsg + "\n\n");
             writer.write(updateMsg);
+        }
+    }
+
+    public static void writeAuditFile(File path, String line) throws IOException {
+        Path p = path.toPath();
+        OpenOption[] opts = {StandardOpenOption.APPEND, StandardOpenOption.CREATE};
+        try (BufferedWriter writer = Files.newBufferedWriter(p, opts)) {
+            writer.write(line);
+        }
+    }
+
+    public static void writeAuditFile(String line) throws IOException {
+        Path p = TestDefinitionProcessor.auditFile.toPath();
+        OpenOption[] opts = {StandardOpenOption.APPEND, StandardOpenOption.CREATE};
+        try (BufferedWriter writer = Files.newBufferedWriter(p, opts)) {
+            writer.write(line);
+        }
+    }
+
+    public static void writeAuditFile(File path, List<String> lines) throws IOException {
+        Path p = path.toPath();
+        OpenOption[] opts = {StandardOpenOption.APPEND, StandardOpenOption.CREATE};
+        try (BufferedWriter writer = Files.newBufferedWriter(p, opts)) {
+            for (String l : lines) {
+                writer.write(l + "\n");
+            }
         }
     }
 
