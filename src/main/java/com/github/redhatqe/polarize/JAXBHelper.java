@@ -29,7 +29,7 @@ public class JAXBHelper implements IJAXBHelper {
             xsd = JAXBHelper.class.getClassLoader().getResource("testcase_importer/testcase-importer.xsd");
         }
         else if (t == ConfigType.class) {
-            xsd = JAXBHelper.class.getClassLoader().getResource("configuration/xml-config.xsd");
+            xsd = JAXBHelper.class.getClassLoader().getResource("configuration/polarize-config.xsd");
         }
         else
             throw new XSDValidationError();
