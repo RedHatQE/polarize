@@ -12,6 +12,7 @@ import com.github.redhatqe.polarize.metadata.*;
 
 import com.github.redhatqe.polarize.importer.testcase.Testcase;
 import com.github.redhatqe.polarize.utils.Consumer2;
+import com.github.redhatqe.polarize.utils.Environ;
 import com.github.redhatqe.polarize.utils.Transformer;
 import com.github.redhatqe.polarize.utils.Tuple;
 import org.testng.annotations.Test;
@@ -410,7 +411,8 @@ public class TestDefinitionProcessor extends AbstractProcessor {
             logger.info("=======================================================");
             logger.info("Done with annotation processing");
             String msg = "Don't forget to set <enabled>false</enabled> under the <importer type=\"testcase\"> " +
-                    "section of your xml-config.xml file when you are done creating/updating testcases in Polarion.";
+                    String.format("section of your %s file when you are done", config.configFileName) +
+                    "creating/updating testcases in Polarion.";
             if (isUpdateSet(config, "testcase"))
                 logger.info(msg);
             logger.info("=======================================================");
@@ -1824,9 +1826,14 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         this.methNameToTestNGDescription = new HashMap<>();
         this.testCaseToMeta = new HashMap<>();
         File cfgFile = null;
-        if (this.configPath != null)
+        if (this.configPath == null)
+            this.configPath = Environ.getVar("POLARIZE_CONFIG").orElse(null);
+
+        if (this.configPath != null) {
             cfgFile = new File(this.configPath);
+        }
         this.config = new XMLConfig(cfgFile);
+        this.configPath = this.config.configPath.getAbsolutePath();
         ConfigType cfg = this.config.config;
         if (cfg != null)
             this.tcPath = this.config.getTestcasesXMLPath();

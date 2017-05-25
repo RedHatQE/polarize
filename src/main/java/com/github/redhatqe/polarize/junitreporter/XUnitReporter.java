@@ -415,7 +415,7 @@ public class XUnitReporter implements IReporter {
         for(IInvokedMethod meth: invoked) {
             ITestNGMethod fn = meth.getTestMethod();
             if (!fn.isTest()) {
-                XUnitReporter.logger.info(String.format("Skipping non-test method %s", fn.getMethodName()));
+                //XUnitReporter.logger.info(String.format("Skipping non-test method %s", fn.getMethodName()));
                 continue;
             }
 

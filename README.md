@@ -221,8 +221,8 @@ although deserializing a YAML file to a POJO wasn't too hard, serializing a POJO
 
 There are 2 main configuration files
 
-1. src/main/resources/xml-config.xml
-2. ~/.polarize/xml-config.xml
+1. src/main/resources/polarion-config.xml
+2. ~/.polarize/polarion-config.xml
 
 The latter (if it exists) will override the keys in the former.  It is recommended to use the latter because you will 
 need to put passwords for 2 different servers in it, and you won't want to accidentally check these in. 

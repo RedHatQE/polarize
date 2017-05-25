@@ -10,6 +10,7 @@ import org.slf4j.LoggerFactory;
 import javax.naming.ConfigurationException;
 import java.io.File;
 import java.nio.file.FileSystems;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.List;
@@ -36,15 +37,20 @@ public class XMLConfig {
     public ImporterType testcase;
     public Logger logger = LoggerFactory.getLogger(XMLConfig.class);
     public File configPath;
+    public String configFileName = "polarion-config.xml";
 
     public XMLConfig(File path) {
         String homeDir = System.getProperty("user.home");
         String envDir = Environ.getVar("POLARIZE_CONFIG").orElse("");
         File defaultPath;
         if (envDir.equals(""))
-            defaultPath = FileSystems.getDefault().getPath(homeDir + "/.polarize/xml-config.xml").toFile();
-        else
+            defaultPath = FileSystems.getDefault()
+                    .getPath(homeDir + String.format("/.polarize/%s", this.configFileName)).toFile();
+        else {
+            Path p = Paths.get(envDir);
+            this.configFileName = p.getFileName().toString();
             defaultPath = new File(envDir);
+        }
         if (path == null) {
             this.configPath = defaultPath;
         }
@@ -67,7 +73,7 @@ public class XMLConfig {
         if (!maybeCfg.isPresent()) {
             //throw new Error("Could not load configuration file");
             logger.error("=======================================================================");
-            logger.error("You really should be using a config file. The default is in ~/.polarize/xml-config.xml");
+            logger.error("You really should be using a config file. The default is in ~/.polarize/polarion-config.xml");
             logger.error("but you can also specify POLARIZE_CONFIG=/path/to/config.xml in your environment");
             logger.error("If you create new test methods and you still aren't using the config");
             logger.error("then you must do the following: ");

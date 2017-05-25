@@ -832,7 +832,7 @@ public class Configurator implements IJAXBHelper {
             logger.error("%s already exists.  Overwriting", backup.toString());
         try {
             Files.copy(pdir, backup);
-            logger.info(String.format("Original xml-config.xml was backed up as %s", backup));
+            logger.info(String.format("Original polarion-config.xml was backed up as %s", backup));
         } catch (IOException e) {
             e.printStackTrace();
         }
