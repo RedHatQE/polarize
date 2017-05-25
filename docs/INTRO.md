@@ -9,5 +9,5 @@ git checkout stoner
 ```
 
 You will also need to configure polarize in order to get all the annotations from rhsm-qe.  Create a file 
-called xml-config.xml and put it in ~/.polarize.  There is a _skeleton_ config file that can be used from
+called polarize-config.xml and put it in ~/.polarize.  There is a _skeleton_ config file that can be used from
 the polarize project that is located here

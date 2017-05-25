@@ -660,7 +660,7 @@ public class Opts {
     }
 
     /**
-     * Takes an xml-config.xml and converts it to json
+     * Takes an polarize-config.xml and converts it to json
      * @param xml
      */
     public void xmlToJson(File xml) {

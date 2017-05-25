@@ -30,7 +30,7 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 /**
- * Class that defines an API to edit the xml-config.xml file
+ * Class that defines an API to edit the polarize-config.xml file
  */
 public class Configurator implements IJAXBHelper {
     public static Logger logger = LoggerFactory.getLogger(Configurator.class);
@@ -129,13 +129,13 @@ public class Configurator implements IJAXBHelper {
                         "The value for the group id (not yet implemented)"));
         sOptToAccessors.put(Opts.PROJECT,
                 new Tuple3<>(this::getProject, this::setProject,
-                        "Sets the Polarion Project ID.  Relevant for xml-config or xunit file"));
+                        "Sets the Polarion Project ID.  Relevant for polarize-config or xunit file"));
         sOptToAccessors.put(Opts.TESTCASE_PREFIX,
                 new Tuple3<>(this::getTestcasePrefix, this::setTestcasePrefix,
-                        "An optional string which will be prepended to the Testcase title.  Relevant to xml-config"));
+                        "An optional string which will be prepended to the Testcase title.  Relevant to polarize-config"));
         sOptToAccessors.put(Opts.TESTCASE_SUFFIX,
                 new Tuple3<>(this::getTestcaseSuffix, this::setTestcaseSuffix,
-                        "An optional string will be appended to the Testcase title.  Relevant to xml-config"));
+                        "An optional string will be appended to the Testcase title.  Relevant to polarize-config"));
         sOptToAccessors.put(Opts.PLANNEDIN,
                 new Tuple3<>(this::getPlannedin, this::setPlannedin,
                         "PROPERTY: A string representing what plan time this test is for. Relevant to xunit.  " +
@@ -159,11 +159,11 @@ public class Configurator implements IJAXBHelper {
         sOptToAccessors.put(Opts.TC_SELECTOR_NAME,
                 new Tuple3<>(this::getTcSelectorName, this::setTcSelectorName,
                         "A JMS selector is used to filter results.  A selector looks like name='val'.  This " +
-                                "switch provides the name part of the selector.  Applies to the xml-config file " +
+                                "switch provides the name part of the selector.  Applies to the polarize-config file " +
                                 "when running a TestCase Import request"));
         sOptToAccessors.put(Opts.TC_SELECTOR_VAL,
                 new Tuple3<>(this::getTcSelectorVal, this::setTcSelectorVal,
-                        "As above, but it provides the val in name='val'.  Applies to the xml-config file " +
+                        "As above, but it provides the val in name='val'.  Applies to the polarize-config file " +
                                 "when running a TestCase Import request"));
         sOptToAccessors.put(Opts.XUNIT_SELECTOR_NAME,
                 new Tuple3<>(this::getXunitSelectorName, this::setXunitSelectorName,
@@ -181,12 +181,12 @@ public class Configurator implements IJAXBHelper {
                         "The path for where to read in the xunit file that will be used as a base"));
         sOptToAccessors.put(Opts.PROJECT_NAME,
                 new Tuple3<>(this::getProjectName, this::setProjectName,
-                        "A name for your project.  Wherever {PROJECT_NAME} is in the xml-config file, the vaule " +
+                        "A name for your project.  Wherever {PROJECT_NAME} is in the polarize-config file, the vaule " +
                                 "here will replace it."));
         sOptToAccessors.put(Opts.BASE_DIR,
                 new Tuple3<>(this::getBaseDir, this::setBaseDir,
                         "The absolute path, to where your project directory is.  The value here will replace " +
-                                "wherever {BASEDIR} is in the xml-config file.  Relevant to xml-config"));
+                                "wherever {BASEDIR} is in the polarize-config file.  Relevant to polarize-config"));
         sOptToAccessors.put(Opts.MAPPING,
                 new Tuple3<>(this::getMappingFile, this::setMappingFile,
                         "Absolute path to where the JSON file that mps methods to IDs will be looked up.  " +
@@ -194,7 +194,7 @@ public class Configurator implements IJAXBHelper {
         sOptToAccessors.put(Opts.TC_XML_PATH,
                 new Tuple3<>(this::getTcPath, this::setTcPath,
                         "Path relative to basedir where the XML description files will be stored.  Relevant " +
-                                "to xml-config"));
+                                "to polarize-config"));
         sOptToAccessors.put(Opts.USERNAME,
                 new Tuple3<>(this::getUser, this::setUser,
                         "Set the user name which will be used as the author of TestRuns or TestCases"));
@@ -228,7 +228,7 @@ public class Configurator implements IJAXBHelper {
         iOptToAccessors.put(Opts.TC_IMPORTER_TIMEOUT,
                 new Tuple3<>(this::getTestcaseTimeout, this::setTestcaseTimeout,
                         "The time in miliseconds to wait for a message reply when performing a TestCase Import " +
-                                "request.  Relevant to xml-config"));
+                                "request.  Relevant to polarize-config"));
         iOptToAccessors.put(Opts.XUNIT_IMPORTER_TIMEOUT,
                 new Tuple3<>(this::getXunitTimeout, this::setXunitTimeout,
                         "The time in miliseconds to wait for a message reply when performing an XUnit Import " +
@@ -256,7 +256,7 @@ public class Configurator implements IJAXBHelper {
         msg = "Used to set custom polarion fields.  Any CLI switch marked as PROPERTY uses the --property switch." +
                 "It takes the form: --property name=val.  Can be called multiple times";
         sSpecs.put(Opts.TR_PROPERTY, this.parser.accepts(Opts.TR_PROPERTY, msg).withRequiredArg().ofType(String.class));
-        msg = "When set to true, only sets values to the xml-config file (given as the first arugment to the CLI)." +
+        msg = "When set to true, only sets values to the polarize-config file (given as the first arugment to the CLI)." +
                 "If false, then only read in the xunit file as given by --current-xunit, and create a new modified " +
                 "version given the other CLI switches that will be written to --new-xunit";
         bSpecs.put(Opts.EDIT_CONFIG,
@@ -813,7 +813,7 @@ public class Configurator implements IJAXBHelper {
     }
 
     /**
-     * Backs up the original xml-config.xml
+     * Backs up the original polarize-config.xml
      */
     public static void rotator(String cfgPath) {
         File dir = new File(cfgPath);
@@ -826,13 +826,13 @@ public class Configurator implements IJAXBHelper {
                     success.toString()));
         }
 
-        String timestamp = Utility.makeTimeStamp("xml-config", ".xml");
+        String timestamp = Utility.makeTimeStamp("polarize-config", ".xml");
         Path backup = Paths.get(backupDir.toString(), timestamp);
         if (backup.toFile().exists())
             logger.error("%s already exists.  Overwriting", backup.toString());
         try {
             Files.copy(pdir, backup);
-            logger.info(String.format("Original polarion-config.xml was backed up as %s", backup));
+            logger.info(String.format("Original polarize-config.xml was backed up as %s", backup));
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -987,7 +987,7 @@ public class Configurator implements IJAXBHelper {
     }
 
     /**
-     * Program to edit xml-config.xml or a testng-polarion.xml file
+     * Program to edit polarize-config.xml or a testng-polarion.xml file
      *
      * @param args
      */
@@ -1519,7 +1519,7 @@ public class Configurator implements IJAXBHelper {
     public URL getXSDFromResource(Class<?> t) {
         URL xsd;
         if (t == ConfigType.class) {
-            xsd = JAXBHelper.class.getClass().getResource("configuration/xml-config.xsd");
+            xsd = JAXBHelper.class.getClass().getResource("configuration/polarize-config.xsd");
         }
         else
             throw new XSDValidationError();

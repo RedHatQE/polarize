@@ -37,7 +37,7 @@ public class XMLConfig {
     public ImporterType testcase;
     public Logger logger = LoggerFactory.getLogger(XMLConfig.class);
     public File configPath;
-    public String configFileName = "polarion-config.xml";
+    public String configFileName = "polarize-config.xml";
 
     public XMLConfig(File path) {
         String homeDir = System.getProperty("user.home");
@@ -73,7 +73,7 @@ public class XMLConfig {
         if (!maybeCfg.isPresent()) {
             //throw new Error("Could not load configuration file");
             logger.error("=======================================================================");
-            logger.error("You really should be using a config file. The default is in ~/.polarize/polarion-config.xml");
+            logger.error("You really should be using a config file. The default is in ~/.polarize/polarize-config.xml");
             logger.error("but you can also specify POLARIZE_CONFIG=/path/to/config.xml in your environment");
             logger.error("If you create new test methods and you still aren't using the config");
             logger.error("then you must do the following: ");

@@ -44,7 +44,7 @@ import java.util.stream.Collectors;
  * Class that handles junit report generation for TestNG
  *
  * Use this class when running TestNG tests as -reporter XUnitReporter.  It can be
- * configured through the xml-config.xml file.  A default configuration is contained in the resources folder, but
+ * configured through the polarize-config.xml file.  A default configuration is contained in the resources folder, but
  * a global environment variable of XUNIT_IMPORTER_CONFIG can also be set.  If this env var exists and it points to a
  * file, this file will be loaded instead.
  */
@@ -515,7 +515,7 @@ public class XUnitReporter implements IReporter {
     }
 
     /**
-     * Gets information from xml-config to set as the elements in the <testsuites>
+     * Gets information from polarize-config to set as the elements in the <testsuites>
      *
      * @param responseName
      * @return

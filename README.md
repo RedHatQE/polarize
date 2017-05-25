@@ -221,8 +221,8 @@ although deserializing a YAML file to a POJO wasn't too hard, serializing a POJO
 
 There are 2 main configuration files
 
-1. src/main/resources/polarion-config.xml
-2. ~/.polarize/polarion-config.xml
+1. src/main/resources/polarize-config.xml
+2. ~/.polarize/polarize-config.xml
 
 The latter (if it exists) will override the keys in the former.  It is recommended to use the latter because you will 
 need to put passwords for 2 different servers in it, and you won't want to accidentally check these in. 
@@ -233,7 +233,7 @@ The config file has some documentation for what the various settings are used fo
 
 This section will describe how to make use of polarize
 
-### Example xml-config.xml file 
+### Example polarize-config.xml file 
 
 ```xml
 <config>
@@ -324,8 +324,8 @@ This section will describe how to make use of polarize
 
 ### Editing the config file or a xunit result file
 
-There is a configurator class which can be used to edit settings in the xml-config.xml file, or in a given xunit result 
-file.  The former is handy when you need to edit the xml-config.xml file for long term changes, and the latter is nice 
+There is a configurator class which can be used to edit settings in the polarize-config.xml file, or in a given xunit result 
+file.  The former is handy when you need to edit the polarize-config.xml file for long term changes, and the latter is nice 
 to have when you only need to edit an existing xunit result file say for example to upload to Polarion.
 
 This shows an example of modifying an existing xunit result file with other information and storing it in a new file 
@@ -340,7 +340,7 @@ java -cp ./polarize-0.5.5-SNAPSHOT-all.jar com.github.redhatqe.polarize.configur
 --property notes="A personal test run"
 ```
 
-Here's an example of where you might want to change the xml-config settings for a longer term purpose
+Here's an example of where you might want to change the polarize-config settings for a longer term purpose
 
 ```
 java -cp ./polarize-0.5.5-SNAPSHOT-all.jar com.github.redhatqe.polarize.configuration.Configurator \
@@ -349,7 +349,7 @@ java -cp ./polarize-0.5.5-SNAPSHOT-all.jar com.github.redhatqe.polarize.configur
 --template-id "sean toner master template test"
 ```
 
-By using the --edit-config option, this will overwrite the existing xml-config.xml file and backup the original to the 
+By using the --edit-config option, this will overwrite the existing polarize-config.xml file and backup the original to the 
 ~/.polarize/backup directory as a timestamped file.
 
 ### Annotations for Testcase definitions
@@ -440,7 +440,7 @@ the description, setup, teardown, or any other information differs between RHEL6
 test method, then you should annotate it twice as above.  If your definitions are otherwise identical, you can just 
 put the projectID={Project.RHEL6, Project.RedHatEnterpriseLinux7} for example.
 
-Given the above annotations, and xml-config.xml as shown earlier, polarize will do the following:
+Given the above annotations, and polarize-config.xml as shown earlier, polarize will do the following:
 
 - Look at the xmlDesc field to get path to xml description file
   - If no such file exists, look in a configured path for the xml description file
@@ -516,7 +516,7 @@ but the XUnit importer.
 ### Listening to CI Bus messages
 
 Because the importers (XUnit and TestCase) send replies back as a message on the CI Bus, it is necessary to listen 
-for these messages.  The xml-config.xml file contains entries like this:
+for these messages.  The polarize-config.xml file contains entries like this:
 
 ```xml
     <importer type="testcase">
@@ -675,9 +675,9 @@ requirements.xml.path/<project>/<class>/<methodName>.feature
 
 Here is a compilation of known limitations and TODO's.  Keep these in mind when using polarize
 
-## Editing the xml-config.xsd
+## Editing the polarize-config.xsd
 
-If you ever need to edit the xml-config.xsd file to add new configuration properties, you will need to cd into the 
+If you ever need to edit the polarize-config.xsd file to add new configuration properties, you will need to cd into the 
 src/main/resources/configuration directory, and then run the configuration.sh script.  Due to some weirdness with JAXB 
 the generated class for the ConfigType does not get annotated with @XmlRootElement(name="config").  So remember to 
 manually add this to the ConfigType class.
