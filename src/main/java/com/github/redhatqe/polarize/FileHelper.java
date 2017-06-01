@@ -1,23 +1,23 @@
 package com.github.redhatqe.polarize;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.github.redhatqe.byzantine.exceptions.InvalidArgumentType;
+import com.github.redhatqe.byzantine.utils.IFileHelper;
+import com.github.redhatqe.polarize.metadata.Meta;
+import com.github.redhatqe.polarize.metadata.QualifiedName;
+import com.github.redhatqe.polarize.metadata.TestDefinition;
+import com.github.redhatqe.polarize.utils.StringHelper;
+
+
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.github.redhatqe.polarize.metadata.Meta;
-import com.github.redhatqe.polarize.exceptions.InvalidArgumentType;
-import com.github.redhatqe.polarize.metadata.QualifiedName;
-import com.github.redhatqe.polarize.metadata.TestDefinition;
-import com.github.redhatqe.polarize.utils.StringHelper;
 
-/**
- * Created by stoner on 7/7/16.
- */
 public class FileHelper implements IFileHelper {
 
     /**

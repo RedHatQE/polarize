@@ -17,9 +17,16 @@ import com.github.redhatqe.polarize.messagebus.CIBusListener;
  * ServiceHandlers can push messages to.  However, there is one Listener, RequestQueue and ServiceHandler per request
  * type.
  *
- * +-----------+       +---------------+       +-----------------+       +----------------+
- * | listener  |------>| Request Queue |------>| Service Handler |------>| Response Queue |
- * +-----------+       +---------------+       +-----------------+       +----------------+
+ * +-----------+       +---------------+       +-----------------+       +-------------------+
+ * | listener  |------>| Request Queue |------>| Service Handler |------>| Polarion endpoint |
+ * +-----------+       +---------------+       +-----------------+       +-------------------+
+ *                                                      |                           |
+ *                                                puts req into                sends response
+ *                                                      |                           |
+ *                                                      V                           V
+ *                                             +------------------+      +--------------------+
+ *                                             | OrientDB Pending |<-----| Message Listener   |
+ *                                             +------------------+      +--------------------+
  *
  * The JMSServiceListener is the JMS implementation of the IServiceListener.  The JSON that is received comes from
  * listening on the CI Message Bus.  This is opposed to for example an HTTPServiceListener or WebSocketServiceListener.

@@ -6,6 +6,7 @@ import java.net.URLClassLoader;
 import java.nio.file.FileAlreadyExistsException;
 import java.util.*;
 
+import com.github.redhatqe.byzantine.utils.IJarHelper;
 import com.github.redhatqe.polarize.metadata.Meta;
 import com.github.redhatqe.polarize.metadata.TestDefAdapter;
 import com.github.redhatqe.polarize.metadata.TestDefinition;
@@ -45,7 +46,6 @@ public class JarHelper implements IJarHelper {
     }
 
 
-    @Override
     public Reflector loadClasses(List<String> classes) {
         URLClassLoader ucl = this.makeLoader();
         Reflector refl = new Reflector();
@@ -100,7 +100,7 @@ public class JarHelper implements IJarHelper {
                 refl.processTestDefs();
 
                 refl.testcasesImporterRequest();
-                File mapPath = new File(refl.config.getMappingPath());
+                File mapPath = new File(refl.config.getMapping());
                 TestDefinitionProcessor.writeMapFile(mapPath, refl.mappingFile);
 
                 refl.testDefAdapters = refl.testDefs.stream()
@@ -127,7 +127,7 @@ public class JarHelper implements IJarHelper {
                         TestDefinitionProcessor.auditMethods(enabledTests, refl.methToProjectDef);
                 File path = TestDefinitionProcessor.auditFile;
                 TestDefinitionProcessor.writeAuditFile(path, audit);
-                TestDefinitionProcessor.checkNoMoreRounds(1, refl.config);
+                TestDefinitionProcessor.checkNoMoreRounds(1, refl.pcfg);
             }
         } catch (IOException e) {
             e.printStackTrace();

@@ -3,4 +3,5 @@
 build/
 test-output/
 artifacts/
+logs/
 *.iml
