@@ -84,7 +84,7 @@ public class FullConfig extends ReporterConfig {
 
 
     public static void main(String[] args) throws IOException {
-        File path = new File("/home/stoner/.polarize/yaml-config.yml");
+        File path = new File("/home/stoner/Projects/testpolarize/testing-polarize.yaml");
         FullConfig cfg = Serializer.fromYaml(FullConfig.class, path);
         String selName = cfg.getXunit().getSelector().getName();
     }

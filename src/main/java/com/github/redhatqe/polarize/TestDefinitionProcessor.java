@@ -9,6 +9,9 @@ import com.github.redhatqe.polarize.configuration.FullConfig;
 import com.github.redhatqe.polarize.configuration.PolarizeConfig;
 import com.github.redhatqe.polarize.configuration.TestCaseInfo;
 import com.github.redhatqe.polarize.exceptions.*;
+import com.github.redhatqe.polarize.messagebus.CIBusListener;
+import com.github.redhatqe.polarize.messagebus.MessageHandler;
+import com.github.redhatqe.polarize.messagebus.MessageResult;
 import com.github.redhatqe.polarize.reporter.configuration.ServerInfo;
 import com.github.redhatqe.polarize.reporter.importer.ImporterRequest;
 import com.github.redhatqe.polarize.reporter.importer.testcase.*;
@@ -684,9 +687,10 @@ public class TestDefinitionProcessor extends AbstractProcessor {
                 maybeNodes.add(Optional.empty());
             else {
                 try {
-                    Consumer<Optional<ObjectNode>> hdlr;
+                    MessageHandler hdlr;
                     hdlr = TestDefinitionProcessor.testcaseImportHandler(tcPath, project, tests, tType);
-                    maybeNodes.add(ImporterRequest.sendImportRequest(url, user, pw, testXml, selector, hdlr, cfgPath));
+                    CIBusListener cbl = new CIBusListener(hdlr);
+                    maybeNodes.add(ImporterRequest.sendImportRequest(cbl, url, user, pw, testXml, selector, cfgPath));
                 } catch (InterruptedException e) {
                     e.printStackTrace();
                 } catch (ExecutionException e) {
@@ -757,17 +761,22 @@ public class TestDefinitionProcessor extends AbstractProcessor {
      * @param tcs Testcases object to be examined
      * @return lambda of a Consumer
      */
-    public static Consumer<Optional<ObjectNode>>
+    public static MessageHandler
     testcaseImportHandler(String testPath, String pID, Testcases tcs, TestCaseInfo tt) {
-        return node -> {
-            if (node == null || !node.isPresent()) {
+        return (ObjectNode node) -> {
+            MessageResult result = new MessageResult();
+            if (node == null) {
                 logger.warn("No message was received");
-                return;
+                result.setStatus(MessageResult.Status.NO_MESSAGE);
+                return result;
             }
-            JsonNode root = node.get().get("root");
+            JsonNode root = node.get("root");
             if (root.has("status")) {
-                if (root.get("status").textValue().equals("failed"))
-                    return;
+                if (root.get("status").textValue().equals("failed")) {
+                    result.setStatus(MessageResult.Status.FAILED);
+                    result.errorDetails = "status was failed";
+                    return result;
+                }
             }
 
             JsonNode testcases = root.get("import-testcases");
@@ -817,6 +826,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
                     logger.error(String.format("Unable to create testcase for %s", name));
                 }
             });
+            return result;
         };
     }
 
@@ -872,8 +882,9 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         }
         String url = baseUrl + this.cfg.getTestcase().getEndpoint();
         TestCaseInfo tt = this.cfg.getTestcase();
-        Consumer<Optional<ObjectNode>> hdlr = testcaseImportHandler(this.tcPath, project, tests, tt);
-        return ImporterRequest.sendImportRequest(url, user, pw, testcaseXml, selector, hdlr, this.configPath);
+        MessageHandler hdlr = testcaseImportHandler(this.tcPath, project, tests, tt);
+        CIBusListener cbl = new CIBusListener(hdlr);
+        return ImporterRequest.sendImportRequest(cbl, url, user, pw, testcaseXml, selector, this.configPath);
     }
 
     /**

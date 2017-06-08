@@ -78,7 +78,8 @@ dependencies {
     compile group: 'org.apache.activemq', name: 'activemq-all', version: '5.14.5'
     compile files('/home/stoner/Projects/polarize-reporter/build/libs/polarize-reporter-0.0.1-SNAPSHOT-all.jar')
 
-    compile group: 'com.github.redhatqe.polarize', name: 'polarize-bus', version: '0.0.1-SNAPSHOT'
+    //compile group: 'com.github.redhatqe.polarize', name: 'polarize-bus', version: '0.0.2'
+    compile files('/home/stoner/Projects/polarize-bus/build/libs/polarize-bus-0.0.2-all.jar')
 }
 
 test {
