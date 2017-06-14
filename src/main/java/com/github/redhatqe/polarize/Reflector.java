@@ -1,8 +1,8 @@
 package com.github.redhatqe.polarize;
 
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.github.redhatqe.polarize.configuration.FullConfig;
 import com.github.redhatqe.polarize.configuration.PolarizeConfig;
+import com.github.redhatqe.polarize.configurator.PolarizeYAML;
 import com.github.redhatqe.polarize.metadata.*;
 import com.github.redhatqe.polarize.reporter.importer.testcase.Parameter;
 import com.github.redhatqe.polarize.reporter.importer.testcase.Testcase;
@@ -30,8 +30,8 @@ public class Reflector {
     public Map<Testcase, Meta<TestDefinition>> testCaseToMeta = new HashMap<>();
     public Map<String,
                Map<String, IdParams>> mappingFile;
-    public PolarizeConfig pcfg;
-    public FullConfig config;
+    public PolarizeYAML pcfg;
+    public PolarizeConfig config;
     public String tcPath;
     private Map<String, List<Testcase>> tcMap = new HashMap<>();
     public Map<String,
@@ -40,7 +40,7 @@ public class Reflector {
     private String configPath = System.getProperty("polarize.config");
 
     public Reflector() {
-        pcfg = new PolarizeConfig();
+        pcfg = new PolarizeYAML();
         config = pcfg.cfg;
         testsToClasses = new HashMap<>();
         testTypes = new HashSet<>(Arrays.asList("AcceptanceTests", "Tier1Tests", "Tier2Tests", "Tier3Tests"));

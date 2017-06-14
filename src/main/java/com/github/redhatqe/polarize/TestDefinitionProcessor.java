@@ -5,8 +5,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.github.redhatqe.byzantine.utils.IFileHelper;
 
-import com.github.redhatqe.polarize.configuration.FullConfig;
 import com.github.redhatqe.polarize.configuration.PolarizeConfig;
+import com.github.redhatqe.polarize.configurator.PolarizeYAML;
 import com.github.redhatqe.polarize.configuration.TestCaseInfo;
 import com.github.redhatqe.polarize.exceptions.*;
 import com.github.redhatqe.polarize.messagebus.CIBusListener;
@@ -70,8 +70,8 @@ public class TestDefinitionProcessor extends AbstractProcessor {
     public static JAXBHelper jaxb = new JAXBHelper();
     //private Testcases testcases = new Testcases();
     private Map<String, List<Testcase>> tcMap = new HashMap<>();
-    public PolarizeConfig config;
-    private FullConfig cfg;
+    public PolarizeYAML config;
+    private PolarizeConfig cfg;
     private static Map<String, WarningInfo> warnings = new HashMap<>();
     private int round = 0;
     private String configPath = System.getProperty("polarize.config");
@@ -395,7 +395,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
      * @param round
      * @return
      */
-    public static Boolean checkNoMoreRounds(int round, PolarizeConfig config) {
+    public static Boolean checkNoMoreRounds(int round, PolarizeYAML config) {
         File warn;
         if (round > 0) {
             warn = new File(warnText);
@@ -1198,7 +1198,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
      * @return Testcase object
      */
     public static Testcase
-    initImporterTestcase(Meta<TestDefinition> meta, Map<String, String> methToDesc, FullConfig cfg) {
+    initImporterTestcase(Meta<TestDefinition> meta, Map<String, String> methToDesc, PolarizeConfig cfg) {
         Testcase tc = new Testcase();
         TestDefinition def = meta.annotation;
         TestDefinitionProcessor.initTestSteps(meta, tc);
@@ -1635,7 +1635,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
                                      Map<String, List<Testcase>> testCaseMap,
                                      File mapPath,
                                      Map<String, String> methToDesc,
-                                     FullConfig config,
+                                     PolarizeConfig config,
                                      Map<String, Map<String, Meta<TestDefinition>>> methToPD) {
         Testcase tc = TestDefinitionProcessor.initImporterTestcase(meta, methToDesc, config);
         // Check if testCasePath exists.  If it doesn't, generate the XML definition.
@@ -1808,7 +1808,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
      * Checks if the \<enabled\> section is set to true for an importer
      * @return
      */
-    public static Boolean isUpdateSet(FullConfig cfg, String importerType) {
+    public static Boolean isUpdateSet(PolarizeConfig cfg, String importerType) {
         switch(importerType) {
             case "testcase":
                 return cfg.getTestcase().getEnabled();
@@ -1878,7 +1878,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         if (this.configPath == null)
             this.configPath = Environ.getVar("POLARIZE_CONFIG").orElse(null);
 
-        this.config = new PolarizeConfig(this.configPath);
+        this.config = new PolarizeYAML(this.configPath);
         this.configPath = this.config.configFileName;
         this.cfg = this.config.cfg;
         if (cfg != null)
