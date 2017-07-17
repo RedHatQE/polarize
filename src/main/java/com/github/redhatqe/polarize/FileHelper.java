@@ -89,10 +89,10 @@ public class FileHelper implements IFileHelper {
      * Creates an xml path for a test method.  The path generated will take the form:</br>
      * /{base}/{projID}/{qualname}
      * </p>
-     * Normally, the base will come from the config file, extra will come from the class.methodName, and project will
+     * Normally, the base will come from the configuration file, extra will come from the class.methodName, and project will
      * be determined based on some other factor like the project in a Meta object.
      *
-     * @param base From the config file \<testcases-xml path={}\>
+     * @param base From the configuration file \<testcases-xml path={}\>
      * @param extra a string representing an extra set of paths concatenated to base
      * @param projID the project
      * @return

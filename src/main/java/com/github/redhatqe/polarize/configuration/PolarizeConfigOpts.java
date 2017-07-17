@@ -1,10 +1,12 @@
 package com.github.redhatqe.polarize.configuration;
 
 
+import com.github.redhatqe.polarize.reporter.configuration.IGetOpts;
+
 /**
  * These are the CLI options that can be used
  */
-public enum PolarizeConfigOpts {
+public enum PolarizeConfigOpts implements IGetOpts {
     TESTCASE_PREFIX("testcase-prefix", "An optional string which will be prepended to the Testcase title.  Relevant " +
             "to polarize-config"),
     TESTCASE_SUFFIX("testcase-suffix", "An optional string will be appended to the Testcase title.  Relevant to" +

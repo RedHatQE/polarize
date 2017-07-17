@@ -28,7 +28,7 @@ public class JAXBHelper implements IJAXBHelper {
             xsd = JAXBHelper.class.getClassLoader().getResource("testcase_importer/testcase-importer.xsd");
         }
         else
-            throw new XSDValidationError();
+            throw new XSDValidationError(String.format("Could not find xsd schema for class %s", t.getName()));
 
         return xsd;
     }

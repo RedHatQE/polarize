@@ -1,8 +1,7 @@
 package com.github.redhatqe.polarize.configurator;
 
 
-import com.github.redhatqe.byzantine.config.IConfig;
-import com.github.redhatqe.byzantine.config.Serializer;
+import com.github.redhatqe.byzantine.configuration.Serializer;
 import com.github.redhatqe.byzantine.configurator.IConfigurator;
 import com.github.redhatqe.byzantine.utils.Tuple;
 import com.github.redhatqe.polarize.configuration.PolarizeConfig;
@@ -47,7 +46,7 @@ public class PolarizeYAML implements IConfigurator<PolarizeConfig> {
             configFile = new File(path);
             this.configFileName = path;
         }
-        logger.info("Using config file at " + configFile);
+        logger.info("Using configuration file at " + configFile);
 
         if (!configFile.exists())
             throw new Error("Config file does not exist!");
@@ -69,8 +68,4 @@ public class PolarizeYAML implements IConfigurator<PolarizeConfig> {
         return cfg;
     }
 
-    @Override
-    public <T1 extends IConfig> void setupNameToHandler(T1 t1) {
-
-    }
 }

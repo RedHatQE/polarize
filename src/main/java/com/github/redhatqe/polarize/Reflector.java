@@ -37,7 +37,7 @@ public class Reflector {
     public Map<String,
                Map<String, Meta<TestDefinition>>> methToProjectDef;
     public Map<String, String> methodToDesc = new HashMap<>();
-    private String configPath = System.getProperty("polarize.config");
+    private String configPath = System.getProperty("polarize.configuration");
 
     public Reflector() {
         pcfg = new PolarizeYAML();

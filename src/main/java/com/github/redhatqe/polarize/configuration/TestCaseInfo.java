@@ -9,6 +9,7 @@ public class TestCaseInfo extends ImporterInfo {
     private Title title;
 
     public TestCaseInfo() {
+        super();
         this.title = new Title();
     }
 

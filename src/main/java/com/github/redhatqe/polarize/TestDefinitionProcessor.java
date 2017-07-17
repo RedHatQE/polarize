@@ -74,7 +74,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
     private PolarizeConfig cfg;
     private static Map<String, WarningInfo> warnings = new HashMap<>();
     private int round = 0;
-    private String configPath = System.getProperty("polarize.config");
+    private String configPath = System.getProperty("polarize.configuration");
 
     public static final String warnText = "/tmp/polarize-warnings.txt";
     public static final String tempTestCase = "/tmp/testcases-%s.xml";
@@ -322,7 +322,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
 
         if (this.config.cfg == null) {
             logger.info("=====================================================");
-            logger.info("No config file found...skipping annotation processing");
+            logger.info("No configuration file found...skipping annotation processing");
             logger.info("=====================================================");
             return true;
         }
@@ -1669,7 +1669,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
             msgs.add("The mapping file changed but the TestCase Importer is also disabled!");
             msgs.add("This means that at runtime the TestRun will fail to import some of the methods since");
             msgs.add("the TestCase in Polarion and what will be sent in the xunit file are no longer in accord.");
-            msgs.add("To correct this, set the testcase enabled to true in the config file.");
+            msgs.add("To correct this, set the testcase enabled to true in the configuration file.");
             msgs.add("This behavior may occur automatically in the future!!");
             msgs.add(hl);
             try {
