@@ -24,7 +24,8 @@ public class PolarizeYAML implements IConfigurator<PolarizeConfig> {
     public PolarizeYAML(String path) {
         File defaultPath;
         String homeDir = System.getProperty("user.home");
-        this.configFileName = path;
+        if (path != null && !path.equals(""))
+            this.configFileName = path;
 
         // If POLARIZE_CONFIG is set, prefer that path
         String envDir = Environ.getVar("POLARIZE_CONFIG").orElse("");

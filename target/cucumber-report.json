@@ -1,0 +1,240 @@
+[
+  {
+    "line": 1,
+    "elements": [
+      {
+        "line": 7,
+        "name": "A YAML config file is used in user specified directory",
+        "description": "",
+        "id": "configuration-for-a-config;a-yaml-config-file-is-used-in-user-specified-directory",
+        "type": "scenario",
+        "keyword": "Scenario",
+        "steps": [
+          {
+            "result": {
+              "duration": 105635773,
+              "status": "passed"
+            },
+            "line": 8,
+            "name": "the default config file exists in /tmp/default.yaml",
+            "match": {
+              "location": "ConfigTest.java:30"
+            },
+            "keyword": "Given "
+          },
+          {
+            "result": {
+              "duration": 45279650,
+              "status": "passed"
+            },
+            "line": 9,
+            "name": "a user loads the config file",
+            "match": {
+              "location": "ConfigTest.java:36"
+            },
+            "keyword": "When "
+          },
+          {
+            "result": {
+              "duration": 1116753,
+              "status": "passed"
+            },
+            "line": 10,
+            "name": "the config file should be loaded successfully",
+            "match": {
+              "location": "ConfigTest.java:44"
+            },
+            "keyword": "Then "
+          },
+          {
+            "result": {
+              "duration": 2022235,
+              "status": "passed"
+            },
+            "line": 11,
+            "name": "the ci.url should be \u0027some.server.com:12345\u0027",
+            "match": {
+              "arguments": [
+                {
+                  "val": "ci",
+                  "offset": 4
+                },
+                {
+                  "val": "url",
+                  "offset": 7
+                },
+                {
+                  "val": "some.server.com:12345",
+                  "offset": 22
+                }
+              ],
+              "location": "ConfigTest.java:48"
+            },
+            "keyword": "And "
+          }
+        ]
+      }
+    ],
+    "name": "Configuration for a Config",
+    "description": "\nA user must be able to include data in a YAML config file, and the properties should be available to other programs.\nThis yaml config file should be user specified, and must conform to a set of properties.  If the config file is non\nstandard, then reading in of the config must fail, and should specify the non-conformity",
+    "id": "configuration-for-a-config",
+    "keyword": "Feature",
+    "uri": "brokerConfiguration.feature"
+  },
+  {
+    "line": 1,
+    "elements": [
+      {
+        "line": 6,
+        "name": "Read a JSON config file",
+        "description": "",
+        "id": "configuration-capabilities;read-a-json-config-file",
+        "type": "scenario",
+        "keyword": "Scenario",
+        "steps": [
+          {
+            "result": {
+              "status": "undefined"
+            },
+            "line": 7,
+            "name": "the file named \"busconfig.json\"",
+            "match": {},
+            "keyword": "Given "
+          },
+          {
+            "result": {
+              "status": "undefined"
+            },
+            "line": 8,
+            "name": "it is located in \"HOME\"",
+            "match": {},
+            "keyword": "And "
+          },
+          {
+            "result": {
+              "status": "undefined"
+            },
+            "line": 9,
+            "name": "it has the contents of",
+            "match": {},
+            "keyword": "And ",
+            "doc_string": {
+              "content_type": "",
+              "line": 10,
+              "value": "{\n}"
+            }
+          }
+        ]
+      }
+    ],
+    "name": "Configuration capabilities",
+    "description": "\nConfiguration can be done from a combination of a JSON file, a database graph, Environment variables, or CLI options.\nSince these can all interact with each other, this is always a very challenging feature to implement and test.",
+    "id": "configuration-capabilities",
+    "keyword": "Feature",
+    "uri": "configure.feature"
+  },
+  {
+    "line": 1,
+    "elements": [
+      {
+        "line": 22,
+        "name": "Send a JSON message to message broker",
+        "description": "",
+        "id": "publish-a-message-to-a-jms-message-broker;send-a-json-message-to-message-broker;;2",
+        "type": "scenario",
+        "keyword": "Scenario Outline",
+        "steps": [
+          {
+            "result": {
+              "status": "undefined"
+            },
+            "line": 7,
+            "name": "a JSON message \"body\" with the following",
+            "match": {},
+            "keyword": "Given ",
+            "doc_string": {
+              "content_type": "",
+              "line": 8,
+              "value": "{ \"testing\": \"Hello world\" }"
+            }
+          },
+          {
+            "result": {
+              "status": "undefined"
+            },
+            "line": 11,
+            "name": "in the header there is a rhsm_qe with a value of polarize_bus",
+            "match": {},
+            "matchedColumns": [
+              1,
+              2
+            ],
+            "keyword": "And "
+          },
+          {
+            "result": {
+              "status": "undefined"
+            },
+            "line": 12,
+            "name": "the default config file is used",
+            "match": {},
+            "keyword": "And "
+          },
+          {
+            "result": {
+              "status": "undefined"
+            },
+            "line": 13,
+            "name": "the JMS selector is set to rhsm_qe\u003d\u0027polarize_bus\u0027",
+            "match": {},
+            "matchedColumns": [
+              3,
+              4
+            ],
+            "keyword": "When "
+          },
+          {
+            "result": {
+              "status": "undefined"
+            },
+            "line": 14,
+            "name": "the message is sent to the ci url",
+            "match": {},
+            "matchedColumns": [
+              0
+            ],
+            "keyword": "And "
+          },
+          {
+            "result": {
+              "status": "undefined"
+            },
+            "line": 15,
+            "name": "the message should be received with the reply body of",
+            "match": {},
+            "keyword": "Then ",
+            "doc_string": {
+              "content_type": "",
+              "line": 16,
+              "value": "{ \"testing\": \"Hello world\" }"
+            }
+          },
+          {
+            "result": {
+              "status": "undefined"
+            },
+            "line": 19,
+            "name": "the message result status should be \"SUCCESS\"",
+            "match": {},
+            "keyword": "And "
+          }
+        ]
+      }
+    ],
+    "name": "Publish a message to a JMS Message Broker",
+    "description": "\nA JMS Message encoded as a JSON object should be submitted to a message broker.  This message must define at a minimum\na JMS type and have a non-empty body.",
+    "id": "publish-a-message-to-a-jms-message-broker",
+    "keyword": "Feature",
+    "uri": "publish.feature"
+  }
+]

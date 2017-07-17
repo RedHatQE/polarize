@@ -11,7 +11,6 @@ import com.github.redhatqe.byzantine.utils.Tuple;
 import com.github.redhatqe.polarize.reporter.configuration.IGetOpts;
 import com.github.redhatqe.polarize.reporter.configuration.ReporterConfig;
 import com.github.redhatqe.polarize.reporter.configuration.ReporterConfigOpts;
-import com.sun.org.apache.xpath.internal.operations.Bool;
 import joptsimple.ArgumentAcceptingOptionSpec;
 import joptsimple.OptionParser;
 import joptsimple.OptionSet;

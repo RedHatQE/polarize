@@ -1,0 +1,16 @@
+brokers:
+  ci:
+    url: "some.server.com:12345"
+    user: "stoner"
+    password: "foo"
+    messages:
+      timeout: 300000
+      maxMsgs: 2
+  metrics:
+    url: "another.server.com:65432"
+    user: "foo"
+    password: "bar"
+    messages:
+      timeout: 1000
+      maxMsgs: 1
+defaultBroker: metrics
