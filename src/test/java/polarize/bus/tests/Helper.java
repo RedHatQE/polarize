@@ -31,6 +31,6 @@ public class Helper {
     }
 
     public static String getDefaultConfigPath() {
-        return Paths.get(System.getProperty("user.home"), ".polarize", "busconfig.yaml").toString();
+        return Paths.get(System.getProperty("user.home"), ".polarize", "polarize-config.yaml").toString();
     }
 }

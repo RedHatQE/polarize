@@ -10,6 +10,8 @@ import com.github.redhatqe.byzantine.utils.Tuple;
 import com.github.redhatqe.polarize.configuration.Broker;
 import com.github.redhatqe.polarize.configuration.Config;
 
+import com.github.redhatqe.polarize.configuration.PolarizeConfig;
+import com.github.redhatqe.polarize.reporter.configuration.ServerInfo;
 import io.reactivex.functions.Action;
 import io.reactivex.functions.Consumer;
 import io.reactivex.subjects.PublishSubject;
@@ -96,6 +98,19 @@ public class CIBusListener implements ICIBus, IMessageListener {
             });
         if (this.config != null)
             this.broker = this.config.getBrokers().get(this.config.getDefaultBroker());
+    }
+
+    public CIBusListener(MessageHandler hdlr, PolarizeConfig cfg) {
+        this.logger = LogManager.getLogger("messagebus.CIBusListener");
+        this.topic = "CI";
+        this.clientID = "polarize-bus-listener-" + Integer.toString(CIBusListener.getId());
+        this.configPath = "";
+        this.config = cfg.getMessageBus();
+        if (this.config != null)
+            this.broker = this.config.getBrokers().get(this.config.getDefaultBroker());
+
+        this.messages = new CircularFifoQueue<>(20);
+        this.nodeSub = this.setupDefaultSubject(IMessageListener.defaultHandler());
     }
 
     /**

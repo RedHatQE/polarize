@@ -47,7 +47,7 @@ public class Config implements IConfig {
 
     public Config() {
         this.brokers = new HashMap<>();
-        this.defaultBroker = "";
+        this.defaultBroker = "ci";
         this.setupDefaultHandlers();
     }
 

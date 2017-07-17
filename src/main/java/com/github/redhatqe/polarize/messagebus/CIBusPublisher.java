@@ -6,6 +6,7 @@ import com.github.redhatqe.byzantine.utils.ArgHelper;
 import com.github.redhatqe.byzantine.utils.Tuple;
 import com.github.redhatqe.polarize.configuration.Broker;
 import com.github.redhatqe.polarize.configuration.Config;
+import com.github.redhatqe.polarize.configuration.PolarizeConfig;
 import com.github.redhatqe.polarize.configurator.CLIConfigurator;
 import com.github.redhatqe.polarize.configurator.YAMLConfigurator;
 import org.apache.activemq.ActiveMQConnectionFactory;
@@ -60,6 +61,22 @@ public class CIBusPublisher implements ICIBus {
         this();
         if (cfg != null)
             this.config = cfg;
+        else
+            this.config = ICIBus.getConfigFromPath(Config.class, this.configPath).orElseThrow(() -> {
+                return new NoConfigFoundError(String.format("Could not find configuration file at %s", this.configPath));
+            });
+        if (this.config != null)
+            this.broker = this.config.getBrokers().get(this.config.getDefaultBroker());
+    }
+
+    public CIBusPublisher(PolarizeConfig cfg) {
+        this.logger = LoggerFactory.getLogger(CIBusListener.class);
+        this.topic = "CI";
+        this.clientID = "Polarize-" + Integer.toString(CIBusPublisher.getId());
+        this.configPath = "";
+        if (cfg != null) {
+            this.config = cfg.getMessageBus();
+        }
         else
             this.config = ICIBus.getConfigFromPath(Config.class, this.configPath).orElseThrow(() -> {
                 return new NoConfigFoundError(String.format("Could not find configuration file at %s", this.configPath));
