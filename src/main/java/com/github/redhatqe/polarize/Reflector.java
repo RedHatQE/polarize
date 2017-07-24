@@ -1,55 +1,62 @@
 package com.github.redhatqe.polarize;
 
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.github.redhatqe.polarize.configuration.XMLConfig;
-import com.github.redhatqe.polarize.importer.testcase.Testcase;
-import com.github.redhatqe.polarize.importer.testcase.Testcases;
+import com.github.redhatqe.polarize.configuration.PolarizeConfig;
+import com.github.redhatqe.polarize.configurator.PolarizeYAML;
 import com.github.redhatqe.polarize.metadata.*;
+import com.github.redhatqe.polarize.reporter.importer.testcase.Parameter;
+import com.github.redhatqe.polarize.reporter.importer.testcase.Testcase;
 
 import java.io.File;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
-import java.lang.reflect.Parameter;
+
 import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.testng.annotations.Test;
 
 
-
-/**
- * Created by stoner on 3/9/16.
- */
 public class Reflector {
-
     public HashMap<String, List<MetaData>> testsToClasses;
     public List<MetaData> methods;
     public List<Meta<TestDefinition>> testDefs;
     public List<Meta<TestDefAdapter>> testDefAdapters;
     private Set<String> testTypes;
-    private static Logger logger = LoggerFactory.getLogger(Reflector.class);
+    private static Logger logger = LogManager.getLogger(Reflector.class.getSimpleName());
     public Map<Testcase, Meta<TestDefinition>> testCaseToMeta = new HashMap<>();
     public Map<String,
                Map<String, IdParams>> mappingFile;
-    public XMLConfig config;
+    public PolarizeYAML pcfg;
+    public PolarizeConfig config;
     public String tcPath;
     private Map<String, List<Testcase>> tcMap = new HashMap<>();
     public Map<String,
                Map<String, Meta<TestDefinition>>> methToProjectDef;
     public Map<String, String> methodToDesc = new HashMap<>();
-    private String configPath = System.getProperty("polarize.config");
+    private String configPath = System.getProperty("polarize.configuration");
 
     public Reflector() {
-        config = new XMLConfig(null);
+        pcfg = new PolarizeYAML();
+        this.init();
+    }
+
+    public Reflector(String cfgPath) {
+        pcfg = new PolarizeYAML(cfgPath);
+        this.init();
+    }
+
+    private void init() {
+        config = pcfg.cfg;
         testsToClasses = new HashMap<>();
         testTypes = new HashSet<>(Arrays.asList("AcceptanceTests", "Tier1Tests", "Tier2Tests", "Tier3Tests"));
         testDefs = new ArrayList<>();
-        mappingFile = FileHelper.loadMapping(new File(config.getMappingPath()));
-        tcPath = config.config.getTestcasesXml().getPath();
-        tcPath = config.getTestcasesXMLPath();
+        mappingFile = FileHelper.loadMapping(new File(config.getMapping()));
+        tcPath = config.getTestcasesXml();
+        tcPath = config.getTestcasesXml();
     }
 
     private <T> List<Meta<TestDefinition>> getTestDefsMetaData(Class<T> c) {
@@ -81,11 +88,10 @@ public class Reflector {
 
         // TODO: This doesnt get clojure param names. Might need to make Reflector and JarHelper
         // in clojure, and get the args that way.
-        Parameter[] params = m.getParameters();
-        List<com.github.redhatqe.polarize.importer.testcase.Parameter> args = Arrays.stream(params)
+        java.lang.reflect.Parameter[] params = m.getParameters();
+        List<Parameter> args = Arrays.stream(params)
                 .map(arg -> {
-                    com.github.redhatqe.polarize.importer.testcase.Parameter pm = new
-                            com.github.redhatqe.polarize.importer.testcase.Parameter();
+                    Parameter pm = new Parameter();
                     pm.setName(arg.getName());
                     pm.setScope("local");
                     return pm;
@@ -217,7 +223,7 @@ public class Reflector {
 
 
     public void processTestDefs() {
-        File mapPath = new File(this.config.getMappingPath());
+        File mapPath = new File(this.config.getMapping());
         this.testDefs.forEach(td ->
                 TestDefinitionProcessor.processTC(td, this.mappingFile, this.testCaseToMeta, this.tcPath, this.tcMap,
                         mapPath, this.methodToDesc, this.config, this.methToProjectDef));
@@ -253,20 +259,13 @@ public class Reflector {
     }
 
     List<Optional<ObjectNode>> testcasesImporterRequest() {
-        List<Optional<ObjectNode>> maybes = new ArrayList<>();
-        Optional<ObjectNode> maybeNode = Optional.empty();
-        if (!this.config.testcase.isEnabled() || this.tcMap.isEmpty()) {
-            maybes.add(maybeNode);
-            return maybes;
-        }
-
-        String sName = this.config.testcase.getSelector().getName();
-        String sVal = this.config.testcase.getSelector().getVal();
-        String user = this.config.polarion.getUser();
-        String pw = this.config.polarion.getPassword();
-        String url = this.config.polarion.getUrl() + this.config.testcase.getEndpoint().getRoute();
-        Boolean enabled = this.config.testcase.isEnabled();
+        String sName = this.config.getTestcase().getSelector().getName();
+        String sVal = this.config.getTestcase().getSelector().getValue();
+        String user = this.config.getServers().get("polarion").getUser();
+        String pw = this.config.getServers().get("polarion").getPassword();
+        String url = this.config.getServers().get("polarion").getUrl() + this.config.getTestcase().getEndpoint();
+        Boolean enabled = this.config.getTestcase().getEnabled();
         return TestDefinitionProcessor.tcImportRequest(this.tcMap, sName, sVal, url, user, pw, this.tcPath,
-                this.config.testcase.getTitle(), enabled, this.configPath);
+                this.config.getTestcase(), enabled, this.configPath);
     }
 }

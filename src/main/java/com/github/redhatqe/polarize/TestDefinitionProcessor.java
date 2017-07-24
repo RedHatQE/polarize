@@ -3,18 +3,31 @@ package com.github.redhatqe.polarize;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.github.redhatqe.polarize.configuration.*;
+import com.github.redhatqe.byzantine.utils.IFileHelper;
+
+import com.github.redhatqe.polarize.configuration.PolarizeConfig;
+import com.github.redhatqe.polarize.configurator.PolarizeYAML;
+import com.github.redhatqe.polarize.configuration.TestCaseInfo;
 import com.github.redhatqe.polarize.exceptions.*;
-import com.github.redhatqe.polarize.importer.ImporterRequest;
-import com.github.redhatqe.polarize.importer.testcase.*;
-import com.github.redhatqe.polarize.junitreporter.XUnitReporter;
+import com.github.redhatqe.polarize.messagebus.CIBusListener;
+import com.github.redhatqe.polarize.messagebus.MessageHandler;
+import com.github.redhatqe.polarize.messagebus.MessageResult;
+import com.github.redhatqe.polarize.reporter.configuration.ServerInfo;
+import com.github.redhatqe.polarize.reporter.importer.ImporterRequest;
+import com.github.redhatqe.polarize.reporter.importer.testcase.*;
+import com.github.redhatqe.polarize.reporter.importer.testcase.Testcase;
+import com.github.redhatqe.polarize.reporter.importer.testcase.Parameter;
+import com.github.redhatqe.polarize.reporter.XUnitReporter;
 import com.github.redhatqe.polarize.metadata.*;
 
-import com.github.redhatqe.polarize.importer.testcase.Testcase;
+import com.github.redhatqe.polarize.reporter.jaxb.IJAXBHelper;
 import com.github.redhatqe.polarize.utils.Consumer2;
 import com.github.redhatqe.polarize.utils.Environ;
 import com.github.redhatqe.polarize.utils.Transformer;
 import com.github.redhatqe.polarize.utils.Tuple;
+//import com.github.redhatqe.byzantine.utils.Tuple;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.testng.annotations.Test;
 
 
@@ -30,10 +43,8 @@ import java.nio.file.*;
 import java.util.*;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.stream.Collectors;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import static com.github.redhatqe.polarize.metadata.DefTypes.*;
 import static com.github.redhatqe.polarize.metadata.DefTypes.Custom.*;
@@ -49,7 +60,7 @@ import static com.github.redhatqe.polarize.metadata.DefTypes.Custom.*;
 public class TestDefinitionProcessor extends AbstractProcessor {
     private Elements elements;
     private Messager msgr;
-    private static Logger logger = LoggerFactory.getLogger(TestDefinitionProcessor.class);
+    private static Logger logger = LogManager.getLogger(TestDefinitionProcessor.class.getSimpleName());
     private String tcPath;
     private Map<String, Map<String, Meta<TestDefinition>>> methToProjectDef;
     private Map<String, String> methNameToTestNGDescription;
@@ -59,10 +70,11 @@ public class TestDefinitionProcessor extends AbstractProcessor {
     public static JAXBHelper jaxb = new JAXBHelper();
     //private Testcases testcases = new Testcases();
     private Map<String, List<Testcase>> tcMap = new HashMap<>();
-    private XMLConfig config;
+    public PolarizeYAML config;
+    private PolarizeConfig cfg;
     private static Map<String, WarningInfo> warnings = new HashMap<>();
     private int round = 0;
-    private String configPath = System.getProperty("polarize.config");
+    private String configPath = System.getProperty("polarize.configuration");
 
     public static final String warnText = "/tmp/polarize-warnings.txt";
     public static final String tempTestCase = "/tmp/testcases-%s.xml";
@@ -229,7 +241,8 @@ public class TestDefinitionProcessor extends AbstractProcessor {
 
     // FIXME: I think this should be removed in favor of the Meta functions
     private Meta<TestDefinition>
-    createMeta(TestDefinition r, List<Parameter> params, Project project, Element e, String testID, Boolean badAnn) {
+    createMeta(TestDefinition r,
+               List<Parameter> params, Project project, Element e, String testID, Boolean badAnn) {
         Meta<TestDefinition> m = new Meta<>();
         m.polarionID = testID;
         m.qualifiedName = this.getTopLevel(e, "", m);
@@ -307,15 +320,15 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         if (checkNoMoreRounds(this.round, this.config))
             return true;
 
-        if (this.config.config == null) {
+        if (this.config.cfg == null) {
             logger.info("=====================================================");
-            logger.info("No config file found...skipping annotation processing");
+            logger.info("No configuration file found...skipping annotation processing");
             logger.info("=====================================================");
             return true;
         }
 
         // load the mapping file
-        File mapPath = new File(this.config.getMappingPath());
+        File mapPath = new File(this.cfg.getMapping());
         System.out.println(mapPath.toString());
         if (mapPath.exists()) {
             logger.info("Loading the map");
@@ -348,7 +361,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
 
         /* testcases holds all the methods that need a new or updated Polarion TestCase */
         this.tcImportRequest();
-        File mapjsonPath = new File(this.config.getMappingPath());
+        File mapjsonPath = new File(this.cfg.getMapping());
         TestDefinitionProcessor.updateMappingFile(this.mappingFile, this.methToProjectDef, this.tcPath, mapjsonPath);
 
         /* Generate the mapping file now that all the XML files should have been generated */
@@ -382,7 +395,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
      * @param round
      * @return
      */
-    public static Boolean checkNoMoreRounds(int round, XMLConfig config) {
+    public static Boolean checkNoMoreRounds(int round, PolarizeYAML config) {
         File warn;
         if (round > 0) {
             warn = new File(warnText);
@@ -413,7 +426,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
             String msg = "Don't forget to set <enabled>false</enabled> under the <importer type=\"testcase\"> " +
                     String.format("section of your %s file when you are done", config.configFileName) +
                     "creating/updating testcases in Polarion.";
-            if (isUpdateSet(config, "testcase"))
+            if (isUpdateSet(config.cfg, "testcase"))
                 logger.info(msg);
             logger.info("=======================================================");
             return true;
@@ -631,35 +644,33 @@ public class TestDefinitionProcessor extends AbstractProcessor {
                     String user,
                     String pw,
                     String tcPath,
-                    TitleType tType,
+                    TestCaseInfo tType,
                     Boolean enabled,
                     String cfgPath) {
         List<Optional<ObjectNode>> maybeNodes = new ArrayList<>();
         if (testcaseMap.isEmpty() || !enabled) {
             if (!testcaseMap.isEmpty()) {
-                String importTests;
-                List<String> projToTCSNeedingImport = testcaseMap.entrySet().stream()
-                        .map(es -> {
-                            String project = es.getKey();
-                            String ts;
-                            List<Testcase> tcs = es.getValue();
-                            ts = String.join("\n\t",
-                                    tcs.stream().map(Testcase::getTitle).collect(Collectors.toList()));
-                            return project + ":\n\t" + ts;
-                        })
-                        .collect(Collectors.toList());
-                importTests = String.join("\n\t", projToTCSNeedingImport);
                 String highlight = "====================================================";
                 String msg = "The TestCase Importer is disabled, but polarize detected that TestCase imports are " +
-                        "required for\n%s";
-                msg = String.format(msg, importTests);
+                        "required for:\n";
                 try {
                     writeAuditFile(TestDefinitionProcessor.auditFile, highlight + "\n");
                     writeAuditFile(TestDefinitionProcessor.auditFile, msg + "\n");
+                    testcaseMap.forEach((String project, List<Testcase> tcs) -> {
+                        String ts = String.join("\n\t",
+                                tcs.stream().map(Testcase::getTitle).collect(Collectors.toList()));
+                        try {
+                            writeAuditFile(TestDefinitionProcessor.auditFile, project + ":\n\t" + ts + "\n");
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                        }
+                    });
                     writeAuditFile(TestDefinitionProcessor.auditFile, highlight + "\n");
                 } catch (IOException e) {
                     e.printStackTrace();
                 }
+
+
             }
             return maybeNodes;
         }
@@ -674,9 +685,10 @@ public class TestDefinitionProcessor extends AbstractProcessor {
                 maybeNodes.add(Optional.empty());
             else {
                 try {
-                    Consumer<Optional<ObjectNode>> hdlr;
+                    MessageHandler hdlr;
                     hdlr = TestDefinitionProcessor.testcaseImportHandler(tcPath, project, tests, tType);
-                    maybeNodes.add(ImporterRequest.sendImportRequest(url, user, pw, testXml, selector, hdlr, cfgPath));
+                    CIBusListener cbl = new CIBusListener(hdlr);
+                    maybeNodes.add(ImporterRequest.sendImportRequest(cbl, url, user, pw, testXml, selector, cfgPath));
                 } catch (InterruptedException e) {
                     e.printStackTrace();
                 } catch (ExecutionException e) {
@@ -691,26 +703,45 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         return maybeNodes;
     }
 
+    Function<String, List<String>> getSrv = (String st) -> {
+        ServerInfo srv = this.cfg.getServers().get(st);
+        if (srv == null) return new ArrayList<>();
+        String[] v = {srv.getUrl(), srv.getUser(), srv.getPassword()};
+        return Arrays.asList(v);
+    };
+
     private List<Optional<ObjectNode>> tcImportRequest() {
-        String selectorName = this.config.testcase.getSelector().getName();
-        String selectorValue = this.config.testcase.getSelector().getVal();
+        String selectorName = this.cfg.getTestcase().getSelector().getName();
+        String selectorValue = this.cfg.getTestcase().getSelector().getValue();
         String baseUrl;
         String user;
         String pw;
-        if (this.config.config.getProject().contains("PLATTP")) {
-            baseUrl = this.config.polarionDevel.getUrl();
-            user = this.config.polarionDevel.getUser();
-            pw = this.config.polarionDevel.getPassword();
+
+        Boolean useDevel = this.cfg.getProject().contains("PLATTP");
+        if (useDevel) {
+            if (!this.cfg.getServers().containsKey("polarion-devel")) {
+                List<String> vals = getSrv.apply("polarion");
+                baseUrl = vals.get(0);
+                user = vals.get(1);
+                pw = vals.get(2);
+            }
+            else {
+                List<String> vals = getSrv.apply("polarion-devel");
+                baseUrl = vals.get(0);
+                user = vals.get(1);
+                pw = vals.get(2);
+            }
         }
         else {
-            baseUrl = this.config.polarion.getUrl();
-            user = this.config.polarion.getUser();
-            pw = this.config.polarion.getPassword();
+            List<String> vals = getSrv.apply("polarion");
+            baseUrl = vals.get(0);
+            user = vals.get(1);
+            pw = vals.get(2);
         }
-        String url = baseUrl + this.config.testcase.getEndpoint().getRoute();
-        String tcpath = this.config.getTestcasesXMLPath();
-        TitleType title = this.config.testcase.getTitle();
-        Boolean enabled = this.config.testcase.isEnabled();
+        String url = baseUrl + this.cfg.getTestcase().getEndpoint();
+        String tcpath = this.cfg.getTestcasesXml();
+        TestCaseInfo title = this.cfg.getTestcase();
+        Boolean enabled = this.cfg.getTestcase().getEnabled();
 
         return TestDefinitionProcessor.tcImportRequest(this.tcMap, selectorName, selectorValue, url, user, pw,
                 tcpath, title, enabled, this.configPath);
@@ -728,17 +759,22 @@ public class TestDefinitionProcessor extends AbstractProcessor {
      * @param tcs Testcases object to be examined
      * @return lambda of a Consumer
      */
-    public static Consumer<Optional<ObjectNode>>
-    testcaseImportHandler(String testPath, String pID, Testcases tcs, TitleType tt) {
-        return node -> {
-            if (node == null || !node.isPresent()) {
+    public static MessageHandler
+    testcaseImportHandler(String testPath, String pID, Testcases tcs, TestCaseInfo tt) {
+        return (ObjectNode node) -> {
+            MessageResult result = new MessageResult();
+            if (node == null) {
                 logger.warn("No message was received");
-                return;
+                result.setStatus(MessageResult.Status.NO_MESSAGE);
+                return result;
             }
-            JsonNode root = node.get().get("root");
+            JsonNode root = node.get("root");
             if (root.has("status")) {
-                if (root.get("status").textValue().equals("failed"))
-                    return;
+                if (root.get("status").textValue().equals("failed")) {
+                    result.setStatus(MessageResult.Status.FAILED);
+                    result.errorDetails = "status was failed";
+                    return result;
+                }
             }
 
             JsonNode testcases = root.get("import-testcases");
@@ -788,6 +824,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
                     logger.error(String.format("Unable to create testcase for %s", name));
                 }
             });
+            return result;
         };
     }
 
@@ -814,25 +851,38 @@ public class TestDefinitionProcessor extends AbstractProcessor {
     private Optional<ObjectNode>
     sendTCImporterRequest(String selector, File testcaseXml, String project, Testcases tests)
             throws InterruptedException, ExecutionException, JMSException {
-        if (!this.config.testcase.isEnabled())
+        if (!this.cfg.getTestcase().getEnabled())
             return Optional.empty();
         String baseUrl;
         String user;
         String pw;
-        if (testcaseXml.toString().contains("PLATTP")) {
-            baseUrl = this.config.polarionDevel.getUrl();
-            user = this.config.polarionDevel.getUser();
-            pw = this.config.polarionDevel.getPassword();
+
+        Boolean useDevel = this.cfg.getProject().contains("PLATTP");
+        if (useDevel) {
+            if (!this.cfg.getServers().containsKey("polarion-devel")) {
+                List<String> vals = getSrv.apply("polarion");
+                baseUrl = vals.get(0);
+                user = vals.get(1);
+                pw = vals.get(2);
+            }
+            else {
+                List<String> vals = getSrv.apply("polarion-devel");
+                baseUrl = vals.get(0);
+                user = vals.get(1);
+                pw = vals.get(2);
+            }
         }
         else {
-            baseUrl = this.config.polarion.getUrl();
-            user = this.config.polarion.getUser();
-            pw = this.config.polarion.getPassword();
+            List<String> vals = getSrv.apply("polarion");
+            baseUrl = vals.get(0);
+            user = vals.get(1);
+            pw = vals.get(2);
         }
-        String url = baseUrl + this.config.testcase.getEndpoint().getRoute();
-        TitleType tt = this.config.testcase.getTitle();
-        Consumer<Optional<ObjectNode>> hdlr = testcaseImportHandler(this.tcPath, project, tests, tt);
-        return ImporterRequest.sendImportRequest(url, user, pw, testcaseXml, selector, hdlr, this.configPath);
+        String url = baseUrl + this.cfg.getTestcase().getEndpoint();
+        TestCaseInfo tt = this.cfg.getTestcase();
+        MessageHandler hdlr = testcaseImportHandler(this.tcPath, project, tests, tt);
+        CIBusListener cbl = new CIBusListener(hdlr);
+        return ImporterRequest.sendImportRequest(cbl, url, user, pw, testcaseXml, selector, this.configPath);
     }
 
     /**
@@ -976,11 +1026,11 @@ public class TestDefinitionProcessor extends AbstractProcessor {
      * @param tc the Testcase object that will get TestSteps information added
      */
     private static void initTestSteps(Meta<TestDefinition> meta, Testcase tc) {
-        com.github.redhatqe.polarize.importer.testcase.TestSteps isteps = tc.getTestSteps();
+        com.github.redhatqe.polarize.reporter.importer.testcase.TestSteps isteps = tc.getTestSteps();
         if (isteps == null) {
-            isteps = new com.github.redhatqe.polarize.importer.testcase.TestSteps();
+            isteps = new com.github.redhatqe.polarize.reporter.importer.testcase.TestSteps();
         }
-        List<com.github.redhatqe.polarize.importer.testcase.TestStep> tsteps = isteps.getTestStep();
+        List<com.github.redhatqe.polarize.reporter.importer.testcase.TestStep> tsteps = isteps.getTestStep();
 
         // Takes a List<Parameter> and returns a TestStepColumn
         Transformer<List<Parameter>, TestStepColumn> parameterize = args -> {
@@ -991,8 +1041,8 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         };
 
         // For automation needs, we will only ever have one TestStep (but perhaps with multiple columns).
-        com.github.redhatqe.polarize.importer.testcase.TestStep ts =
-                new com.github.redhatqe.polarize.importer.testcase.TestStep();
+        com.github.redhatqe.polarize.reporter.importer.testcase.TestStep ts =
+                new com.github.redhatqe.polarize.reporter.importer.testcase.TestStep();
         List<TestStepColumn> cols = ts.getTestStepColumn();
         if (meta.params != null && meta.params.size() > 0) {
             TestStepColumn tcolumns = parameterize.transform(meta.params);
@@ -1146,7 +1196,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
      * @return Testcase object
      */
     public static Testcase
-    initImporterTestcase(Meta<TestDefinition> meta, Map<String, String> methToDesc, XMLConfig cfg) {
+    initImporterTestcase(Meta<TestDefinition> meta, Map<String, String> methToDesc, PolarizeConfig cfg) {
         Testcase tc = new Testcase();
         TestDefinition def = meta.annotation;
         TestDefinitionProcessor.initTestSteps(meta, tc);
@@ -1177,7 +1227,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         else
             tc.setDescription(def.description());
 
-        TitleType titleType = cfg.testcase.getTitle();
+        TestCaseInfo titleType = cfg.getTestcase();
         String t = "%s%s%s";
         String title;
         if (def.title().equals("")) {
@@ -1457,8 +1507,11 @@ public class TestDefinitionProcessor extends AbstractProcessor {
 
         Boolean mapIsEdited = false;
         Tuple<Integer, Integer> count = paramCount(meta, mapFile);
-        if (!count.first.equals(count.second))
-            mapIsEdited = true;
+        if (!count.first.equals(count.second)) {
+            // If we couldn't find the method in the map, count.second == -1
+            if (count.second != -1)
+                mapIsEdited = true;
+        }
 
         // TODO: Instead of throwing an error on mismatch, perhaps we should auto-correct based on precedence
         // FIXME: When query ability is added, can run a check
@@ -1562,7 +1615,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
      */
     private Testcase processTC(Meta<TestDefinition> meta) throws MismatchError {
         return TestDefinitionProcessor.processTC(meta, this.mappingFile, this.testCaseToMeta, this.tcPath, this.tcMap,
-                new File(this.config.getMappingPath()), this.methNameToTestNGDescription, this.config,
+                new File(this.cfg.getMapping()), this.methNameToTestNGDescription, this.config.cfg,
                 this.methToProjectDef);
     }
 
@@ -1583,7 +1636,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
                                      Map<String, List<Testcase>> testCaseMap,
                                      File mapPath,
                                      Map<String, String> methToDesc,
-                                     XMLConfig config,
+                                     PolarizeConfig config,
                                      Map<String, Map<String, Meta<TestDefinition>>> methToPD) {
         Testcase tc = TestDefinitionProcessor.initImporterTestcase(meta, methToDesc, config);
         // Check if testCasePath exists.  If it doesn't, generate the XML definition.
@@ -1609,15 +1662,17 @@ public class TestDefinitionProcessor extends AbstractProcessor {
             }
         }
 
-        if (res.second && !config.testcase.isEnabled()) {
+        if (res.second && !config.getTestcase().getEnabled()) {
             List<String> msgs = new ArrayList<>();
+            String qual = meta.qualifiedName;
             String hl = "\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!";
             msgs.add(hl);
             msgs.add("WARNING!");
-            msgs.add("The mapping file changed but the TestCase Importer is also disabled!");
+            msgs.add(String.format("The mapping file changed for %s", qual));
+            msgs.add("However, the TestCase Importer is also disabled!");
             msgs.add("This means that at runtime the TestRun will fail to import some of the methods since");
             msgs.add("the TestCase in Polarion and what will be sent in the xunit file are no longer in accord.");
-            msgs.add("To correct this, set the testcase enabled to true in the config file.");
+            msgs.add("To correct this, set the testcase enabled to true in the configuration file.");
             msgs.add("This behavior may occur automatically in the future!!");
             msgs.add(hl);
             try {
@@ -1756,14 +1811,12 @@ public class TestDefinitionProcessor extends AbstractProcessor {
      * Checks if the \<enabled\> section is set to true for an importer
      * @return
      */
-    public static Boolean isUpdateSet(XMLConfig XCfg, String importerType) {
+    public static Boolean isUpdateSet(PolarizeConfig cfg, String importerType) {
         switch(importerType) {
             case "testcase":
-                ImporterType TC = XCfg.testcase;
-                return TC.isEnabled();
+                return cfg.getTestcase().getEnabled();
             case "xunit":
-                ImporterType XU = XCfg.xunit;
-                return XU.isEnabled();
+                return cfg.getXunit().getEnabled();
             default:
                 logger.error("Unknown importer type, returning false");
                 return false;
@@ -1785,9 +1838,9 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         Path p = path.toPath();
         OpenOption[] opts = {StandardOpenOption.APPEND, StandardOpenOption.CREATE};
         try (BufferedWriter writer = Files.newBufferedWriter(p, opts)) {
-
             writer.write(diffMsg + "\n\n");
-            writer.write(updateMsg);
+            if (updates.size() != 0)
+                writer.write(updateMsg);
         }
     }
 
@@ -1825,18 +1878,14 @@ public class TestDefinitionProcessor extends AbstractProcessor {
 
         this.methNameToTestNGDescription = new HashMap<>();
         this.testCaseToMeta = new HashMap<>();
-        File cfgFile = null;
         if (this.configPath == null)
             this.configPath = Environ.getVar("POLARIZE_CONFIG").orElse(null);
 
-        if (this.configPath != null) {
-            cfgFile = new File(this.configPath);
-        }
-        this.config = new XMLConfig(cfgFile);
-        this.configPath = this.config.configPath.getAbsolutePath();
-        ConfigType cfg = this.config.config;
+        this.config = new PolarizeYAML(this.configPath);
+        this.configPath = this.config.configFileName;
+        this.cfg = this.config.cfg;
         if (cfg != null)
-            this.tcPath = this.config.getTestcasesXMLPath();
+            this.tcPath = cfg.getTestcasesXml();
     }
 
     @Override

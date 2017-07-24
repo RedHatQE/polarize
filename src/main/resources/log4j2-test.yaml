@@ -1,0 +1,40 @@
+---
+Configuration:
+  status: warn
+  name: YAMLConfigTest
+  properties:
+    property:
+      name: filename
+      value: logs/test-yaml.log
+  thresholdFilter:
+    level: debug
+  appenders:
+    Console:
+      name: STDOUT
+      PatternLayout:
+        Pattern: "%d %p %C{1.} [%t] %m%n"
+    File:
+      name: FILE
+      fileName: ${filename}
+      bufferedIO: true
+      PatternLayout:
+        Pattern: "%d %p %C{1.} [%t] %m%n"
+  Loggers:
+    logger:
+      - name: com.github.redhatqe.polarize.out
+        level: info
+        additivity: true
+        AppenderRef:
+          ref: STDOUT
+      - name: com.github.redhatqe.polarize
+        level: debug
+        additivity: false
+        AppenderRef:
+          ref: FILE
+    Root:
+      level: debug
+      AppenderRef:
+        - ref: STDOUT
+          level: info
+        - ref: FILE
+          level: debug

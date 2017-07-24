@@ -1,23 +1,23 @@
 package com.github.redhatqe.polarize;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.github.redhatqe.byzantine.exceptions.InvalidArgumentType;
+import com.github.redhatqe.byzantine.utils.IFileHelper;
+import com.github.redhatqe.polarize.metadata.Meta;
+import com.github.redhatqe.polarize.metadata.QualifiedName;
+import com.github.redhatqe.polarize.metadata.TestDefinition;
+import com.github.redhatqe.polarize.utils.StringHelper;
+
+
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.github.redhatqe.polarize.metadata.Meta;
-import com.github.redhatqe.polarize.exceptions.InvalidArgumentType;
-import com.github.redhatqe.polarize.metadata.QualifiedName;
-import com.github.redhatqe.polarize.metadata.TestDefinition;
-import com.github.redhatqe.polarize.utils.StringHelper;
 
-/**
- * Created by stoner on 7/7/16.
- */
 public class FileHelper implements IFileHelper {
 
     /**
@@ -89,10 +89,10 @@ public class FileHelper implements IFileHelper {
      * Creates an xml path for a test method.  The path generated will take the form:</br>
      * /{base}/{projID}/{qualname}
      * </p>
-     * Normally, the base will come from the config file, extra will come from the class.methodName, and project will
+     * Normally, the base will come from the configuration file, extra will come from the class.methodName, and project will
      * be determined based on some other factor like the project in a Meta object.
      *
-     * @param base From the config file \<testcases-xml path={}\>
+     * @param base From the configuration file \<testcases-xml path={}\>
      * @param extra a string representing an extra set of paths concatenated to base
      * @param projID the project
      * @return

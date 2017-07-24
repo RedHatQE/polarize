@@ -1,5 +1,0 @@
-<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
-           targetNamespace="com.redhat.qe.rhsm.PolarizeTypes"
-           elementFormDefault="qualified">
-
-</xs:schema>

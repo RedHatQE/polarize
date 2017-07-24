@@ -1,9 +1,0 @@
-<mapping>
-    <entry name="com.foo.blah.Test.testmethod">
-        <testcase id="">
-            <path>
-                /path/to/xml
-            </path>
-        </testcase>
-    </entry>
-</mapping>

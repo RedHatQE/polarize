@@ -1,13 +1,14 @@
 package com.github.redhatqe.polarize.metadata;
 
 import com.github.redhatqe.polarize.FileHelper;
-import com.github.redhatqe.polarize.IJAXBHelper;
 import com.github.redhatqe.polarize.JAXBHelper;
-import com.github.redhatqe.polarize.importer.testcase.Parameter;
-import com.github.redhatqe.polarize.importer.testcase.Testcase;
+import com.github.redhatqe.polarize.reporter.importer.testcase.Parameter;
+import com.github.redhatqe.polarize.reporter.importer.testcase.Testcase;
+import com.github.redhatqe.polarize.reporter.jaxb.IJAXBHelper;
 import com.github.redhatqe.polarize.utils.Tuple;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 
 import java.io.File;
 import java.nio.file.Path;
@@ -26,7 +27,7 @@ public class Meta<T> {
     public T annotation;
     public List<Parameter> params = null;
     public String polarionID = "";
-    public static final Logger logger = LoggerFactory.getLogger(Meta.class);
+    public static final Logger logger = LogManager.getLogger(Meta.class.getSimpleName());
     public Boolean dirty = false;
 
     public Meta() {
@@ -101,7 +102,7 @@ public class Meta<T> {
             return Optional.empty();
         }
         else if (tc.get().getId() == null || tc.get().getId().equals("")) {
-            Meta.logger.info("No id attribute for <testcase>");
+            Meta.logger.info(String.format("For %s: No id attribute for <testcase> element", tc.get().getTitle()));
 
             res.first = "";
             res.second = tc.get();

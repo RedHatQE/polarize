@@ -612,64 +612,7 @@ the rhsm-qe tests will run, and will stop once it hits any break points you set 
 
 # Roadmap
 
-Discussion on what still needs to be done.
-
-## Feature file parser
-
-BDD style requirement files are becoming very common, and gherkin style file the defacto standard.  If you are
-unfamiliar with feature files and the gherkin syntax, please see https://cucumber.io/docs/reference
-
-Although feature files are good at capturing a high level feature, it's setup requirements, scenario and assertions for
-testing, there is still data required for Polarion that needs to be contained within the feature file (for example
-if it's a positive or negative test, if it is a functional or non-functional test, or whether it's a must have, should
-have etc feature).
-
-This extra data can be contained as a parseable entity within the Feature description.  Here's an example:
-
-```gherkin
-Feature: Generate XML from annotated class
-
-  Definition:
-    severity: must_have      # One of should_have, must_have, nice_to_have, will_not_have
-    type: Functional         # One of Functional, NonFunctional,
-    subType:                 # optional
-    status: draft            # defaults to draft
-    title:                   # Not filled in by PM.  Done by QE
-    plannedin                # a list of plannedin releases
-      - RHEL_7_3
-    links
-      - /some/link/to/share  # optional
-
-  Scenario: Annotated class generates valid XML
-    Given The class is annotated with @TestDefinition
-      And The TestDefinition annotation has author
-      And The TestDefinition annotation has projectId
-      And The TestDefinition annotation has sub-annotation Requirement
-      And The field for xmlDesc is an empty string in the Annotation
-     Then XML suitable for the WorkItem importer will be generated
-```
-
-## Workflow process: Feature file to Requirements
-
-Polarize is somewhat opinionated in how it should be used.  The central concept is that when a QE needs to write
-an automated test, there should already be an existing definition of the requirements.  More and more companies are
-moving to BDD style tests and feature files to capture the essence of a feature and what needs to be tested.  Generally
-speaking, the Product Owner, developers, and Quality Engineers should go over what needs to be done, and through this
-discussion they will write a gherkin style feature file.
-
-Once the initial feature file is hashed out between the PO, devs, and QE the written feature file can be stored in
-source control within the test project.  Any subsequent changes needed can be reviewed in source control whether the
-change comes due to developers gaining a better understanding of the requirement, QE's finding that there is not
-enough information to be able to make assertions, or the PO getting additional feedback from customers.  This reviewal
-process can be done under normal source control abilities (eg, through github PR's or gerrit for example).  Once the
-review has been done the feature file will be merged in including some additional metadata.
-
-This metadata will only be to cover information needed for a Polarion Requirement or TestCase.  By default, polarize
-will look for a feature file based on the following path:
-
-```
-requirements.xml.path/<project>/<class>/<methodName>.feature
-```
+See the ROADMAP.md file
 
 # Limitations and known TODOs
 
