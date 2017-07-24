@@ -102,7 +102,7 @@ public class Meta<T> {
             return Optional.empty();
         }
         else if (tc.get().getId() == null || tc.get().getId().equals("")) {
-            Meta.logger.info("No id attribute for <testcase>");
+            Meta.logger.info(String.format("For %s: No id attribute for <testcase> element", tc.get().getTitle()));
 
             res.first = "";
             res.second = tc.get();

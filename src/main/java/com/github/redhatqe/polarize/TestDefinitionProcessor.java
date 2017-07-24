@@ -650,29 +650,27 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         List<Optional<ObjectNode>> maybeNodes = new ArrayList<>();
         if (testcaseMap.isEmpty() || !enabled) {
             if (!testcaseMap.isEmpty()) {
-                String importTests;
-                List<String> projToTCSNeedingImport = testcaseMap.entrySet().stream()
-                        .map(es -> {
-                            String project = es.getKey();
-                            String ts;
-                            List<Testcase> tcs = es.getValue();
-                            ts = String.join("\n\t",
-                                    tcs.stream().map(Testcase::getTitle).collect(Collectors.toList()));
-                            return project + ":\n\t" + ts;
-                        })
-                        .collect(Collectors.toList());
-                importTests = String.join("\n\t", projToTCSNeedingImport);
                 String highlight = "====================================================";
                 String msg = "The TestCase Importer is disabled, but polarize detected that TestCase imports are " +
-                        "required for\n%s";
-                msg = String.format(msg, importTests);
+                        "required for:\n";
                 try {
                     writeAuditFile(TestDefinitionProcessor.auditFile, highlight + "\n");
                     writeAuditFile(TestDefinitionProcessor.auditFile, msg + "\n");
+                    testcaseMap.forEach((String project, List<Testcase> tcs) -> {
+                        String ts = String.join("\n\t",
+                                tcs.stream().map(Testcase::getTitle).collect(Collectors.toList()));
+                        try {
+                            writeAuditFile(TestDefinitionProcessor.auditFile, project + ":\n\t" + ts + "\n");
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                        }
+                    });
                     writeAuditFile(TestDefinitionProcessor.auditFile, highlight + "\n");
                 } catch (IOException e) {
                     e.printStackTrace();
                 }
+
+
             }
             return maybeNodes;
         }
@@ -1509,8 +1507,11 @@ public class TestDefinitionProcessor extends AbstractProcessor {
 
         Boolean mapIsEdited = false;
         Tuple<Integer, Integer> count = paramCount(meta, mapFile);
-        if (!count.first.equals(count.second))
-            mapIsEdited = true;
+        if (!count.first.equals(count.second)) {
+            // If we couldn't find the method in the map, count.second == -1
+            if (count.second != -1)
+                mapIsEdited = true;
+        }
 
         // TODO: Instead of throwing an error on mismatch, perhaps we should auto-correct based on precedence
         // FIXME: When query ability is added, can run a check
@@ -1663,10 +1664,12 @@ public class TestDefinitionProcessor extends AbstractProcessor {
 
         if (res.second && !config.getTestcase().getEnabled()) {
             List<String> msgs = new ArrayList<>();
+            String qual = meta.qualifiedName;
             String hl = "\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!";
             msgs.add(hl);
             msgs.add("WARNING!");
-            msgs.add("The mapping file changed but the TestCase Importer is also disabled!");
+            msgs.add(String.format("The mapping file changed for %s", qual));
+            msgs.add("However, the TestCase Importer is also disabled!");
             msgs.add("This means that at runtime the TestRun will fail to import some of the methods since");
             msgs.add("the TestCase in Polarion and what will be sent in the xunit file are no longer in accord.");
             msgs.add("To correct this, set the testcase enabled to true in the configuration file.");
@@ -1835,9 +1838,9 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         Path p = path.toPath();
         OpenOption[] opts = {StandardOpenOption.APPEND, StandardOpenOption.CREATE};
         try (BufferedWriter writer = Files.newBufferedWriter(p, opts)) {
-
             writer.write(diffMsg + "\n\n");
-            writer.write(updateMsg);
+            if (updates.size() != 0)
+                writer.write(updateMsg);
         }
     }
 

@@ -6,6 +6,7 @@ import java.net.URLClassLoader;
 import java.nio.file.FileAlreadyExistsException;
 import java.util.*;
 
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.github.redhatqe.byzantine.utils.IJarHelper;
 import com.github.redhatqe.polarize.metadata.Meta;
 import com.github.redhatqe.polarize.metadata.TestDefAdapter;
@@ -29,13 +30,17 @@ import java.util.stream.Collectors;
 public class JarHelper implements IJarHelper {
     final List<URL> jarPaths;
     final String paths;
+    public String cfgPath;
 
-    public JarHelper(String paths) {
+    public JarHelper(String paths, String cfgPath) {
+        this.cfgPath = cfgPath;
         this.jarPaths = IJarHelper.convertToUrl(paths);
         this.paths = this.jarPaths.stream()
                 .map(URL::getFile)
                 .reduce("", (i, c) -> c + "," + i);
-        System.out.println("In constructor: " + this.paths);
+
+        if (TestDefinitionProcessor.auditFile.exists())
+            TestDefinitionProcessor.auditFile.delete();
     }
 
 
@@ -48,7 +53,12 @@ public class JarHelper implements IJarHelper {
 
     public Reflector loadClasses(List<String> classes) {
         URLClassLoader ucl = this.makeLoader();
-        Reflector refl = new Reflector();
+        Reflector refl;
+        if (this.cfgPath != null && !this.cfgPath.equals(""))
+            refl = new Reflector(this.cfgPath);
+        else
+            refl = new Reflector();
+
         for(String s: classes) {
             try {
                 Class<?> cls = ucl.loadClass(s);
@@ -71,12 +81,14 @@ public class JarHelper implements IJarHelper {
         OptionParser parser = new OptionParser();
         parser.accepts("jars").withRequiredArg();
         parser.accepts("packages").withRequiredArg();
+        parser.accepts("config").withRequiredArg();
         parser.accepts("output");
 
         OptionSet opts = parser.parse(args);
         String jarPathsOpt = (String) opts.valueOf("jars");
         String packName = (String) opts.valueOf("packages");
         String output = (String) opts.valueOf("output");
+        String config = (String) opts.valueOf("config");
         if (output == null) {
             output = System.getProperty("user.dir") + "/groups-to-methods.json";
         }
@@ -86,20 +98,19 @@ public class JarHelper implements IJarHelper {
         Type tToC = new TypeToken<Map<String, List<MetaData>>>() {}.getType();
         Type testT = new TypeToken<List<MetaData>>(){}.getType();
 
-        JarHelper jh = new JarHelper(jarPathsOpt);
+        JarHelper jh = new JarHelper(jarPathsOpt, config);
         try {
             List<String> classes = new ArrayList<>();
             for(String s: jh.paths.split(",")) {
                 for(String pn: packName.split(",")){
                     classes.addAll(IJarHelper.getClasses(s, pn));
                 }
-                classes.forEach(System.out::println);
 
                 Reflector refl = jh.loadClasses(classes);
                 refl.methToProjectDef = refl.makeMethToProjectMeta();
                 refl.processTestDefs();
 
-                refl.testcasesImporterRequest();
+                List<Optional<ObjectNode>> toBeImported = refl.testcasesImporterRequest();
                 File mapPath = new File(refl.config.getMapping());
                 TestDefinitionProcessor.writeMapFile(mapPath, refl.mappingFile);
 

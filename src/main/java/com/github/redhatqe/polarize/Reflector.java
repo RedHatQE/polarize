@@ -41,6 +41,15 @@ public class Reflector {
 
     public Reflector() {
         pcfg = new PolarizeYAML();
+        this.init();
+    }
+
+    public Reflector(String cfgPath) {
+        pcfg = new PolarizeYAML(cfgPath);
+        this.init();
+    }
+
+    private void init() {
         config = pcfg.cfg;
         testsToClasses = new HashMap<>();
         testTypes = new HashSet<>(Arrays.asList("AcceptanceTests", "Tier1Tests", "Tier2Tests", "Tier3Tests"));
@@ -250,13 +259,6 @@ public class Reflector {
     }
 
     List<Optional<ObjectNode>> testcasesImporterRequest() {
-        List<Optional<ObjectNode>> maybes = new ArrayList<>();
-        Optional<ObjectNode> maybeNode = Optional.empty();
-        if (!this.config.getTestcase().getEnabled() || this.tcMap.isEmpty()) {
-            maybes.add(maybeNode);
-            return maybes;
-        }
-
         String sName = this.config.getTestcase().getSelector().getName();
         String sVal = this.config.getTestcase().getSelector().getValue();
         String user = this.config.getServers().get("polarion").getUser();
