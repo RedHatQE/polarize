@@ -72,7 +72,7 @@ public enum DefTypes {
         TAGS,
         SETUP,
         TEARDOWN,
-        COMPONENT,
+        CASECOMPONENT,
         SUBCOMPONENT,
         AUTOMATION_SCRIPT,
         TESTTYPE,

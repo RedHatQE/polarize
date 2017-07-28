@@ -1112,8 +1112,8 @@ public class TestDefinitionProcessor extends AbstractProcessor {
                 case TEARDOWN:
                     supp.accept(TEARDOWN.stringify(), def.teardown());
                     break;
-                case COMPONENT:
-                    supp.accept(COMPONENT.stringify(), def.component());
+                case CASECOMPONENT:
+                    supp.accept(CASECOMPONENT.stringify(), def.component());
                     break;
                 case SUBCOMPONENT:
                     supp.accept(SUBCOMPONENT.stringify(), def.subcomponent());
@@ -1155,7 +1155,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
             custom = new CustomFields();
         List<CustomField> fields = custom.getCustomField();
         DefTypes.Custom[] fieldKeys = {CASEAUTOMATION, CASEIMPORTANCE, CASELEVEL, CASEPOSNEG, UPSTREAM, TAGS, SETUP,
-                                       TEARDOWN, AUTOMATION_SCRIPT, COMPONENT, SUBCOMPONENT, TESTTYPE, SUBTYPE1,
+                                       TEARDOWN, AUTOMATION_SCRIPT, CASECOMPONENT, SUBCOMPONENT, TESTTYPE, SUBTYPE1,
                                        SUBTYPE2};
 
         Consumer2<String, String> supp = (id, content) -> {
@@ -1212,7 +1212,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
                 .map(wi -> {
                     LinkedWorkItem tcLwi = new LinkedWorkItem();
                     tcLwi.setWorkitemId(wi.workitemId());
-                    tcLwi.setRoleId(wi.role().toString());
+                    tcLwi.setRoleId(wi.role().toString().toLowerCase());
                     return tcLwi;
                 })
                 .collect(Collectors.toList()));
