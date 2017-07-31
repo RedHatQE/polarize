@@ -92,6 +92,7 @@ configurations {
 task myJavadocs(type: Javadoc) {
     source = sourceSets.main.allJava
     options.addStringOption('Xdoclint:none', '-quiet')
+    classpath += sourceSets.test.compileClasspath
 }
 
 // Generates the javadoc jar

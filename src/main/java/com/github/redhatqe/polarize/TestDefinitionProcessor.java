@@ -68,6 +68,9 @@ public class TestDefinitionProcessor extends AbstractProcessor {
     public static final String tempTestCase = "/tmp/testcases-%s.xml";
     public static final File auditFile = new File("/tmp/polarize-auditing.txt");
 
+    // FIXME: gross, but I need a way to prevent duplicate error strings
+    public static Set<String> errorMessages = new HashSet<>();
+
     /**
      * Recursive function that will get the fully qualified name of a method.
      *
@@ -453,6 +456,10 @@ public class TestDefinitionProcessor extends AbstractProcessor {
 
     private static void addBadFunction(String qualName, String project, List<String> badFuncs, String err) {
         err = String.format(err, qualName, project);
+        if (errorMessages.contains(err))
+            return;
+        else
+            errorMessages.add(err);
         logger.error(err);
         badFuncs.add(err);
     }
@@ -486,11 +493,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
             String mapid = "";
             // Check if the mapFile has the corresponding project of this function name
             if (!mapFile.containsKey(fnName) || !mapFile.get(fnName).containsKey(project)) {
-                if (id.equals("")) {
-                    TestDefinitionProcessor.addBadFunction(meta.qualifiedName, project, badFunctions, err);
-                }
-                else
-                    TestDefinitionProcessor.addToMapFile(mapFile, meta, id, mapPath);
+                TestDefinitionProcessor.addToMapFile(mapFile, meta, id, mapPath);
                 return;
             }
             else {
@@ -506,19 +509,16 @@ public class TestDefinitionProcessor extends AbstractProcessor {
             }
 
             switch(check) {
-                case 0: case 1:
-                    err = "No TestCase ID exists anywhere (not in map file, annotation or xml)";
-                    TestDefinitionProcessor.addBadFunction(meta.qualifiedName, project, badFunctions, err);
-                    break;
                 case 2: case 3:
                     TestDefinitionProcessor.addToMapFile(mapFile, meta, id, mapPath);
                     break;
                 case 4: case 5:
-                    err = "TestCase ID is in the mapping file, but not the XML or annotation";
+                    err = "- %s in project %s: TestCase ID is in the mapping file, but not the XML or annotation";
                     TestDefinitionProcessor.addBadFunction(meta.qualifiedName, project, badFunctions, err);
                     break;
                 case 6:
-                    String msg = "TestCase ID %s in map file and %s from XML don't match.  Replacing with XML value";
+                    String msg = "- %s in project %s: TestCase ID %s in map file and %s from XML don't match.  " +
+                            "Replacing with XML value";
                     logger.warn(String.format(msg, mapid, id));
                     TestDefinitionProcessor.addToMapFile(mapFile, meta, id, mapPath);
                 case 7:
@@ -1335,10 +1335,8 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         Map<String, IdParams> methodToParams = mapFile.get(qualName);
 
         int paramSize = meta.params.size();
-        if (methodToParams == null && paramSize == 0)
-            return;
-        if (methodToParams == null && paramSize != 0) {
-            String err = String.format("Method %s has %d args, but doesnt exist in mapfile", qualName, paramSize);
+        if (methodToParams == null) {
+            String err = String.format("Could not find method %s in mapfile", qualName);
             throw new MismatchError(err);
         }
 
@@ -1437,6 +1435,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         String xmlId = idAndTC.first;
         String mapId = maybeMapFileID.orElse("");
         int importType = meta.annotation.update() ? 1 << 1 : 0;
+        boolean mapFileEdit = false;
 
         // w00t, bit tricks.  Thought I wouldn't need these again after my embedded days :)
         int idval = (annId.equals("") ? 0 : 1 << 2) | (xmlId.equals("") ? 0 : 1 << 1) | (mapId.equals("") ? 0 : 1);
@@ -1444,7 +1443,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         if (idtype == null)
             throw new MappingError("Error in IDType.fromNumber()");
 
-        String msg = "- %s for project %s: the testCaseID=\"\" in the @TestDefinition but the ID=%s in the %s.";
+        String msg = "- %s in project %s: the testCaseID=\"\" in the @TestDefinition but the ID=%s in the %s.";
         String qual = meta.qualifiedName;
         String project = meta.project;
         String pqual = meta.project + " -> " + qual;
@@ -1466,6 +1465,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         switch (idtype) {
             case NONE:
                 importType |= 0x01;
+                mapFileEdit = true;
                 break;
             case MAP:
                 editXML(meta, testCasePath, mapId, tc);
@@ -1543,9 +1543,13 @@ public class TestDefinitionProcessor extends AbstractProcessor {
             }
             if (!idtouse.equals("")) {
                 TestDefinitionProcessor.setPolarionIDInMapFile(meta, idtouse, mapFile);
-                createMappingFile(mapPath, methToPD, mapFile);
+                mapFileEdit = true;
             }
         }
+
+        // We need to regenerate the mapfile if we have a new method before checkParameterMismatch is called
+        if (mapFileEdit)
+            updateMappingFile(mapFile, methToPD, testCasePath, mapPath);
 
         // At this point, make sure that the number of args in the method is how many we have in the mapping file.
         checkParameterMismatch(meta, mapFile);
@@ -1680,7 +1684,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
                                                             m.polarionID = idForProject;
                                                         }
                                                         else
-                                                            throw new MappingError("No ID for " + methName);
+                                                            logger.error("No ID for " + methName);
                                                     }
                                                 }
                                                 String id = m.polarionID;
