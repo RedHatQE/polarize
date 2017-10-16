@@ -1,0 +1,44 @@
+---
+testcases-xml: /path/to/your/project/testcases
+mapping: /path/to/mapping.json  # Maps the qualified name to project->id
+author: stoner
+project: PLATTP
+servers:
+    polarion:
+        url: https://some.server/endpoint
+        user: my_user
+        password: my_password
+testcase:
+    endpoint: /import/testcases
+    timeout: 300000
+    enabled: false
+    selector:
+        name: my_team
+        value: some_value
+    title:
+        prefix: "RHSM-TC: "
+        suffix: ""
+xunit:              # settings for the xunit importer
+    testrun:
+        id: ""      # id is an optional unique id for testrun. Defaults to a timestamp (uniqueness guaranteed by client)
+        title: "Sean Toner Polarize TestRun"
+        template-id: "sean toner test template"
+    endpoint: /import/xunit
+    selector:       # the JMS selector <name>='<value>'
+        name: my_team
+        value: some_value
+    custom:         # Sets the custom fields in the xml
+        test-suite: # A list of key-value pairs.  The response properties
+            dry-run: false
+            set-testrun-finished: true
+            include-skipped: false
+        properties:             # a list of key value pairs where they key is a custom field
+            template-id: ""     # The template id to use for test runs
+            plannedin:          # The plannedin phase
+            jenkinsjobs:        # Path to the jenkins job
+            notes:              # arbitrary field
+    timeout: 300000  # time in milliseconds to wait for reply message
+    enabled: true
+kerberos:
+  user: ________
+  password: ____________

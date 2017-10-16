@@ -40,7 +40,7 @@ def getCreds(String polarizePropertyFile) {
 }
 
 task wrapper(type: Wrapper) {
-    gradleVersion = '3.5'
+    gradleVersion = '4.2'
 }
 
 repositories {

@@ -94,10 +94,10 @@ public class PolarizeCLI extends ReporterCLI {
                 , "--property", "notes='just some notes here"
                 , "--property", "jenkinsjobs='http://path/to/job/url"
                 , "--edit-configuration", "/tmp/testing-polarize-config.yaml"
-                , "--current-xunit", "https://rhsm-jenkins.rhev-ci-vms.eng.rdu2.redhat.com/view/QE-RHEL7.4/job/import-polarion-testrun/lastSuccessfulBuild/artifact/new-testng-polarion.xml"
+                , "--current-xunit", "https://rhsm-jenkins-rhel7.rhev-ci-vms.eng.rdu2.redhat.com/view/QE-RHEL7.5/job/rhsm-rhel-7.5-x86_64-Tier1Tests/lastSuccessfulBuild/artifact/test-output/testng-polarion.xml"
                 , "--new-xunit", "/tmp/modified-polarion.xml"
         };
-        if (args.length == 0)
+        if (args.length == 1)
             args = testArgs;
 
         PolarizeConfig afterCLICfg = cliFig.pipe(ymlCfg, ICLIConfig.arrayToTupleList(args));

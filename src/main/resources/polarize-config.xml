@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<config>
+    <project-name name="rhsm-qe"></project-name>
+    <basedir path="$WORKSPACE"></basedir>
+    <requirements-xml path="{basedir}/requirements"></requirements-xml>
+    <testcases-xml path="{basedir}/testcases"></testcases-xml>
+    <mapping path="{basedir}/mapping.json"></mapping>
+    <user name="platformqe_machine" password="polarion"></user>
+    <project>RHEL6</project>
+    <servers>
+        <server name="polarion" url="http://path/to/polarion" user="polarion_user" password="password"></server>
+        <server name="kerberos" user="user-for-ci-msgs" password="password"></server>
+        <server name="ossrh" user="ossrh-user" password="password"></server>
+        <server name="broker" url="tcp://ci-broker"></server>
+    </servers>
+    <importers>
+        <importer type="testcase">
+            <endpoint route="/import/testcase"></endpoint>
+            <file path="/tmp/testcases.xml"></file>
+            <selector name="rhsm_qe" val="testcase_importer"></selector>
+            <title prefix="RHSM-TC : " suffix=""></title>
+            <timeout millis="3000000"></timeout>
+            <enabled>false</enabled>
+        </importer>
+        <importer type="xunit">
+            <template-id id=""></template-id>
+            <testrun id="" title="" type=""></testrun>
+            <endpoint route="/import/xunit"></endpoint>
+            <file path="{basedir}/test-output/testng-polarion.xml"></file>
+            <selector name="rhsm_qe" val="xunit_importer"></selector>
+            <test-suite>
+                <property name="dry-run" val="false"></property>
+                <property name="set-testrun-finished" val="true"></property>
+                <property name="include-skipped" val="false"></property>
+            </test-suite>
+            <custom-fields>
+                <property name="plannedin" val=""></property>
+                <property name="jenkinsjobs" val=""></property>
+                <property name="notes" val=""></property>
+                <property name="variant" val=""></property>
+                <property name="arch" val=""></property>
+            </custom-fields>
+            <timeout millis="3000000"></timeout>
+            <enabled>true</enabled>
+        </importer>
+    </importers>
+</config>

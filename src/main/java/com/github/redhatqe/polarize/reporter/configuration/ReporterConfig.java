@@ -526,8 +526,10 @@ public class ReporterConfig implements IConfig {
         File xunit = new File(tsPath);
         if (tsPath.startsWith("https")) {
 
-            String user = this.servers.get(polarionServer).getUser();
-            String pw = this.servers.get(polarionServer).getPassword();
+            String user = this.getKerberos().getUser();
+            String pw = this.getKerberos().getPassword();
+            //String user = this.servers.get(polarionServer).getUser();
+            //String pw = this.servers.get(polarionServer).getPassword();
             Optional<File> maybeXunit = ImporterRequest.get(tsPath, user, pw, newpath);
             if (maybeXunit.isPresent())
                 xunit = maybeXunit.get();
