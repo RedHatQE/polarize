@@ -266,6 +266,6 @@ public class Reflector {
         String url = this.config.getServers().get("polarion").getUrl() + this.config.getTestcase().getEndpoint();
         Boolean enabled = this.config.getTestcase().getEnabled();
         return TestDefinitionProcessor.tcImportRequest(this.tcMap, sName, sVal, url, user, pw, this.tcPath,
-                this.config.getTestcase(), enabled, this.configPath);
+                this.config.getTestcase(), enabled, this.pcfg.configFilePath);
     }
 }

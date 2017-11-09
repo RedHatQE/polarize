@@ -5,4 +5,5 @@ test-output/
 artifacts/
 logs/
 target/
+out/
 *.iml

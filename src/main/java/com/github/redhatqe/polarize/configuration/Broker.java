@@ -15,12 +15,23 @@ public class Broker {
     String password;
     @JsonProperty
     MessageOpts messages;
+    @JsonProperty
+    TLSClient tls;
+
+    public Broker(String url, String u, String pw, Long to, Integer nummsgs, TLSClient tls) {
+        this.url = url;
+        this.user = u;
+        this.password = pw;
+        this.messages = new MessageOpts(to, nummsgs);
+        this.tls = new TLSClient(tls);
+    }
 
     public Broker(String url, String u, String pw, Long to, Integer nummsgs) {
         this.url = url;
         this.user = u;
         this.password = pw;
         this.messages = new MessageOpts(to, nummsgs);
+        this.tls = new TLSClient();
     }
 
     public Broker() {
@@ -32,6 +43,7 @@ public class Broker {
         this.user = orig.getUser();
         this.password = orig.getPassword();
         this.messages = new MessageOpts(orig.getMessageTimeout(), orig.getMessageMax());
+        this.tls = new TLSClient(tls);
     }
 
     public String getUrl() {
@@ -73,4 +85,34 @@ public class Broker {
 
     @JsonIgnore
     public void setMessageMax(Integer max) { this.messages.setMaxMsgs(max); }
+
+    @JsonIgnore
+    public String getKeystorePath() { return this.tls.getKeystorePath(); }
+
+    @JsonIgnore
+    public String getKeystorePassword() { return this.tls.getKeystorePassword(); }
+
+    @JsonIgnore
+    public String getKeystoreKeyPassword() { return this.tls.getKeystoreKeyPassword(); }
+
+    @JsonIgnore
+    public String getTruststorePath() { return this.tls.getTruststorePath(); }
+
+    @JsonIgnore
+    public String getTruststorePassword() { return this.tls.getTruststorePassword(); }
+
+    @JsonIgnore
+    public void setKeystorePath(String path) { this.tls.setKeystorePath(path); }
+
+    @JsonIgnore
+    public void setKeystorePassword(String pw) { this.tls.setKeystorePassword(pw); }
+
+    @JsonIgnore
+    public void setKeystoreKeyPassword(String pw) { this.tls.setKeystoreKeyPassword(pw); }
+
+    @JsonIgnore
+    public void setTruststorePath(String path) { this.tls.setTruststorePath(path); }
+
+    @JsonIgnore
+    public void setTruststorePassword(String pw) { this.tls.setTruststorePassword(pw); }
 }

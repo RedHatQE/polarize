@@ -23,13 +23,6 @@ import java.lang.annotation.*;
  *               caseposneg="positive",               // defaults to positive if not given
  *               caselevel="component",               // defaults to component if not given
  *               testtype="functional",               // defaults to functional if not given
- *               reqs = {@Requirement(id="",
- *                                    severity="Should Have",         // defaults to Must Have
- *                                    reqtype="NonFunctional",        // defaults to Functional
- *                                    priority="high",                // defaults to medium
- *                                    author="Sean Toner",            // required (someone has to OK this)
- *                                    description="Feature Summary",  // required
- *                                    xmlDesc="/path/to/xml-file")}
  *               setup="Description of any preconditions that must be established for test case to run"
  * </code>
  */

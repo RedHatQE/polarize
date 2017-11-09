@@ -8,10 +8,9 @@ import com.github.redhatqe.byzantine.exceptions.NoConfigFoundError;
 import com.github.redhatqe.byzantine.utils.ArgHelper;
 import com.github.redhatqe.byzantine.utils.Tuple;
 import com.github.redhatqe.polarize.configuration.Broker;
-import com.github.redhatqe.polarize.configuration.Config;
+import com.github.redhatqe.polarize.configuration.BrokerConfig;
 
 import com.github.redhatqe.polarize.configuration.PolarizeConfig;
-import com.github.redhatqe.polarize.reporter.configuration.ServerInfo;
 import io.reactivex.functions.Action;
 import io.reactivex.functions.Consumer;
 import io.reactivex.subjects.PublishSubject;
@@ -23,46 +22,38 @@ import org.apache.logging.log4j.Logger;
 
 import javax.jms.*;
 import javax.jms.Message;
+import javax.jms.Queue;
 
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStreamReader;
 
 import java.time.Instant;
-import java.util.Enumeration;
-import java.util.Optional;
+import java.util.*;
 import java.util.concurrent.ExecutionException;
 
 /**
  * A Class that provides functionality to listen to the CI Message Bus
  */
-public class CIBusListener implements ICIBus, IMessageListener {
-    Logger logger;
+public class CIBusListener extends CIBusClient implements ICIBus, IMessageListener {
+    Logger logger = LogManager.getLogger(CIBusListener.class.getName());
     private String topic;
-    private String clientID;
-    private String configPath;
-    public Config config;
-    private Broker broker;
     private Subject<ObjectNode> nodeSub;
     private Integer messageCount = 0;
-    private static Integer id = 0;
-    // TODO: Implement a RingBuffer or double ended queue to hold received messages
+
+    public String publishDest;
     public CircularFifoQueue<MessageResult> messages;
 
-    private synchronized static Integer getId(){
-        return CIBusListener.id++;
-    }
 
     public CIBusListener() {
-        this.logger = LogManager.getLogger("messagebus.CIBusListener");
-        this.topic = "CI";
-        this.clientID = "polarize-bus-listener-" + Integer.toString(CIBusListener.getId());
+        super();
+        this.topic = TOPIC;
+        this.uuid = UUID.randomUUID();
+        this.clientID = POLARIZE_CLIENT_ID + "." + this.uuid;
+
         this.configPath = ICIBus.getDefaultConfigPath();
         String err = String.format("Could not find configuration file at %s", this.configPath);
-        this.config = ICIBus.getConfigFromPath(Config.class, this.configPath)
+        this.brokerConfig = ICIBus.getConfigFromPath(BrokerConfig.class, this.configPath)
                 .orElseThrow(() -> new NoConfigFoundError(err));
-        if (this.config != null)
-            this.broker = this.config.getBrokers().get(this.config.getDefaultBroker());
+        this.broker = this.brokerConfig.getBrokers().get(this.brokerConfig.getDefaultBroker());
 
         this.messages = new CircularFifoQueue<>(20);
         this.nodeSub = this.setupDefaultSubject(IMessageListener.defaultHandler());
@@ -75,7 +66,7 @@ public class CIBusListener implements ICIBus, IMessageListener {
 
     public CIBusListener(MessageHandler hdlr, String path) {
         this(hdlr);
-        this.config = ICIBus.getConfigFromPath(Config.class, path).orElseThrow(() -> {
+        this.brokerConfig = ICIBus.getConfigFromPath(BrokerConfig.class, path).orElseThrow(() -> {
             return new NoConfigFoundError(String.format("Could not find configuration file at %s", this.configPath));
         });
     }
@@ -84,33 +75,33 @@ public class CIBusListener implements ICIBus, IMessageListener {
                          Long timeout, Integer max) {
         this(hdlr);
         this.clientID = id;
-        this.config = new Config(name, url, user, pw, timeout, max);
-        this.broker = this.config.getBrokers().get(name);
+        this.brokerConfig = new BrokerConfig(name, url, user, pw, timeout, max);
+        this.broker = this.brokerConfig.getBrokers().get(name);
     }
 
-    public CIBusListener(MessageHandler hdlr, Config cfg) {
+    public CIBusListener(MessageHandler hdlr, BrokerConfig cfg) {
         this(hdlr);
         if (cfg != null)
-            this.config = cfg;
+            this.brokerConfig = cfg;
         else
-            this.config = ICIBus.getConfigFromPath(Config.class, this.configPath).orElseThrow(() -> {
-                return new NoConfigFoundError(String.format("Could not find configuration file at %s", this.configPath));
+            this.brokerConfig = ICIBus.getConfigFromPath(BrokerConfig.class, this.configPath).orElseThrow(() -> {
+                return new NoConfigFoundError(String.format("Could not find brokerConfig file at %s", this.configPath));
             });
-        if (this.config != null)
-            this.broker = this.config.getBrokers().get(this.config.getDefaultBroker());
+
+        this.broker = this.brokerConfig.getBrokers().get(this.brokerConfig.getDefaultBroker());
     }
 
     public CIBusListener(MessageHandler hdlr, PolarizeConfig cfg) {
         this.logger = LogManager.getLogger("messagebus.CIBusListener");
-        this.topic = "CI";
-        this.clientID = "polarize-bus-listener-" + Integer.toString(CIBusListener.getId());
+        this.topic = TOPIC;
+        this.clientID = POLARIZE_CLIENT_ID + "." + UUID.randomUUID();
         this.configPath = "";
-        this.config = cfg.getMessageBus();
-        if (this.config != null)
-            this.broker = this.config.getBrokers().get(this.config.getDefaultBroker());
+        this.brokerConfig = cfg.getMessageBus();
+        if (this.brokerConfig != null)
+            this.broker = this.brokerConfig.getBrokers().get(this.brokerConfig.getDefaultBroker());
 
         this.messages = new CircularFifoQueue<>(20);
-        this.nodeSub = this.setupDefaultSubject(IMessageListener.defaultHandler());
+        this.nodeSub = this.setupDefaultSubject(hdlr);
     }
 
     /**
@@ -198,6 +189,7 @@ public class CIBusListener implements ICIBus, IMessageListener {
         return Optional.of(tuple);
     }
 
+
     /**
      * An asynchronous way to get a Message with a MessageListener
      *
@@ -208,21 +200,20 @@ public class CIBusListener implements ICIBus, IMessageListener {
     @Override
     public Optional<Connection> tapIntoMessageBus(String selector, MessageListener listener) {
         String brokerUrl = this.broker.getUrl();
-        ActiveMQConnectionFactory factory = new ActiveMQConnectionFactory(brokerUrl);
+        ActiveMQConnectionFactory factory = this.setupFactory(brokerUrl, this.broker);
         Connection connection = null;
         MessageConsumer consumer;
 
         try {
-            String user = this.broker.getUser();
-            String pw = this.broker.getPassword();
-            factory.setUserName(user);
-            factory.setPassword(pw);
             connection = factory.createConnection();
             connection.setClientID(this.clientID);
             connection.setExceptionListener(exc -> this.logger.error(exc.getMessage()));
 
             Session session = connection.createSession(false, Session.AUTO_ACKNOWLEDGE);
-            Topic dest = session.createTopic("CI");
+
+            String publishDest = String.format("Consumer.%s.%s", POLARIZE_CLIENT_ID + ".queue", TOPIC);
+            Queue dest = session.createQueue(publishDest);
+
             if (selector == null || selector.equals(""))
                 throw new Error("Must supply a value for the selector");
 
@@ -232,6 +223,9 @@ public class CIBusListener implements ICIBus, IMessageListener {
             consumer.setMessageListener(listener);
             connection.start();
         } catch (JMSException e) {
+            e.printStackTrace();
+        } catch (Exception e) {
+            logger.error("Error getting keystore");
             e.printStackTrace();
         }
         return Optional.ofNullable(connection);
@@ -283,30 +277,6 @@ public class CIBusListener implements ICIBus, IMessageListener {
     }
 
     /**
-     * This is an asynchronous single-threaded way of listening for messages.  It uses tapIntoMessageBus to supply a
-     * MessageListener.  Each time the listener is called, it will call onNext to the Subject, pushing an ObjectNode
-     * @param args
-     */
-    public static void main(String... args) throws JMSException {
-        MessageHandler hdlr = IMessageListener.defaultHandler();
-        CIBusListener cbl = new CIBusListener(hdlr);
-
-        Tuple<Optional<String>, Optional<String[]>> ht = ArgHelper.headAndTail(args);
-        String cfgPath = ht.first.orElse(ICIBus.getDefaultConfigPath());
-        CIBusListener bl = new CIBusListener(IMessageListener.defaultHandler(), cfgPath);
-        String selector = ht.second.orElseGet(() -> new String[]{"polarize_bus=\"testing\""})[0];
-
-        Optional<Connection> res = bl.tapIntoMessageBus(selector, bl.createListener(bl.messageParser()));
-
-        // Spin in a loop here.  We will stop once we get the max number of messages as specified from the broker
-        // setting, or the timeout has been exceeded.  Sleep every second so we dont kill CPU usage.
-        bl.listenUntil(30000L);
-
-        if (res.isPresent())
-            res.get().close();
-    }
-
-    /**
      * Overrides the broker's timeout value with the given timeout and count
      *
      * Loop will stop once either the timeout has expired or the number of messages of reached is received
@@ -325,7 +295,7 @@ public class CIBusListener implements ICIBus, IMessageListener {
                 Thread.sleep(1000);
                 mod++;
                 if (mod % 10 == 0)
-                    logger.info("Still waiting for message...");
+                    logger.info(String.format("Waiting on message for %d seconds...", mod));
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }
@@ -363,34 +333,87 @@ public class CIBusListener implements ICIBus, IMessageListener {
      * @param args
      */
     public static void test(String[] args) throws ExecutionException, InterruptedException, JMSException {
+        // FIXME: Use guice to make something that is an IMessageListener so we can mock it out
         CIBusListener bl = new CIBusListener();
-        String responseName = args[0];
+        Optional<Connection> rconn = bl.tapIntoMessageBus("rhsm_qe=polarize_bus",
+                bl.createListener(bl.messageParser()));
 
-        // waitForMessage will block here until we get a message or we time out
-        Optional<Tuple<Connection, Message>> maybeConn = bl.waitForMessage(responseName);
-        if (!maybeConn.isPresent()) {
-            bl.logger.error("No Connection object found");
-            return;
-        }
+        Broker b = bl.brokerConfig.getBrokers().get("ci");
+        b.setMessageMax(1);
+        CIBusPublisher cbp = new CIBusPublisher(bl.brokerConfig);
+        String body = "{ \"testing\": \"Hello World\"}";
 
-        Tuple<Connection, Message> tuple = maybeConn.get();
-        Message msg = tuple.second;
+        Map<String, String> props = new HashMap<>();
+        props.put("rhsm_qe", "polarize_bus");
+        Optional<Connection> sconn = cbp.sendMessage(body, b, new JMSMessageOptions("stoner-polarize", props));
 
-        Boolean stop = false;
-        while(!stop) {
-            // Get keyboard input.  When the user types 'q'. stop the loop
-            InputStreamReader r = new InputStreamReader(System.in);
-            BufferedReader br = new BufferedReader(r);
-            System.out.println("Enter 'q' to quit");
+        bl.listenUntil(10000L);
+        MessageResult result = bl.messages.remove();
+        if (result.getNode().isPresent()) {
+            ObjectNode node = result.getNode().get();
+            ObjectMapper mapper = new ObjectMapper();
             try {
-                String answer = br.readLine();
-                if (answer.toLowerCase().charAt(0) == 'q') {
-                    stop = true;
-                }
+                JsonNode testNode = mapper.readTree(body);
+                String expected = testNode.get("testing").textValue();
+                JsonNode testing = node.get("root");
+                String actual = testing.get("testing").textValue();
             } catch (IOException e) {
-                e.printStackTrace();
+                bl.logger.error("Invalid Test: The expected value in the test did not convert to a Json object");
             }
         }
-        tuple.first.close();
+        else
+            bl.logger.error("No message node");
+
+        rconn.ifPresent((Connection c) -> {
+            try {
+                c.close();
+            } catch (JMSException e) {
+                e.printStackTrace();
+            }
+        });
+
+        sconn.ifPresent(c -> {
+            try {
+                c.close();
+            } catch (JMSException e) {
+                e.printStackTrace();
+            }
+        });
+    }
+
+    /**
+     * This is an asynchronous single-threaded way of listening for messages.  It uses tapIntoMessageBus to supply a
+     * MessageListener.  Each time the listener is called, it will call onNext to the Subject, pushing an ObjectNode
+     * @param args
+     */
+    public static void main2(String... args) throws JMSException {
+        MessageHandler hdlr = IMessageListener.defaultHandler();
+        CIBusListener cbl = new CIBusListener(hdlr);
+
+        Tuple<Optional<String>, Optional<String[]>> ht = ArgHelper.headAndTail(args);
+        String cfgPath = ht.first.orElse(ICIBus.getDefaultConfigPath());
+        CIBusListener bl = new CIBusListener(IMessageListener.defaultHandler(), cfgPath);
+        String selector = ht.second.orElseGet(() -> new String[]{"polarize_bus=\"testing\""})[0];
+
+        Optional<Connection> res = bl.tapIntoMessageBus(selector, bl.createListener(bl.messageParser()));
+
+        // Spin in a loop here.  We will stop once we get the max number of messages as specified from the broker
+        // setting, or the timeout has been exceeded.  Sleep every second so we dont kill CPU usage.
+        bl.listenUntil(30000L);
+
+        if (res.isPresent())
+            res.get().close();
+    }
+
+    public static void main(String[] args) {
+        try {
+            CIBusListener.test(args);
+        } catch (ExecutionException e) {
+            e.printStackTrace();
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        } catch (JMSException e) {
+            e.printStackTrace();
+        }
     }
 }

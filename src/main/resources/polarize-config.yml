@@ -39,6 +39,31 @@ xunit:              # settings for the xunit importer
             notes:              # arbitrary field
     timeout: 300000  # time in milliseconds to wait for reply message
     enabled: true
+# The message bus is really server side information.  If the client needs to change it, can set up session information
+# or can only opt for that with real-time websocket usage
+message-bus:
+    brokers:
+        ci:
+            url: tcp://url.of.message.broker:port
+            user: client-name
+            password: ""
+            messages:
+                timeout: 300000
+                maxMsgs: 2
+            # tls is required if the broker requires client side authentication
+            tls:
+                keystore-path: ""    # Path to the .jks keystore
+                truststore-path: ""  # Path to the .jks truststore
+                keystorekey-pw: ""   # Password of the private key (from the .p12 file created by the CSR and imported from browser)
+                keystore-pw: ""      # Password of the keystore file (jks)
+                truststore-pw: ""    # Password of the truststore file
+        metrics:
+            url: "another.server.com:65432"
+            user: "foo"
+            password: "bar"
+            messages:
+                timeout: 1000
+                maxMsgs: 1
 kerberos:
   user: ________
   password: ____________

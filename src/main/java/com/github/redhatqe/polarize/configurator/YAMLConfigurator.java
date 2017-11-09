@@ -6,7 +6,7 @@ import com.github.redhatqe.byzantine.configurator.IConfigurator;
 import com.github.redhatqe.byzantine.exceptions.NoConfigFoundError;
 import com.github.redhatqe.byzantine.utils.ArgHelper;
 import com.github.redhatqe.byzantine.utils.Tuple;
-import com.github.redhatqe.polarize.configuration.Config;
+import com.github.redhatqe.polarize.configuration.BrokerConfig;
 import com.github.redhatqe.polarize.messagebus.ICIBus;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -17,14 +17,14 @@ import java.util.List;
 import java.util.Optional;
 
 
-public class YAMLConfigurator implements IConfigurator<Config> {
+public class YAMLConfigurator implements IConfigurator<BrokerConfig> {
     public String path;
-    public final Config config;
+    public final BrokerConfig brokerConfig;
     public Logger logger = LogManager.getLogger(YAMLConfigurator.class);
 
     public YAMLConfigurator(String path) throws IOException {
         this.path = path;
-        this.config = Serializer.fromYaml(Config.class, new File(this.path));
+        this.brokerConfig = Serializer.fromYaml(BrokerConfig.class, new File(this.path));
     }
 
     public static YAMLConfigurator build(String path) throws IOException {
@@ -38,7 +38,7 @@ public class YAMLConfigurator implements IConfigurator<Config> {
      * @return
      */
     @Override
-    public Config pipe(Config cfg, List<Tuple<String, String>> args) {
+    public BrokerConfig pipe(BrokerConfig cfg, List<Tuple<String, String>> args) {
         return cfg;
     }
 
@@ -50,12 +50,12 @@ public class YAMLConfigurator implements IConfigurator<Config> {
 
         // Our starting value
         YAMLConfigurator yCfg = YAMLConfigurator.build(path);
-        Config next;
-        next = yCfg.pipe(yCfg.config, null);
+        BrokerConfig next;
+        next = yCfg.pipe(yCfg.brokerConfig, null);
         next = CLIConfigurator.build(next).pipe(next, ICLIConfig.arrayToTupleList(args));
         yCfg.logger.info("done");
 
-        Config cfg = ICIBus.getConfigFromPath(Config.class, path)
+        BrokerConfig cfg = ICIBus.getConfigFromPath(BrokerConfig.class, path)
                 .orElseThrow(() -> new NoConfigFoundError(String.format("Could not load configuration file at %s", path)));
         cfg.getBrokers();
     }

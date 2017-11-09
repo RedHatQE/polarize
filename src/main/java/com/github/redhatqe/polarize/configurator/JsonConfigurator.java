@@ -4,7 +4,7 @@ import com.github.redhatqe.byzantine.configuration.IConfig;
 import com.github.redhatqe.byzantine.configurator.ICLIConfig;
 import com.github.redhatqe.byzantine.configurator.IConfigurator;
 import com.github.redhatqe.byzantine.utils.Tuple;
-import com.github.redhatqe.polarize.configuration.Config;
+import com.github.redhatqe.polarize.configuration.BrokerConfig;
 import joptsimple.OptionSet;
 
 
@@ -13,7 +13,7 @@ import java.util.List;
 /**
  * This class
  */
-public class JsonConfigurator implements IConfigurator<Config>, ICLIConfig {
+public class JsonConfigurator implements IConfigurator<BrokerConfig>, ICLIConfig {
 
     /**
      * This is most likely the initial starting Configurator stage in the pipeline.  The pipeline generally will start
@@ -24,7 +24,7 @@ public class JsonConfigurator implements IConfigurator<Config>, ICLIConfig {
      * @return
      */
     @Override
-    public Config pipe(Config cfg, List<Tuple<String, String>> args) {
+    public BrokerConfig pipe(BrokerConfig cfg, List<Tuple<String, String>> args) {
         return null;
     }
 

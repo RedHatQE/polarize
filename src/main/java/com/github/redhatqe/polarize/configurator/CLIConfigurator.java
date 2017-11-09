@@ -9,7 +9,7 @@ import com.github.redhatqe.byzantine.parser.Option;
 import com.github.redhatqe.byzantine.utils.ArgHelper;
 import com.github.redhatqe.byzantine.utils.Tuple;
 import com.github.redhatqe.polarize.configuration.Broker;
-import com.github.redhatqe.polarize.configuration.Config;
+import com.github.redhatqe.polarize.configuration.BrokerConfig;
 import com.github.redhatqe.polarize.configuration.ConfigOpts;
 import joptsimple.ArgumentAcceptingOptionSpec;
 import joptsimple.OptionParser;
@@ -27,20 +27,20 @@ import java.util.Map;
 import java.util.Optional;
 
 
-public class CLIConfigurator implements IConfigurator<Config>, ICLIConfig {
+public class CLIConfigurator implements IConfigurator<BrokerConfig>, ICLIConfig {
     private OptionParser parser = new OptionParser();
     private Map<String, Option<String>> sOptions = new HashMap<>();
     private Map<String, OptionSpec<String>> optToSpec = new HashMap<>();
     public static String cfgEnvName = "POLARIZE_CONFIG";
-    public static final String configFileName = "polarize-config.yaml";
-    private Config config;
+    public static final String configFileName = "broker-config.yaml";
+    private BrokerConfig brokerConfig;
     public Logger logger = LogManager.getLogger("byzantine-" + CLIConfigurator.class.getName());
 
-    public CLIConfigurator(Config cfg) {
-        this.config = cfg;
+    public CLIConfigurator(BrokerConfig cfg) {
+        this.brokerConfig = cfg;
     }
 
-    public static CLIConfigurator build(Config cfg) {
+    public static CLIConfigurator build(BrokerConfig cfg) {
         return new CLIConfigurator(cfg);
     }
 
@@ -134,8 +134,8 @@ public class CLIConfigurator implements IConfigurator<Config>, ICLIConfig {
     }
 
     @Override
-    public Config pipe(Config cfg, List<Tuple<String, String>> args) {
-        Config copied = new Config(cfg);
+    public BrokerConfig pipe(BrokerConfig cfg, List<Tuple<String, String>> args) {
+        BrokerConfig copied = new BrokerConfig(cfg);
         this.setupNameToHandler(copied);
         String[] a = ICLIConfig.tupleListToArray(args);
         this.parse(cfg, a);
@@ -150,13 +150,13 @@ public class CLIConfigurator implements IConfigurator<Config>, ICLIConfig {
      */
     public static void test(String... args) {
         String[] testArgs = {"--broker", "ci.url=192.168.100.100"};
-        Config cfg2 = new Config("ci", "ci-labs-foo", "stoner", "bar", 60000L, 1);
+        BrokerConfig cfg2 = new BrokerConfig("ci", "ci-labs-foo", "stoner", "bar", 60000L, 1);
         Broker b = new Broker("ci-labs.eng.rdu2:61613", "foo", "bar", 1000L, 1);
         cfg2.addBroker("metrics", b);
         CLIConfigurator cliCfg = new CLIConfigurator(cfg2);
 
         List<Tuple<String, String>> argList = ICLIConfig.arrayToTupleList(testArgs);
-        Config modified = cliCfg.pipe(cfg2, argList);
+        BrokerConfig modified = cliCfg.pipe(cfg2, argList);
         cliCfg.logger.info("Done");
     }
 
@@ -186,13 +186,13 @@ public class CLIConfigurator implements IConfigurator<Config>, ICLIConfig {
         else
             polarizeConfig = getConfigFromEnvOrDefault();
 
-        // Start with the Config from the YAML then pipe it to the CLI
+        // Start with the BrokerConfig from the YAML then pipe it to the CLI
         cfgFile = new File(polarizeConfig);
         if (!cfgFile.exists())
             throw new IOException(String.format("%s does not exist", polarizeConfig));
-        Config ymlCfg = Serializer.fromYaml(Config.class, cfgFile);
+        BrokerConfig ymlCfg = Serializer.fromYaml(BrokerConfig.class, cfgFile);
         CLIConfigurator cliFig = new CLIConfigurator(ymlCfg);
-        Config afterCLICfg = cliFig.pipe(ymlCfg, ICLIConfig.arrayToTupleList(args));
+        BrokerConfig afterCLICfg = cliFig.pipe(ymlCfg, ICLIConfig.arrayToTupleList(args));
 
     }
 }

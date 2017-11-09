@@ -6,7 +6,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import com.github.redhatqe.byzantine.configuration.Serializer;
 import com.github.redhatqe.polarize.configuration.Broker;
-import com.github.redhatqe.polarize.configuration.Config;
+import com.github.redhatqe.polarize.configuration.BrokerConfig;
 import com.github.redhatqe.polarize.configuration.PolarizeConfig;
 import com.github.redhatqe.polarize.messagebus.*;
 import cucumber.api.CucumberOptions;
@@ -37,7 +37,7 @@ import java.util.Optional;
                 , features = {"src/test/resources/publish.feature"})
 public class PublishBusTest implements En {
     public PolarizeConfig config;
-    public Config cfg;
+    public BrokerConfig cfg;
     static String configPath = Helper.getDefaultConfigPath();
     static Logger logger = LogManager.getLogger("messagebus." + PublishBusTest.class.getName());
     public String body = "";
@@ -62,7 +62,7 @@ public class PublishBusTest implements En {
         And("the default config file is used", () -> {
             //Helper.installDefaultConfig(configPath);
             try {
-                logger.info(String.format("Using config file: %s", configPath));
+                logger.info(String.format("Using brokerConfig file: %s", configPath));
                 config = Serializer.fromYaml(PolarizeConfig.class, new File(configPath));
             } catch (IOException e) {
                 throw new Error(e.getMessage());

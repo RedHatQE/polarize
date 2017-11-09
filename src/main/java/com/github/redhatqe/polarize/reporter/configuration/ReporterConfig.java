@@ -9,7 +9,7 @@ import com.github.redhatqe.byzantine.configuration.IConfig;
 import com.github.redhatqe.byzantine.configuration.Serializer;
 import com.github.redhatqe.byzantine.parser.Setter;
 import com.github.redhatqe.byzantine.utils.Tuple;
-import com.github.redhatqe.polarize.configuration.Config;
+import com.github.redhatqe.polarize.configuration.BrokerConfig;
 import com.github.redhatqe.polarize.exceptions.InvalidArgument;
 import com.github.redhatqe.polarize.exceptions.XMLUnmarshallError;
 import com.github.redhatqe.polarize.reporter.importer.ImporterRequest;
@@ -48,7 +48,7 @@ public class ReporterConfig implements IConfig {
     @JsonProperty(required=true)
     private Credentials kerberos;
     @JsonProperty(value="message-bus", required=true)
-    private Config messageBus;
+    private BrokerConfig messageBus;
     //@JsonProperty
     //private String defaultBroker;
 
@@ -209,11 +209,11 @@ public class ReporterConfig implements IConfig {
         this.newConfigPath = newConfigPath;
     }
 
-    public Config getMessageBus() {
+    public BrokerConfig getMessageBus() {
         return messageBus;
     }
 
-    public void setMessageBus(Config messageBus) {
+    public void setMessageBus(BrokerConfig messageBus) {
         this.messageBus = messageBus;
     }
 

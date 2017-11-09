@@ -18,7 +18,7 @@ import java.util.Map;
  * A simple configuration class to set required parameters such as broker urls or timeouts.  An example JSON configuration
  * is in src/main/resources/skeleton.json, and a YAML configuration is in src/main/resources/skeleton.yaml
  */
-public class Config implements IConfig {
+public class BrokerConfig implements IConfig {
     // =========================================================================
     // 1. Add all properties for your class/configuration
     // =========================================================================
@@ -36,25 +36,25 @@ public class Config implements IConfig {
     public Boolean showHelp = false;
 
     // =========================================================================
-    // 3. Constructors go here.  Remember that there must be a no-arg constructor
+    // 3. Constructors go here.  Remember that there must be a no-arg constructor and you usually want a copy con
     // =========================================================================
-    public Config(String name, String url, String user, String pw, Long to, Integer max) {
+    public BrokerConfig(String name, String url, String user, String pw, Long to, Integer max) {
         this();
         Broker broker = new Broker(url, user, pw, to, max);
         this.brokers.put(name, broker);
         this.defaultBroker = name;
     }
 
-    public Config() {
+    public BrokerConfig() {
         this.brokers = new HashMap<>();
         this.defaultBroker = "ci";
         this.setupDefaultHandlers();
     }
 
     /**
-     * Create a new Config with the same values as the instance passed in
+     * Create a new BrokerConfig with the same values as the instance passed in
      */
-    public Config(Config cfg) {
+    public BrokerConfig(BrokerConfig cfg) {
         this();
         cfg.getBrokers().forEach((k, v) -> this.brokers.put(k, new Broker(v)));
         this.defaultBroker = cfg.defaultBroker;
@@ -166,8 +166,8 @@ public class Config implements IConfig {
 
 
     public static void main(String[] args) {
-        Config cfg = new Config("ci", "ci-labs.eng.rdu2:61616", "stoner", "foo", 300000L, 1);
-        Config cfg2 = new Config("ci", "ci-labs-foo", "stoner", "bar", 60000L, -1);
+        BrokerConfig cfg = new BrokerConfig("ci", "ci-labs.eng.rdu2:61616", "stoner", "foo", 300000L, 1);
+        BrokerConfig cfg2 = new BrokerConfig("ci", "ci-labs-foo", "stoner", "bar", 60000L, -1);
         //cfg2.parse(args);
 
         Broker b = new Broker("ci-labs.eng.rdu2:61613", "foo", "bar", 1000L, 1);
@@ -182,9 +182,9 @@ public class Config implements IConfig {
         }
 
         try {
-            Config readIn = Serializer.fromJson(Config.class, new File("/tmp/testing.json"));
+            BrokerConfig readIn = Serializer.fromJson(BrokerConfig.class, new File("/tmp/testing.json"));
             Serializer.toYaml(cfg2, "/tmp/testing2.yaml");
-            Config cfgYaml = Serializer.fromYaml(Config.class, new File("/tmp/testing2.yaml"));
+            BrokerConfig cfgYaml = Serializer.fromYaml(BrokerConfig.class, new File("/tmp/testing2.yaml"));
             Broker broker = readIn.getBrokers().get("ci");
             System.out.println(readIn.getDefaultBroker());
             System.out.println(cfgYaml.getBrokers().get("ci").getUrl());

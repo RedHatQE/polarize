@@ -1,6 +1,6 @@
 package polarize.bus.tests;
 
-import polarize.bus.tests.config.ConfigTest;
+import polarize.bus.tests.config.BrokerConfigTest;
 
 import java.io.*;
 import java.nio.file.Files;
@@ -11,7 +11,7 @@ import java.util.stream.Collectors;
 
 public class Helper {
     public static void installDefaultConfig(String configPath) {
-        InputStream cfg = ConfigTest.class.getClassLoader().getResourceAsStream("configs/default.yaml");
+        InputStream cfg = BrokerConfigTest.class.getClassLoader().getResourceAsStream("configs/default.yaml");
         String content = "";
         try (BufferedReader buffer = new BufferedReader(new InputStreamReader(cfg))) {
             content = buffer.lines().collect(Collectors.joining("\n"));
@@ -32,5 +32,11 @@ public class Helper {
 
     public static String getDefaultConfigPath() {
         return Paths.get(System.getProperty("user.home"), ".polarize", "polarize-config.yaml").toString();
+    }
+
+    public static String getDefaultConfigPath(String ftype) {
+        return Paths.get( System.getProperty("user.home")
+                        , ".polarize"
+                        , String.format("polarize-config.%s", ftype)).toString();
     }
 }

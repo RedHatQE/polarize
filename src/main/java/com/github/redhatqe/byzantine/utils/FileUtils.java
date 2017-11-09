@@ -7,7 +7,6 @@ import java.time.LocalDateTime;
  */
 public class FileUtils {
     public static String makeTimeStamp() {
-        // Create a timestamped file polarize-config-<timestamp>.xml in backup from polarize-config.xml
         LocalDateTime now = LocalDateTime.now();
         String timestamp = "%s-%s-%d-%d-%d-%d-%d";
         timestamp = String.format(timestamp, now.getMonth().toString(), now.getDayOfMonth(), now.getYear(),
@@ -16,7 +15,6 @@ public class FileUtils {
     }
 
     public static String makeTimeStamp(String base, String end) {
-        // Create a timestamped file polarize-config-<timestamp>.xml in backup from polarize-config.xml
         LocalDateTime now = LocalDateTime.now();
         if (!base.equals(""))
             base += "-";

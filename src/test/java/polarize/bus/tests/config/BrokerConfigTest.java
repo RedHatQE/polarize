@@ -3,7 +3,7 @@ package polarize.bus.tests.config;
 
 import com.github.redhatqe.byzantine.configuration.Serializer;
 import com.github.redhatqe.polarize.configuration.Broker;
-import com.github.redhatqe.polarize.configuration.Config;
+import com.github.redhatqe.polarize.configuration.BrokerConfig;
 import cucumber.api.CucumberOptions;
 import cucumber.api.java8.En;
 import cucumber.api.junit.Cucumber;
@@ -20,33 +20,33 @@ import java.io.*;
 @RunWith(Cucumber.class)
 @CucumberOptions( plugin = "json:target/cucumber-report.json"
                 , features = {"src/test/resources"})
-public class ConfigTest implements En {
-    static Config config;
+public class BrokerConfigTest implements En {
+    static BrokerConfig brokerConfig;
     static String configPath;
-    static Logger logger = LogManager.getLogger(ConfigTest.class);
+    static Logger logger = LogManager.getLogger(BrokerConfigTest.class);
 
-    public ConfigTest() {
+    public BrokerConfigTest() {
         // Copies the default.yaml file in resources/configs/default.yaml to /tmp
-        Given("^the default config file exists in /tmp/default\\.yaml$", () -> {
+        Given("^the default brokerConfig file exists in /tmp/default\\.yaml$", () -> {
             configPath = "/tmp/default.yaml";
             Helper.installDefaultConfig(configPath);
         });
 
-        // Sets this.config
-        When("^a user loads the config file$", ()-> {
+        // Sets this.brokerConfig
+        When("^a user loads the brokerConfig file$", ()-> {
             try {
-                config = Serializer.fromYaml(Config.class, new File(configPath));
+                brokerConfig = Serializer.fromYaml(BrokerConfig.class, new File(configPath));
             } catch (IOException e) {
                 e.printStackTrace();
             }
         });
 
-        Then("^the config file should be loaded successfully$", ()-> {
-            Assert.assertTrue(config != null);
+        Then("^the brokerConfig file should be loaded successfully$", ()-> {
+            Assert.assertTrue(brokerConfig != null);
         });
 
         And("^the (\\w+)\\.(\\w+) should be '(.+)'$", (String name, String key, String ans)-> {
-            Broker b = config.getBrokers().get(name);
+            Broker b = brokerConfig.getBrokers().get(name);
             Assert.assertTrue(b != null);
             switch(key) {
                 case "url":

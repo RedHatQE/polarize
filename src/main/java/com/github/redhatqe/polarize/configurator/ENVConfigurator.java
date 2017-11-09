@@ -2,7 +2,7 @@ package com.github.redhatqe.polarize.configurator;
 
 import com.github.redhatqe.byzantine.configurator.IENVConfig;
 import com.github.redhatqe.byzantine.utils.Tuple;
-import com.github.redhatqe.polarize.configuration.Config;
+import com.github.redhatqe.polarize.configuration.BrokerConfig;
 
 import java.util.HashMap;
 import java.util.List;
@@ -10,10 +10,10 @@ import java.util.Map;
 
 
 public class ENVConfigurator implements IENVConfig {
-    public Config cfg;
+    public BrokerConfig cfg;
     public Map<String, String> recognizedVars = new HashMap<>();
 
-    public ENVConfigurator(Config cfg) {
+    public ENVConfigurator(BrokerConfig cfg) {
         this.cfg = cfg;
     }
 

@@ -726,6 +726,15 @@ of resources and a burden on the polarion server.
 Building polarize is relatively straight forward and uses gradle.  The tricky part is that polarize is meant to be 
 uploaded to maven central so that other teams may make use of it.
 
+Firstly, you should have a ~/.polarize/polarize-properties.properties file that contains two things:
+
+```
+ossrhUsername=
+ossrhPassword=
+```
+
+These should be the username and password to your nexus sonatype repository manager.
+
 The project also makes use of SNAPSHOT repositories.  If the version contains the word SNAPSHOT in it in the build file, 
 then when you publish the polarize artifacts, it will go into maven's snapshot repository.  If your project uses maven, 
 gradle or leiningen, you may need to add the snapshot repository to your project.
@@ -735,30 +744,12 @@ you can run the following sequence of commands from your polarize directory
 
 ```
 gradle clean
-gradle publish
-gradle pP
-```
-
-The gradle clean command will remove the temporary build directory.  The gradle publish command will build a maven pom 
-file, and store that in a local artifacts directory.  The gradle pP command is shorthand for the task gradle 
-preparePublish.  Why run a command called preparePublish _after_ the publish task?  The first gradle publish command is 
-actually just to generate the maven pom and store the artifacts locally.  When you are ready to upload the artifacts to 
-maven central, then you need to run the gradle publish a second time.  The build.gradle script checks for the existence 
-of the maven pom file.  If it doesn't exist, it will create the pom and store the artifacts locally.  If the pom file 
-does exist, then the publish command will do some other work including signing the all the jar files (source jars, doc 
-jars, and the pom itself) and then upload to maven.
-
-However, if you are in a development cycle, and you do not wish to bump to a new version and simply build the lateset 
-snapshot, then you can just run these commands:
-
-```
-gradle clean
-gradle pP
+gradle build
 gradle install
 ```
 
-This will clean your temp builds, compile everything, and install to your local maven repo (somewhere in ~/.m2/repos).
-If you have other projects relying on polarize, the gradle install will put the artifacts in your local maven repo.
+The gradle clean command will remove the temporary build directory.  The gradle build command will build a maven pom 
+file, and store that in a local artifacts directory.  
 
 ## Uploading to maven central
 
@@ -822,6 +813,10 @@ If you are using leiningen for your builds, you can add the maven central repo l
                               :update        :always}]
                  ]
 ```
+
+## Forgotten password
+
+In the event that you forgot your username or password for nexus, you can go to their [Jira site][-nexus-pw]
 
 # Other metadata mechanisms for other languages
 
@@ -934,3 +929,6 @@ const my_test_method = test_definition(defs, my_test_method)
 
 Unfortunately, I don't know ruby so I can't give an example, however, since ruby has the concept of higher order 
 functions, it can follow the same strategy as javascript
+
+[-nexus-pw]: https://issues.sonatype.org/secure/ForgotLoginDetails.jspa
+[-nexus]: https://oss.sonatype.org/#stagingRepositories

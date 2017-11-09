@@ -47,9 +47,9 @@ import java.util.stream.Collectors;
  * Class that handles junit report generation for TestNG
  *
  * Use this class when running TestNG tests as -reporter XUnitReporter.  It can be
- * configured through the polarize-config.xml file.  A default configuration is contained in the resources folder, but
- * a global environment variable of XUNIT_IMPORTER_CONFIG can also be set.  If this env var exists and it points to a
- * file, this file will be loaded instead.
+ * configured through the polarize-config.yaml or json file.  A default configuration is contained in the resources
+ * folder, but a global environment variable of XUNIT_IMPORTER_CONFIG can also be set.  If this env var exists and it
+ * points to a file, this file will be loaded instead.
  */
 public class XUnitReporter implements IReporter {
     private final static Logger logger = LogManager.getLogger(XUnitReporter.class.getSimpleName());
@@ -698,7 +698,7 @@ public class XUnitReporter implements IReporter {
         OptionSpec<String> xunitOpt = parser.accepts("xunit").withRequiredArg().ofType(String.class).required();
         OptionSpec<String> selectorOpt = parser.accepts("selector").withRequiredArg().ofType(String.class)
                 .defaultsTo(defaultSelector);
-        // TODO: Add --configuration-path for path to Config file
+        // TODO: Add --configuration-path for path to BrokerConfig file
 
         OptionSet opts = parser.parse(args);
         String xunit = opts.valueOf(xunitOpt);

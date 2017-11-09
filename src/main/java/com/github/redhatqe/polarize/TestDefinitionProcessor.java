@@ -3,6 +3,7 @@ package com.github.redhatqe.polarize;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.github.redhatqe.byzantine.configuration.Serializer;
 import com.github.redhatqe.byzantine.utils.IFileHelper;
 
 import com.github.redhatqe.polarize.configuration.PolarizeConfig;
@@ -26,6 +27,7 @@ import com.github.redhatqe.polarize.utils.Environ;
 import com.github.redhatqe.polarize.utils.Transformer;
 import com.github.redhatqe.polarize.utils.Tuple;
 //import com.github.redhatqe.byzantine.utils.Tuple;
+import org.apache.activemq.transport.stomp.FrameTranslator;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.testng.annotations.Test;
@@ -68,7 +70,6 @@ public class TestDefinitionProcessor extends AbstractProcessor {
     // Map of qualified name -> { projectID: testcaseID }
     private Map<String, Map<String, IdParams>> mappingFile = new LinkedHashMap<>();
     public static JAXBHelper jaxb = new JAXBHelper();
-    //private Testcases testcases = new Testcases();
     private Map<String, List<Testcase>> tcMap = new HashMap<>();
     public PolarizeYAML config;
     private PolarizeConfig cfg;
@@ -687,7 +688,8 @@ public class TestDefinitionProcessor extends AbstractProcessor {
                 try {
                     MessageHandler hdlr;
                     hdlr = TestDefinitionProcessor.testcaseImportHandler(tcPath, project, tests, tType);
-                    CIBusListener cbl = new CIBusListener(hdlr);
+                    PolarizeConfig cfg = Serializer.fromYaml(PolarizeConfig.class, new File(cfgPath));
+                    CIBusListener cbl = new CIBusListener(hdlr, cfg);
                     maybeNodes.add(ImporterRequest.sendImportRequest(cbl, url, user, pw, testXml, selector, cfgPath));
                 } catch (InterruptedException e) {
                     e.printStackTrace();
@@ -696,6 +698,9 @@ public class TestDefinitionProcessor extends AbstractProcessor {
                     e.printStackTrace();
                 } catch (JMSException e) {
                     logger.warn("TODO: Retry after a sleep");
+                    e.printStackTrace();
+                } catch (IOException e) {
+                    logger.warn("FIXME: Could not find brokerConfig file");
                     e.printStackTrace();
                 }
             }
@@ -1380,7 +1385,12 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         }
     }
 
-    public static void checkParameterMismatch(Meta<TestDefinition> meta, Map<String, Map<String, IdParams>> mapFile) {
+    public static void checkParameterMismatch( Meta<TestDefinition> meta
+                                             , Map<String
+                                             , Map<String, IdParams>> mapFile
+                                             , IDType idtype) {
+        if (idtype == IDType.NONE)
+            return;
         String qualName = meta.qualifiedName;
         Map<String, IdParams> methodToParams = mapFile.get(qualName);
 
@@ -1601,7 +1611,7 @@ public class TestDefinitionProcessor extends AbstractProcessor {
         }
 
         // At this point, make sure that the number of args in the method is how many we have in the mapping file.
-        checkParameterMismatch(meta, mapFile);
+        checkParameterMismatch(meta, mapFile, idtype);
 
         return new Tuple<>(importType, mapIsEdited);
     }

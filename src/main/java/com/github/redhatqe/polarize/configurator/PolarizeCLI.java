@@ -72,7 +72,7 @@ public class PolarizeCLI extends ReporterCLI {
         else
             polarizeConfig = getConfigFromEnvOrDefault();
 
-        // Start with the Config from the YAML then pipe it to the CLI
+        // Start with the BrokerConfig from the YAML then pipe it to the CLI
         cfgFile = new File(polarizeConfig);
         if (!cfgFile.exists())
             throw new IOException(String.format("%s does not exist", polarizeConfig));
