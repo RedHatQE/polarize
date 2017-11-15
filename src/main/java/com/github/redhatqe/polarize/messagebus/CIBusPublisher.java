@@ -10,6 +10,7 @@ import com.github.redhatqe.polarize.configuration.PolarizeConfig;
 import com.github.redhatqe.polarize.configurator.CLIConfigurator;
 import com.github.redhatqe.polarize.configurator.YAMLConfigurator;
 import org.apache.activemq.ActiveMQConnectionFactory;
+import org.apache.activemq.ActiveMQMessageProducer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -127,6 +128,7 @@ public class CIBusPublisher extends CIBusClient implements ICIBus {
             // FIXME: Ideally, we should have the Topic figured out via JNDI
             Topic dest = session.createTopic(this.publishDest);
             producer = session.createProducer(dest);
+
             TextMessage msg = session.createTextMessage(text);
             setOptionals(msg, opts);
 

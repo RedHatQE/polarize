@@ -1,6 +1,5 @@
 package com.github.redhatqe.polarize.metadata;
 
-import org.testng.annotations.Test;
 
 import java.lang.annotation.*;
 

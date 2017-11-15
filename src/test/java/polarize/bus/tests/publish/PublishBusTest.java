@@ -31,10 +31,11 @@ import java.util.Optional;
 /**
  * Need to figure out how to specify tags for cucumber. Especially so that gradle will pick it up
  * Also, this should really be a unit test not a unit test that gets run by gradle
- */
+ *
 @RunWith(Cucumber.class)
 @CucumberOptions( plugin = "json:target/cucumber-report.json"
                 , features = {"src/test/resources/publish.feature"})
+*/
 public class PublishBusTest implements En {
     public PolarizeConfig config;
     public BrokerConfig cfg;

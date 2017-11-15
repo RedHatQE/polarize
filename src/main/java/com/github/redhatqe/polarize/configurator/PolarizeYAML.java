@@ -22,6 +22,11 @@ public class PolarizeYAML implements IConfigurator<PolarizeConfig> {
     public String configFilePath = "";
     private Logger logger = LogManager.getLogger(PolarizeYAML.class.getSimpleName());
 
+    /**
+     * The constructor's main purpose is to find and set the file to be used for configuration
+     *
+     * @param path
+     */
     public PolarizeYAML(String path) {
         File defaultPath;
         String homeDir = System.getProperty("user.home");

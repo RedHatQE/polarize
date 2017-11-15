@@ -11,6 +11,7 @@ import com.github.redhatqe.byzantine.utils.IJarHelper;
 import com.github.redhatqe.polarize.metadata.Meta;
 import com.github.redhatqe.polarize.metadata.TestDefAdapter;
 import com.github.redhatqe.polarize.metadata.TestDefinition;
+import com.github.redhatqe.polarize.newconfig.TCMapperRequest;
 import com.github.redhatqe.polarize.utils.Tuple;
 import com.google.gson.GsonBuilder;
 import com.google.gson.reflect.TypeToken;
@@ -70,6 +71,99 @@ public class JarHelper implements IJarHelper {
         return refl;
     }
 
+
+    public static Set<String> getEnabledTests(List<MetaData> anns) {
+        return anns.stream()
+                .filter(a -> a.enabled)
+                .map(a -> a.className + "." + a.methodName)
+                .collect(Collectors.toSet());
+    }
+
+    static private void makeFile(String json, String filename) {
+        File file = new File(filename);
+
+        try {
+            if (file.exists()) {
+                boolean deleted = file.delete();
+                if (!deleted) {
+                    throw new FileAlreadyExistsException("Could not delete old file");
+                }
+            } else {
+                file.createNewFile();
+            }
+
+            FileWriter fw = new FileWriter(file);
+            BufferedWriter bw = new BufferedWriter(fw);
+            bw.write(json);
+            bw.close();
+        } catch (IOException ex) {
+            System.err.println(ex.getMessage());
+        }
+    }
+
+
+    /**
+     * Takes the jars (which must also be on the classpath) and the names of packages
+     * eg java -cp sm-0.0.1-SNAPSHOT.jar --jar file:///path/to/sm-0.0.1-SNAPSHOT-standalone.jar \
+     * --packages "polarize.cli.tests,polarize.gui.tests"
+     * @param args
+
+    public static void reflect(TCMapperRequest req) {
+        String jarPathsOpt = req.getPathToJar();
+        List<String> packNames = req.getPackages();
+
+        Gson gson = new GsonBuilder().setPrettyPrinting().create();
+        Type metaType = new TypeToken<List<Meta<TestDefAdapter>>>() {}.getType();
+        Type tToC = new TypeToken<Map<String, List<MetaData>>>() {}.getType();
+        Type testT = new TypeToken<List<MetaData>>(){}.getType();
+
+        JarHelper jh = new JarHelper(jarPathsOpt, config);
+        try {
+            List<String> classes = new ArrayList<>();
+            for(String s: jh.paths.split(",")) {
+                for(String pn: packNames){
+                    classes.addAll(IJarHelper.getClasses(s, pn));
+                }
+
+                Reflector refl = jh.loadClasses(classes);
+                refl.methToProjectDef = refl.makeMethToProjectMeta();
+                refl.processTestDefs();
+
+                List<Optional<ObjectNode>> toBeImported = refl.testcasesImporterRequest();
+                File mapPath = new File(refl.config.getMapping());
+                TestDefinitionProcessor.writeMapFile(mapPath, refl.mappingFile);
+
+                refl.testDefAdapters = refl.testDefs.stream()
+                        .map(m -> {
+                            TestDefinition def = m.annotation;
+                            TestDefAdapter adap = TestDefAdapter.create(def);
+                            Meta<TestDefAdapter> meta = Meta.create(m.qualifiedName, m.methName, m.className,
+                                    m.packName, m.project, m.polarionID, m.params, adap);
+                            return meta;
+                        })
+                        .collect(Collectors.toList());
+                List<Meta<TestDefAdapter>> sorted = Reflector.sortTestDefs(refl.testDefAdapters);
+
+                String jsonDefs = gson.toJson(sorted, metaType);
+                String tToCDefs = gson.toJson(refl.testsToClasses, tToC);
+                String testng = gson.toJson(refl.methods, testT);
+
+                makeFile(tToCDefs, "/tmp/tests-reflected.json");
+                makeFile(jsonDefs, output);
+                makeFile(testng, "/tmp/testng-reflected.json");
+
+                Set<String> enabledTests = JarHelper.getEnabledTests(refl.methods);
+                Tuple<SortedSet<String>, List<TestDefinitionProcessor.UpdateAnnotation>> audit =
+                        TestDefinitionProcessor.auditMethods(enabledTests, refl.methToProjectDef);
+                File path = TestDefinitionProcessor.auditFile;
+                TestDefinitionProcessor.writeAuditFile(path, audit);
+                TestDefinitionProcessor.checkNoMoreRounds(1, refl.pcfg);
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+    */
 
     /**
      * Takes the jars (which must also be on the classpath) and the names of packages
@@ -142,35 +236,6 @@ public class JarHelper implements IJarHelper {
             }
         } catch (IOException e) {
             e.printStackTrace();
-        }
-    }
-
-    public static Set<String> getEnabledTests(List<MetaData> anns) {
-        return anns.stream()
-                .filter(a -> a.enabled)
-                .map(a -> a.className + "." + a.methodName)
-                .collect(Collectors.toSet());
-    }
-
-    static private void makeFile(String json, String filename) {
-        File file = new File(filename);
-
-        try {
-            if (file.exists()) {
-                boolean deleted = file.delete();
-                if (!deleted) {
-                    throw new FileAlreadyExistsException("Could not delete old file");
-                }
-            } else {
-                file.createNewFile();
-            }
-
-            FileWriter fw = new FileWriter(file);
-            BufferedWriter bw = new BufferedWriter(fw);
-            bw.write(json);
-            bw.close();
-        } catch (IOException ex) {
-            System.err.println(ex.getMessage());
         }
     }
 }

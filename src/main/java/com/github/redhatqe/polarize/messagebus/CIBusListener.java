@@ -335,16 +335,16 @@ public class CIBusListener extends CIBusClient implements ICIBus, IMessageListen
     public static void test(String[] args) throws ExecutionException, InterruptedException, JMSException {
         // FIXME: Use guice to make something that is an IMessageListener so we can mock it out
         CIBusListener bl = new CIBusListener();
-        Optional<Connection> rconn = bl.tapIntoMessageBus("rhsm_qe=polarize_bus",
-                bl.createListener(bl.messageParser()));
 
         Broker b = bl.brokerConfig.getBrokers().get("ci");
         b.setMessageMax(1);
         CIBusPublisher cbp = new CIBusPublisher(bl.brokerConfig);
         String body = "{ \"testing\": \"Hello World\"}";
-
         Map<String, String> props = new HashMap<>();
         props.put("rhsm_qe", "polarize_bus");
+
+        String sel = "rhsm_qe='polarize_bus'";
+        Optional<Connection> rconn = bl.tapIntoMessageBus(sel, bl.createListener(bl.messageParser()));
         Optional<Connection> sconn = cbp.sendMessage(body, b, new JMSMessageOptions("stoner-polarize", props));
 
         bl.listenUntil(10000L);
@@ -355,8 +355,9 @@ public class CIBusListener extends CIBusClient implements ICIBus, IMessageListen
             try {
                 JsonNode testNode = mapper.readTree(body);
                 String expected = testNode.get("testing").textValue();
-                JsonNode testing = node.get("root");
-                String actual = testing.get("testing").textValue();
+                bl.logger.info("Testing value was " + expected);
+                //JsonNode testing = node.get("root");
+                //String actual = testing.get("testing").textValue();
             } catch (IOException e) {
                 bl.logger.error("Invalid Test: The expected value in the test did not convert to a Json object");
             }
@@ -366,6 +367,7 @@ public class CIBusListener extends CIBusClient implements ICIBus, IMessageListen
 
         rconn.ifPresent((Connection c) -> {
             try {
+                bl.logger.info("Closing the receiver connection");
                 c.close();
             } catch (JMSException e) {
                 e.printStackTrace();
@@ -374,6 +376,7 @@ public class CIBusListener extends CIBusClient implements ICIBus, IMessageListen
 
         sconn.ifPresent(c -> {
             try {
+                bl.logger.info("Closing the sender connection");
                 c.close();
             } catch (JMSException e) {
                 e.printStackTrace();
