@@ -9,7 +9,7 @@ String archivesBaseName = "polarize"
 String projectURL = 'https://github.com/RedHatQE/polarize'
 String devURL = 'git@github.com:RedHatQE/polarize.git'
 // Change this to where your polarize.properties file is stored
-String polarizePropertyFile = '/home/stoner/.polarize/polarize.properties'
+String polarizePropertyFile = '/home/stoner/.polarize/polarize-project.properties'
 String pomPath = "${project.projectDir}/build/tmp/pom.xml"
 String mvnPom = "${project.projectDir}/build/tmp/${project.name}-${project.version}.pom"
 String arcDir = "${project.projectDir}/artifacts/com/github/redhatqe/polarize/polarize/${project.version}"
