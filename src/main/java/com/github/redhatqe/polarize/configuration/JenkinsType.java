@@ -16,15 +16,16 @@ import javax.xml.bind.annotation.XmlValue;
 
 
 /**
- * <p>Java class for basedir-Type complex type.
+ * <p>Java class for jenkinsType complex type.
  * 
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="basedir-Type">
+ * &lt;complexType name="jenkinsType">
  *   &lt;simpleContent>
  *     &lt;extension base="&lt;http://www.w3.org/2001/XMLSchema>string">
- *       &lt;attribute name="path" type="{http://www.w3.org/2001/XMLSchema}string" />
+ *       &lt;attribute name="user" type="{http://www.w3.org/2001/XMLSchema}string" />
+ *       &lt;attribute name="password" type="{http://www.w3.org/2001/XMLSchema}string" />
  *     &lt;/extension>
  *   &lt;/simpleContent>
  * &lt;/complexType>
@@ -33,15 +34,17 @@ import javax.xml.bind.annotation.XmlValue;
  * 
  */
 @XmlAccessorType(XmlAccessType.FIELD)
-@XmlType(name = "basedir-Type", propOrder = {
+@XmlType(name = "jenkinsType", propOrder = {
     "value"
 })
-public class BasedirType {
+public class JenkinsType {
 
     @XmlValue
     protected String value;
-    @XmlAttribute(name = "path")
-    protected String path;
+    @XmlAttribute(name = "user")
+    protected String user;
+    @XmlAttribute(name = "password")
+    protected String password;
 
     /**
      * Gets the value of the value property.
@@ -68,27 +71,51 @@ public class BasedirType {
     }
 
     /**
-     * Gets the value of the path property.
+     * Gets the value of the user property.
      * 
      * @return
      *     possible object is
      *     {@link String }
      *     
      */
-    public String getPath() {
-        return path;
+    public String getUser() {
+        return user;
     }
 
     /**
-     * Sets the value of the path property.
+     * Sets the value of the user property.
      * 
      * @param value
      *     allowed object is
      *     {@link String }
      *     
      */
-    public void setPath(String value) {
-        this.path = value;
+    public void setUser(String value) {
+        this.user = value;
+    }
+
+    /**
+     * Gets the value of the password property.
+     * 
+     * @return
+     *     possible object is
+     *     {@link String }
+     *     
+     */
+    public String getPassword() {
+        return password;
+    }
+
+    /**
+     * Sets the value of the password property.
+     * 
+     * @param value
+     *     allowed object is
+     *     {@link String }
+     *     
+     */
+    public void setPassword(String value) {
+        this.password = value;
     }
 
 }

@@ -933,8 +933,8 @@ public class Configurator implements IJAXBHelper {
     public void editTestSuite(String tsPath, String newpath) throws IOException {
         File xunit = new File(tsPath);
         if (tsPath.startsWith("https")) {
-            String user = this.config.polarion.getUser();
-            String pw = this.config.polarion.getPassword();
+            String user = this.config.config.jenkins.getUser();
+            String pw = this.config.config.jenkins.getPassword();
             Optional<File> maybeXunit = ImporterRequest.get(tsPath, user, pw, newpath);
             if (maybeXunit.isPresent())
                 xunit = maybeXunit.get();
