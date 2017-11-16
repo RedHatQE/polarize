@@ -127,16 +127,7 @@
     </xs:simpleContent>
   </xs:complexType>
 
-  <xs:complexType name="userType">
-    <xs:simpleContent>
-      <xs:extension base="xs:string">
-        <xs:attribute type="xs:string" name="name"/>
-        <xs:attribute type="xs:string" name="password"/>
-      </xs:extension>
-    </xs:simpleContent>
-  </xs:complexType>
-
-  <xs:complexType name="jenkinsType">
+  <xs:complexType name="authType">
     <xs:simpleContent>
       <xs:extension base="xs:string">
         <xs:attribute type="xs:string" name="user"/>
@@ -156,12 +147,12 @@
           <xs:documentation>Maps the qualified name to project->id</xs:documentation>
         </xs:annotation>
       </xs:element>
-      <xs:element type="userType" name="user">
+      <xs:element type="authType" name="polarion-auth">
         <xs:annotation>
           <xs:documentation>Will be passed to kerberos credentials</xs:documentation>
         </xs:annotation>
       </xs:element>
-      <xs:element type="jenkinsType" name="jenkins">
+      <xs:element type="authType" name="jenkins-auth">
         <xs:annotation>
           <xs:documentation>Credentials for Jenkins</xs:documentation>
         </xs:annotation>

@@ -16,16 +16,16 @@ import javax.xml.bind.annotation.XmlValue;
 
 
 /**
- * <p>Java class for titleType complex type.
+ * <p>Java class for authType complex type.
  * 
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="titleType">
+ * &lt;complexType name="authType">
  *   &lt;simpleContent>
  *     &lt;extension base="&lt;http://www.w3.org/2001/XMLSchema>string">
- *       &lt;attribute name="prefix" type="{http://www.w3.org/2001/XMLSchema}string" />
- *       &lt;attribute name="suffix" type="{http://www.w3.org/2001/XMLSchema}string" />
+ *       &lt;attribute name="user" type="{http://www.w3.org/2001/XMLSchema}string" />
+ *       &lt;attribute name="password" type="{http://www.w3.org/2001/XMLSchema}string" />
  *     &lt;/extension>
  *   &lt;/simpleContent>
  * &lt;/complexType>
@@ -34,17 +34,17 @@ import javax.xml.bind.annotation.XmlValue;
  * 
  */
 @XmlAccessorType(XmlAccessType.FIELD)
-@XmlType(name = "titleType", propOrder = {
+@XmlType(name = "authType", propOrder = {
     "value"
 })
-public class TitleType {
+public class AuthType {
 
     @XmlValue
     protected String value;
-    @XmlAttribute(name = "prefix")
-    protected String prefix;
-    @XmlAttribute(name = "suffix")
-    protected String suffix;
+    @XmlAttribute(name = "user")
+    protected String user;
+    @XmlAttribute(name = "password")
+    protected String password;
 
     /**
      * Gets the value of the value property.
@@ -71,51 +71,51 @@ public class TitleType {
     }
 
     /**
-     * Gets the value of the prefix property.
+     * Gets the value of the user property.
      * 
      * @return
      *     possible object is
      *     {@link String }
      *     
      */
-    public String getPrefix() {
-        return prefix;
+    public String getUser() {
+        return user;
     }
 
     /**
-     * Sets the value of the prefix property.
+     * Sets the value of the user property.
      * 
      * @param value
      *     allowed object is
      *     {@link String }
      *     
      */
-    public void setPrefix(String value) {
-        this.prefix = value;
+    public void setUser(String value) {
+        this.user = value;
     }
 
     /**
-     * Gets the value of the suffix property.
+     * Gets the value of the password property.
      * 
      * @return
      *     possible object is
      *     {@link String }
      *     
      */
-    public String getSuffix() {
-        return suffix;
+    public String getPassword() {
+        return password;
     }
 
     /**
-     * Sets the value of the suffix property.
+     * Sets the value of the password property.
      * 
      * @param value
      *     allowed object is
      *     {@link String }
      *     
      */
-    public void setSuffix(String value) {
-        this.suffix = value;
+    public void setPassword(String value) {
+        this.password = value;
     }
 
 }

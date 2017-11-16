@@ -344,8 +344,8 @@ public class Configurator implements IJAXBHelper {
      */
     private void getServers() {
         List<ServerType> current = this.cfg.getServers().getServer();
-        String username = this.cfg.getUser().getName();
-        String password = this.cfg.getUser().getPassword();
+        String username = this.cfg.getPolarionAuth().getUser();
+        String password = this.cfg.getPolarionAuth().getPassword();
         // Commandline overrides config file
         String user = (this.opts.has(sSpecs.get(Opts.USERNAME))) ?
                 this.opts.valueOf(sSpecs.get(Opts.USERNAME)) :
@@ -933,8 +933,8 @@ public class Configurator implements IJAXBHelper {
     public void editTestSuite(String tsPath, String newpath) throws IOException {
         File xunit = new File(tsPath);
         if (tsPath.startsWith("https")) {
-            String user = this.config.config.jenkins.getUser();
-            String pw = this.config.config.jenkins.getPassword();
+            String user = this.cfg.getJenkinsAuth().getUser();
+            String pw = this.cfg.getJenkinsAuth().getPassword();
             Optional<File> maybeXunit = ImporterRequest.get(tsPath, user, pw, newpath);
             if (maybeXunit.isPresent())
                 xunit = maybeXunit.get();
@@ -1483,22 +1483,22 @@ public class Configurator implements IJAXBHelper {
 
     public String getUser() {
         if (this.user == null)
-            this.user = this.cfg.getUser().getName();
+            this.user = this.cfg.getPolarionAuth().getUser();
         return this.user;
     }
 
     public void setUser(String user) {
-        this.cfg.getUser().setName(user);
+        this.cfg.getPolarionAuth().setUser(user);
     }
 
     public String getUserPassword() {
         if (this.userPassword == null)
-            this.userPassword = this.cfg.getUser().getPassword();
+            this.userPassword = this.cfg.getPolarionAuth().getPassword();
         return this.user;
     }
 
     public void setUserPassword(String pw) {
-        this.cfg.getUser().setPassword(pw);
+        this.cfg.getPolarionAuth().setPassword(pw);
     }
 
     /**
