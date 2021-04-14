@@ -4,3 +4,4 @@ build/
 test-output/
 artifacts/
 *.iml
+.#*.java
