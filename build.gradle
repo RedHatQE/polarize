@@ -1,6 +1,8 @@
 plugins {
-    id 'java' // or 'groovy' Must be explicitly applied
-    id 'com.github.johnrengelman.shadow' version '1.2.3'
+    id 'java-library' // or 'groovy' Must be explicitly applied
+    id 'com.github.johnrengelman.shadow' version '6.1.0'
+    id 'signing'
+    id 'maven-publish'
 }
 
 group 'com.github.redhatqe.polarize'
@@ -15,52 +17,54 @@ String mvnPom = "${project.projectDir}/build/tmp/${project.name}-${project.versi
 String arcDir = "${project.projectDir}/artifacts/com/github/redhatqe/polarize/polarize/${project.version}"
 String arcPom = "${arcDir}/${project.name}-${project.version}.pom"
 File arcPomFile = makeSigningPomFile(arcDir)
-sourceCompatibility = 1.8
-targetCompatibility = 1.8
 
-['java', 'com.github.johnrengelman.shadow',
- 'maven', 'signing', 'maven-publish'].each {
-    apply plugin : it
-}
+// apply plugin: 'java'
+// apply plugin: 'com.github.johnrengelman.shadow'
+// apply plugin: 'maven-publish'
 
-task wrapper(type: Wrapper) {
-    gradleVersion = '3.5'
-}
+// ['java', 'com.github.johnrengelman.shadow',
+//  'maven', 'signing', 'maven-publish'].each {
+//     apply plugin : it
+// }
+
+// task wrapper(type: Wrapper) {
+//     gradleVersion = '7.0'
+// }
 
 repositories {
     mavenCentral()
     mavenLocal()
-    jcenter()
 }
 
 jar {
     manifest {
         attributes('Implementation-Title': 'polarize',
-                'Implementation-Version': version,
-                'Main-Class': 'com.github.redhatqe.polarize.JarHelper')
+                   'Implementation-Version': version,
+                   'Main-Class': 'com.github.redhatqe.polarize.JarHelper')
     }
     from sourceSets.main.output
     from sourceSets.main.allJava
 }
 
 dependencies {
-    testCompile group: 'junit', name: 'junit', version: '4.12'
-    testCompile 'org.testng:testng:6.9.10'
-    testCompile 'info.cukes:cucumber-java8:1.2.4'
-    compile group: 'net.sf.jopt-simple', name: 'jopt-simple', version: '5.0-beta-1'
-    compile 'org.reflections:reflections:0.9.10'
-    compile 'org.testng:testng:6.9.10'
-    compile 'com.google.code.gson:gson:2.6.2'
-    compile group: 'org.slf4j', name: 'slf4j-api', version: '1.7.21'
-    compile group: 'ch.qos.logback', name: 'logback-classic', version: '1.1.7'
+    testCompileOnly group: 'junit', name: 'junit', version: '4.12'
+    testCompileOnly 'org.testng:testng:6.9.10'
+    testCompileOnly 'info.cukes:cucumber-java8:1.2.4'
+    implementation group: 'net.sf.jopt-simple', name: 'jopt-simple', version: '5.0-beta-1'
+    implementation 'org.reflections:reflections:0.9.10'
+    implementation 'org.testng:testng:6.9.10'
+    implementation 'com.google.code.gson:gson:2.6.2'
+    implementation group: 'org.slf4j', name: 'slf4j-api', version: '1.7.21'
+    implementation group: 'ch.qos.logback', name: 'logback-classic', version: '1.1.7'
     //compile 'org.apache.tinkerpop:gremlin-core:3.2.1'
-    compile group: 'org.apache.httpcomponents', name: 'httpclient', version: '4.5.2'
-    compile 'org.apache.httpcomponents:httpmime:4.5.2'
-    compile 'org.json:json:20140107'
-    compile group: 'com.fasterxml.jackson.core', name: 'jackson-core', version: '2.8.2'
-    compile group: 'com.fasterxml.jackson.core', name: 'jackson-databind', version: '2.8.2'
+    implementation group: 'org.apache.httpcomponents', name: 'httpclient', version: '4.5.2'
+    implementation 'org.apache.httpcomponents:httpmime:4.5.2'
+    implementation 'org.json:json:20140107'
+    implementation group: 'com.fasterxml.jackson.core', name: 'jackson-core', version: '2.8.2'
+    implementation group: 'com.fasterxml.jackson.core', name: 'jackson-databind', version: '2.8.2'
     //compile group: 'com.fasterxml.jackson.dataformat', name: 'jackson-dataformat-yaml', version: '2.8.2'
-    compile group: 'org.apache.activemq', name: 'activemq-all', version: '5.14.1'
+    implementation group: 'org.apache.activemq', name: 'activemq-all', version: '5.14.1'
+    implementation 'jakarta.xml.bind:jakarta.xml.bind-api:3.0.0'
 }
 
 test {
