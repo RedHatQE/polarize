@@ -10,26 +10,11 @@ version '0.6.0-SNAPSHOT'
 String archivesBaseName = "polarize"
 String projectURL = 'https://github.com/RedHatQE/polarize'
 String devURL = 'git@github.com:RedHatQE/polarize.git'
-// Change this to where your polarize.properties file is stored
-String polarizePropertyFile = '/home/stoner/.polarize/polarize-project.properties'
 String pomPath = "${project.projectDir}/build/tmp/pom.xml"
 String mvnPom = "${project.projectDir}/build/tmp/${project.name}-${project.version}.pom"
 String arcDir = "${project.projectDir}/artifacts/com/github/redhatqe/polarize/polarize/${project.version}"
 String arcPom = "${arcDir}/${project.name}-${project.version}.pom"
 File arcPomFile = makeSigningPomFile(arcDir)
-
-// apply plugin: 'java'
-// apply plugin: 'com.github.johnrengelman.shadow'
-// apply plugin: 'maven-publish'
-
-// ['java', 'com.github.johnrengelman.shadow',
-//  'maven', 'signing', 'maven-publish'].each {
-//     apply plugin : it
-// }
-
-// task wrapper(type: Wrapper) {
-//     gradleVersion = '7.0'
-// }
 
 repositories {
     mavenCentral()
@@ -139,6 +124,7 @@ if (arcPomFile != null && arcPomFile.exists()) {
 }
 
 signing {
+    useGpgCmd()
     sign configurations.archives
 }
 
@@ -205,9 +191,9 @@ publishing {
 
                 Node devsNode = new Node(asNode(), 'developers')
                 Node devNode = new Node(devsNode, 'developer')
-                devNode.appendNode('id', 'stoner')
-                devNode.appendNode('name', 'Sean Toner')
-                devNode.appendNode('email', 'stoner@redhat.com')
+                devNode.appendNode('id', 'jstavel')
+                devNode.appendNode('name', 'Jan Stavel')
+                devNode.appendNode('email', 'jstavel@redhat.com')
 
                 Node licensesNode = new Node(asNode(), 'licenses')
                 Node licenseNode = new Node(licensesNode, 'license')
@@ -238,9 +224,9 @@ publishing {
 
                 Node devsNode = new Node(asNode(), 'developers')
                 Node devNode = new Node(devsNode, 'developer')
-                devNode.appendNode('id', 'stoner')
-                devNode.appendNode('name', 'Sean Toner')
-                devNode.appendNode('email', 'stoner@redhat.com')
+                devNode.appendNode('id', 'jstavel')
+                devNode.appendNode('name', 'Jan Stavel')
+                devNode.appendNode('email', 'jstavel@redhat.com')
 
                 Node licensesNode = new Node(asNode(), 'licenses')
                 Node licenseNode = new Node(licensesNode, 'license')
@@ -269,11 +255,9 @@ publishing {
                 else {
                     url 'https://oss.sonatype.org/service/local/staging/deploy/maven2'
                 }
-                File f = new File(polarizePropertyFile)
-                Properties props = new Properties()
-                props.load(f.newDataInputStream())
-                String user = props.getProperty("ossrhUsername")
-                String pw = props.getProperty("ossrhPassword")
+                // read the properties from a file gradle.properties (the file is in a GRADLE_HOME dir or in a project root dir)
+                String user = project.getProperty("ossrhUsername")
+                String pw = project.getProperty("ossrhPassword")
                 credentials {
                     username = user
                     password = pw
