@@ -828,6 +828,12 @@ need to have a few things set up.  In your ~/.gradle/gradle.properties file, inc
 
 Gradle uses this information to know how to sign all the artifacts.  This is a requirement for maven central, so you 
 must have a pgp/gpg key for the signing, and the oss central site must have your public key registered to a public site.
+
+It is necessary to provide credentials for login to 'oss.sonatype.org' in your `~/.gradle/gradle.properties` file:
+
+- ossrhUsername=USERNAME
+- ossrhPassword=PASSWORD
+
 For more information on getting set up with Sonatype, please read their page:
 
 http://central.sonatype.org/pages/ossrh-guide.html
