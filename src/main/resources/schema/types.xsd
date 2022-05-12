@@ -22,6 +22,7 @@ elementFormDefault="qualified">
         <xs:restriction base="xs:string">
             <xs:enumeration value="RHEL6"/>
             <xs:enumeration value="RedHatEnterpriseLinux7"/>
+            <xs:enumeration value="RHELSS"/>
             <xs:enumeration value="PLATTP"/>
         </xs:restriction>
     </xs:simpleType>
@@ -76,7 +77,7 @@ elementFormDefault="qualified">
 
     <xs:simpleType name="arch-types">
         <xs:restriction base="xs:string">
-            <xs:enumeration value="x8664"/>
+            <xs:enumeration value="x86_64"/>
             <xs:enumeration value="ppc64"/>
             <xs:enumeration value="ppc64le"/>
             <xs:enumeration value="ia64"/>
