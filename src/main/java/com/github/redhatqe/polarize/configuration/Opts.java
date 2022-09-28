@@ -26,6 +26,10 @@ public class Opts {
     public static final String PLANNEDIN = "plannedin";
     public static final String JENKINSJOBS = "jenkinsjobs";
     public static final String NOTES = "notes";
+    public static final String LOGS = "logs";
+    public static final String COMPOSEID = "composeid";
+    public static final String BUILD = "build";
+    public static final String FIPS = "fips";
     public static final String ARCH = "arch";
     public static final String VARIANT = "variant";
 

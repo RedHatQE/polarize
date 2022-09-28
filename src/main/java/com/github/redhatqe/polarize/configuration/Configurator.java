@@ -50,6 +50,10 @@ public class Configurator implements IJAXBHelper {
     private String plannedin;
     private String jenkinsjobs;
     private String notes;
+    private String logs;
+    private String composeid;
+    private String build;
+    private String fips;
     private String arch;
     private String variant;
     private String templateId;
@@ -148,6 +152,22 @@ public class Configurator implements IJAXBHelper {
                 new Tuple3<>(this::getNotes, this::setNotes,
                         "PROPERTY: An optional free form section for notes.  Relevant to xunit.  It is used " +
                                 "like this: --property notes=\"Some description\""));
+        sOptToAccessors.put(Opts.LOGS,
+                new Tuple3<>(this::getLogs, this::setLogs,
+                        "PROPERTY: An optional free form section for logs.  Relevant to xunit.  It is used " +
+                                "like this: --property logs=\"Some description\""));
+        sOptToAccessors.put(Opts.COMPOSEID,
+                new Tuple3<>(this::getComposeID, this::setComposeID,
+                        "PROPERTY: An optional free form section for composeid.  Relevant to xunit.  It is used " +
+                                "like this: --property composeid=\"Some description\""));
+        sOptToAccessors.put(Opts.BUILD,
+                new Tuple3<>(this::getBuild, this::setBuild,
+                        "PROPERTY: An optional free form section for build.  Relevant to xunit.  It is used " +
+                                "like this: --property build=\"Some description\""));
+        sOptToAccessors.put(Opts.FIPS,
+                new Tuple3<>(this::getFips, this::setFips,
+                        "PROPERTY: An optional free form section for fips.  Relevant to xunit.  It is used " +
+                                "like this: --property fips=\"Some description\""));
         sOptToAccessors.put(Opts.ARCH,
                 new Tuple3<>(this::getArch, this::setArch,
                         "PROPERTY: Optional arch test was run on. Relevant to xunit.  It is used like this: " +
@@ -421,6 +441,30 @@ public class Configurator implements IJAXBHelper {
                     if (n != null)
                         p.setVal(n);
                     this.testsuiteProps.put(keyname, n);
+                    break;
+                case Opts.LOGS:
+                    String l = this.getLogs();
+                    if (l != null)
+                        p.setVal(l);
+                    this.testsuiteProps.put(keyname, l);
+                    break;
+                case Opts.COMPOSEID:
+                    String c = this.getComposeID();
+                    if (c != null)
+                        p.setVal(c);
+                    this.testsuiteProps.put(keyname, c);
+                    break;
+                case Opts.BUILD:
+                    String n = this.getBuild();
+                    if (b != null)
+                        p.setVal(b);
+                    this.testsuiteProps.put(keyname, b);
+                    break;
+                case Opts.FIPS:
+                    String n = this.getFips();
+                    if (f != null)
+                        p.setVal(f);
+                    this.testsuiteProps.put(keyname, f);
                     break;
                 case Opts.ARCH:
                     String a = this.getArch();
@@ -1233,6 +1277,46 @@ public class Configurator implements IJAXBHelper {
 
     public void setNotes(String notes) {
         this.notes = this.sanitize(notes);
+    }
+
+    public String getLogs() {
+        if (this.logs == null)
+            this.logs = this.sanitize(this.searchCustomFields("logs"));
+        return logs;
+    }
+
+    public void setLogs(String logs) {
+        this.logs = this.sanitize(logs);
+    }
+
+    public String getComposeID() {
+        if (this.composeid == null)
+            this.composeid = this.sanitize(this.searchCustomFields("composeid"));
+        return composeid;
+    }
+
+    public void setComposeID(String composeid) {
+        this.composeid = this.sanitize(composeid);
+    }
+
+    public String getBuild() {
+        if (this.build == null)
+            this.build = this.sanitize(this.searchCustomFields("build"));
+        return build;
+    }
+
+    public void setBuild(String build) {
+        this.build = this.sanitize(build);
+    }
+
+    public String getFips() {
+        if (this.fips == null)
+            this.fips = this.sanitize(this.searchCustomFields("fips"));
+        return fips;
+    }
+
+    public void setFips(String fips) {
+        this.fips = this.sanitize(fips);
     }
 
     public String getArch() {
