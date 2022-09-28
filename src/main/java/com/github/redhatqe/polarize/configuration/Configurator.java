@@ -155,19 +155,19 @@ public class Configurator implements IJAXBHelper {
         sOptToAccessors.put(Opts.LOGS,
                 new Tuple3<>(this::getLogs, this::setLogs,
                         "PROPERTY: An optional free form section for logs.  Relevant to xunit.  It is used " +
-                                "like this: --property logs=\"Some description\""));
+                                "like this: --property logs=\"Some path/url to logs\""));
         sOptToAccessors.put(Opts.COMPOSEID,
                 new Tuple3<>(this::getComposeID, this::setComposeID,
                         "PROPERTY: An optional free form section for composeid.  Relevant to xunit.  It is used " +
-                                "like this: --property composeid=\"Some description\""));
+                                "like this: --property composeid=\"RHEL-9.0.0-12345678.0\""));
         sOptToAccessors.put(Opts.BUILD,
                 new Tuple3<>(this::getBuild, this::setBuild,
                         "PROPERTY: An optional free form section for build.  Relevant to xunit.  It is used " +
-                                "like this: --property build=\"Some description\""));
+                                "like this: --property build=\"subscription-manager-1.29.30-1.el9\""));
         sOptToAccessors.put(Opts.FIPS,
                 new Tuple3<>(this::getFips, this::setFips,
-                        "PROPERTY: An optional free form section for fips.  Relevant to xunit.  It is used " +
-                                "like this: --property fips=\"Some description\""));
+                        "PROPERTY: An optional yes/no for fips use.  Relevant to xunit.  It is used " +
+                                "like this: --property fips=\"yes\""));
         sOptToAccessors.put(Opts.ARCH,
                 new Tuple3<>(this::getArch, this::setArch,
                         "PROPERTY: Optional arch test was run on. Relevant to xunit.  It is used like this: " +
