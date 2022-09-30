@@ -1,4 +1,4 @@
-(defproject com.github.redhatqe/polarize "0.8.3-SNAPSHOT"
+(defproject com.github.redhatqe/polarize "0.8.4-SNAPSHOT"
   :description "Polarion related stuff for RHSM TestNG."
   :url "https://github.com/RedHatQE/polarize"
   :java-source-path "src"
