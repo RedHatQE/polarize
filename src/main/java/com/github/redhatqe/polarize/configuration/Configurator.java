@@ -168,6 +168,19 @@ public class Configurator implements IJAXBHelper {
                 new Tuple3<>(this::getFips, this::setFips,
                         "PROPERTY: An optional yes/no for fips use.  Relevant to xunit.  It is used " +
                                 "like this: --property fips=\"yes\""));
+        sOptToAccessors.put(Opts.CANDLEPINTARGET,
+                new Tuple3<>(this::getCandlepintarget, this::setCandlepintarget,
+                        "PROPERTY: An optional yes/no for candlepintarget use.  Relevant to xunit.  It is used " +
+                                "like this: --property candlepintarget=\"yes\""));
+        sOptToAccessors.put(Opts.CANDLEPINVERSION,
+                new Tuple3<>(this::getCandlepinversion, this::setCandlepinversion,
+                        "PROPERTY: An optional yes/no for candlepinversion use.  Relevant to xunit.  It is used " +
+                                "like this: --property candlepinversion=\"yes\""));
+        sOptToAccessors.put(Opts.CDNTARGET,
+                new Tuple3<>(this::getCdntarget, this::setCdntarget,
+                        "PROPERTY: An optional yes/no for cdntarget use.  Relevant to xunit.  It is used " +
+                                "like this: --property cdntarget=\"yes\""));
+
         sOptToAccessors.put(Opts.ARCH,
                 new Tuple3<>(this::getArch, this::setArch,
                         "PROPERTY: Optional arch test was run on. Relevant to xunit.  It is used like this: " +
@@ -465,6 +478,24 @@ public class Configurator implements IJAXBHelper {
                     if (f != null)
                         p.setVal(f);
                     this.testsuiteProps.put(keyname, f);
+                    break;
+                case Opts.CANDLEPINTARGET:
+                    String n = this.getCandlepintarget();
+                    if (f != null)
+                        p.setVal(cpt);
+                    this.testsuiteProps.put(keyname, cpt);
+                    break;
+                case Opts.CANDLEPINVERSION:
+                    String n = this.getCandlepinversion();
+                    if (f != null)
+                        p.setVal(cpv);
+                    this.testsuiteProps.put(keyname, cpv);
+                    break;
+                case Opts.CDNTARGET:
+                    String n = this.getCdntarget();
+                    if (f != null)
+                        p.setVal(cdnt);
+                    this.testsuiteProps.put(keyname, cdnt);
                     break;
                 case Opts.ARCH:
                     String a = this.getArch();
@@ -1317,6 +1348,36 @@ public class Configurator implements IJAXBHelper {
 
     public void setFips(String fips) {
         this.fips = this.sanitize(fips);
+    }
+
+    public String getCandlepintarget() {
+        if (this.candlepintarget == null)
+            this.candlepintarget = this.sanitize(this.searchCustomFields("candlepintarget"));
+        return candlepintarget;
+    }
+
+    public void setCandlepintarget(String candlepintarget) {
+        this.candlepintarget = this.sanitize(candlepintarget);
+    }
+
+    public String getCandlepinversion() {
+        if (this.candlepinversion == null)
+            this.candlepinversion = this.sanitize(this.searchCustomFields("candlepinversion"));
+        return candlepinversion;
+    }
+
+    public void setCangetCandlepinversion(String candlepinversion) {
+        this.candlepinversion = this.sanitize(candlepinversion);
+    }
+
+    public String getCdntarget() {
+        if (this.cdntarget == null)
+            this.cdntarget = this.sanitize(this.searchCustomFields("cdntarget"));
+        return cdntarget;
+    }
+
+    public void setCdntarget(String cdntarget) {
+        this.cdntarget = this.sanitize(cdntarget);
     }
 
     public String getArch() {

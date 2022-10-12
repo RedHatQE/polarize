@@ -30,6 +30,9 @@ public class Opts {
     public static final String COMPOSEID = "composeid";
     public static final String BUILD = "build";
     public static final String FIPS = "fips";
+    public static final String CANDLEPINTARGET = "candlepintarget";
+    public static final String CANDLEPINVERSION = "candlepinversion";
+    public static final String CDNTARGET = "cdntarget";
     public static final String ARCH = "arch";
     public static final String VARIANT = "variant";
 
