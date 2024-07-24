@@ -1,6 +1,11 @@
-(defproject com.github.redhatqe/polarize "0.8.3-SNAPSHOT"
+(defproject com.github.redhatqe/polarize "0.8.4-SNAPSHOT"
   :description "Polarion related stuff for RHSM TestNG."
   :url "https://github.com/RedHatQE/polarize"
+  :license {:name "GPL-3.0"
+            :comment "GNU General Public License v3.0"
+            :url "https://choosealicense.com/licenses/gpl-3.0"
+            :year 2024
+            :key "gpl-3.0"}
   :java-source-path "src"
   :java-source-paths ["src"]
   :dependencies [[net.sf.jopt-simple/jopt-simple "5.0-beta-1"]
